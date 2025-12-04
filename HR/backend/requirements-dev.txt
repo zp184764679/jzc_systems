@@ -1,0 +1,28 @@
+# Development dependencies
+# Install with: pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-flask>=1.2.0
+
+# Code quality
+flake8>=6.0.0
+pylint>=2.17.0
+black>=23.7.0
+isort>=5.12.0
+
+# Development tools
+ipython>=8.14.0
+ipdb>=0.13.13
+
+# Type checking
+mypy>=1.4.0
+
+# API testing
+httpie>=3.2.0
+
+# Database tools
+alembic>=1.11.0

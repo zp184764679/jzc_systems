@@ -1,0 +1,67 @@
+/* CRM App Styles */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Ant Design Layout overrides */
+.ant-layout {
+  min-height: 100vh;
+}
+
+.ant-layout-header {
+  height: auto;
+  line-height: normal;
+}
+
+/* Customer list page */
+.customer-list-page {
+  padding: 0;
+}
+
+/* Card styles */
+.ant-card {
+  border-radius: 8px;
+}
+
+/* Table styles */
+.ant-table-wrapper {
+  overflow-x: auto;
+}
+
+/* Modal styles */
+.ant-modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Form styles */
+.ant-form-item {
+  margin-bottom: 16px;
+}
+
+/* Dashboard statistics */
+.ant-statistic-title {
+  color: #666;
+}
+
+/* Timeline */
+.ant-timeline-item-content {
+  padding-bottom: 16px;
+}
+
+/* Tags in table */
+.ant-tag {
+  margin: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    padding: 12px !important;
+  }
+
+  .ant-card-body {
+    padding: 12px;
+  }
+}
