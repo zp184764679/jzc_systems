@@ -1,0 +1,222 @@
+# routes/pr/query.py
+# 查询采购申请相关接口
+
+from flask import Blueprint, request, jsonify
+from models.pr import PR
+from models.rfq import RFQ
+from extensions import db
+import traceback
+from .common import zh_status, zh_urgency, iso
+
+bp = Blueprint('pr_query', __name__)
+
+@bp.route('/requests', methods=['GET', 'OPTIONS'])
+def get_requests():
+    """
+    获取所有物料申请，可根据状态和用户筛选
+    参数：
+    - status: 状态筛选 (submitted/approved/rejected/draft)
+    - user_id: 用户ID筛选
+    """
+    if request.method == 'OPTIONS':
+        return "", 204
+    
+    try:
+        status = request.args.get('status')
+        user_id = request.args.get('user_id')
+
+        query = PR.query
+        if user_id:
+            query = query.filter_by(owner_id=int(user_id))
+        if status:
+            query = query.filter_by(status=status)
+
+        all_requests = query.order_by(PR.created_at.desc()).all()
+
+        result = []
+        for r in all_requests:
+            approved_qty = sum(item.qty for item in r.items if item.status == "approved")
+            pending_qty = sum(item.qty for item in r.items if item.status == "pending")
+            result.append({
+                "id": r.id,
+                "prNumber": r.pr_number,
+                "title": r.title,
+                "description": r.description,
+                "approvedQty": approved_qty,
+                "pendingQty": pending_qty,
+                "status": zh_status(r.status),
+                "status_code": r.status,
+                "urgency": zh_urgency(r.urgency),
+                "urgency_code": r.urgency,
+                "created_at": iso(r.created_at),
+                "owner_id": r.owner_id,
+                "owner_name": (r.owner.username if r.owner else None),
+                "owner_department": (r.owner.department if r.owner else None),
+            })
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"获取申请列表错误: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"查询失败: {str(e)}"}), 500
+
+@bp.route('/mine', methods=['GET', 'OPTIONS'])
+def get_my_requests():
+    """获取当前用户发起的物料申请；参数：user_id"""
+    if request.method == 'OPTIONS':
+        return "", 204
+    
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"error": "缺少用户ID"}), 400
+
+        my_requests = PR.query.filter_by(owner_id=int(user_id)).order_by(PR.created_at.desc()).all()
+
+        result = []
+        for r in my_requests:
+            result.append({
+                "id": r.id,
+                "prNumber": r.pr_number,
+                "title": r.title,
+                "status": zh_status(r.status),
+                "status_code": r.status,
+                "urgency": zh_urgency(r.urgency),
+                "urgency_code": r.urgency,
+                "created_at": iso(r.created_at),
+                "owner_id": r.owner_id,
+                "owner_name": (r.owner.username if r.owner else None),
+                "owner_department": (r.owner.department if r.owner else None),
+                "items": [{"name": it.name, "qty": it.qty, "unit": it.unit} for it in r.items]
+            })
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"获取我的申请列表错误: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"查询失败: {str(e)}"}), 500
+
+@bp.route('/todo', methods=['GET', 'OPTIONS'])
+def get_todo_requests():
+    """获取待审批的物料申请（状态为 submitted 的物料申请）"""
+    if request.method == 'OPTIONS':
+        return "", 204
+    
+    try:
+        todo_requests = PR.query.filter_by(status="submitted").order_by(PR.created_at.desc()).all()
+
+        result = []
+        for r in todo_requests:
+            result.append({
+                "id": r.id,
+                "prNumber": r.pr_number,
+                "title": r.title,
+                "status": zh_status(r.status),
+                "status_code": r.status,
+                "urgency": zh_urgency(r.urgency),
+                "urgency_code": r.urgency,
+                "created_at": iso(r.created_at),
+                "owner_id": r.owner_id,
+                "owner_name": (r.owner.username if r.owner else None),
+                "owner_department": (r.owner.department if r.owner else None),
+                "items": [{"name": it.name, "qty": it.qty, "unit": it.unit} for it in r.items]
+            })
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"获取待审批列表错误: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"查询失败: {str(e)}"}), 500
+
+@bp.route('/requests/<int:id>', methods=['GET', 'OPTIONS'])
+def get_detail(id):
+    """获取单个申请详情"""
+    if request.method == 'OPTIONS':
+        return "", 204
+    
+    try:
+        pr = PR.query.get(id)
+        if not pr:
+            return jsonify({"error": "申请不存在"}), 404
+
+        return jsonify({
+            "id": pr.id,
+            "prNumber": pr.pr_number,
+            "title": pr.title,
+            "description": pr.description,
+            "status": zh_status(pr.status),
+            "status_code": pr.status,
+            "urgency": zh_urgency(pr.urgency),
+            "urgency_code": pr.urgency,
+            "created_at": iso(pr.created_at),
+            "updated_at": iso(getattr(pr, 'updated_at', None)),
+            "owner_id": pr.owner_id,
+            "owner_name": (pr.owner.username if pr.owner else None),
+            "owner_department": (pr.owner.department if pr.owner else None),
+            "reject_reason": getattr(pr, 'reject_reason', None),
+            "items": [{
+                "id": item.id,
+                "name": item.name,
+                "spec": item.spec,
+                "qty": item.qty,
+                "unit": item.unit,
+                "remark": item.remark,
+                "status": zh_status(item.status),
+                "status_code": item.status,
+                "classification": getattr(item, 'classification', None),
+                "reject_reason": getattr(item, 'reject_reason', None)
+            } for item in pr.items]
+        }), 200
+
+    except Exception as e:
+        print(f"获取申请详情错误: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"查询失败: {str(e)}"}), 500
+
+@bp.route('/approved-not-sent', methods=['GET', 'OPTIONS'])
+def get_approved_not_sent():
+    """
+    获取已批准但未发送RFQ的PR列表
+    用于"发送采购单"界面
+
+    排除条件：
+    1. PR的状态必须是 "approved"
+    2. PR没有关联的RFQ，或者
+    3. PR关联的RFQ状态不是 "po_created"（已创建PO就不再显示）
+    """
+    if request.method == 'OPTIONS':
+        return "", 204
+
+    try:
+        approved_prs = PR.query.filter_by(status="approved").order_by(PR.created_at.desc()).all()
+
+        result = []
+        for pr in approved_prs:
+            # 检查该PR是否有关联的RFQ，且RFQ状态为 'po_created'
+            # 如果已经创建了PO，就不再显示在待发送列表中
+            has_po_created_rfq = RFQ.query.filter_by(
+                pr_id=pr.id,
+                status='po_created'
+            ).first()
+
+            # 如果已经有PO创建的RFQ，跳过这个PR
+            if has_po_created_rfq:
+                continue
+
+            result.append({
+                "id": pr.id,
+                "prNumber": pr.pr_number,
+                "title": pr.title,
+                "urgency": zh_urgency(pr.urgency),
+                "urgency_code": pr.urgency,
+                "owner_name": (pr.owner.username if pr.owner else None),
+                "owner_department": (pr.owner.department if pr.owner else None),
+                "items_count": len(pr.items),
+                "created_at": iso(pr.created_at),
+            })
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"获取已批准未发送列表错误: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"查询失败: {str(e)}"}), 500

@@ -1,0 +1,346 @@
+[
+  {
+    "material_code": "SUS303",
+    "material_name": "SUS303不锈钢",
+    "category": "不锈钢",
+    "density": 7.9,
+    "typical_price": 5.1,
+    "description": "易切削不锈钢，添加硫和磷提高切削性，适用于自动车床加工"
+  },
+  {
+    "material_code": "SUS304",
+    "material_name": "SUS304不锈钢",
+    "category": "不锈钢",
+    "density": 7.93,
+    "typical_price": 5.3,
+    "description": "18-8奥氏体不锈钢，通用性最强，耐腐蚀性好"
+  },
+  {
+    "material_code": "SUS316",
+    "material_name": "SUS316不锈钢",
+    "category": "不锈钢",
+    "density": 7.93,
+    "typical_price": 6.8,
+    "description": "添加钼的奥氏体不锈钢，耐腐蚀和耐高温性能优于304"
+  },
+  {
+    "material_code": "SUS316L",
+    "material_name": "SUS316L不锈钢",
+    "category": "不锈钢",
+    "density": 7.93,
+    "typical_price": 7.0,
+    "description": "超低碳316不锈钢，抗晶间腐蚀性能更好"
+  },
+  {
+    "material_code": "SUS310S",
+    "material_name": "SUS310S不锈钢",
+    "category": "不锈钢",
+    "density": 7.98,
+    "typical_price": 8.5,
+    "description": "耐高温不锈钢，可在1000℃以下使用"
+  },
+  {
+    "material_code": "SUS321",
+    "material_name": "SUS321不锈钢",
+    "category": "不锈钢",
+    "density": 7.93,
+    "typical_price": 6.2,
+    "description": "添加钛稳定化的奥氏体不锈钢，抗晶间腐蚀"
+  },
+  {
+    "material_code": "SUS430",
+    "material_name": "SUS430不锈钢",
+    "category": "不锈钢",
+    "density": 7.7,
+    "typical_price": 4.5,
+    "description": "铁素体不锈钢，成本较低，有磁性"
+  },
+  {
+    "material_code": "SUS420",
+    "material_name": "SUS420不锈钢",
+    "category": "不锈钢",
+    "density": 7.75,
+    "typical_price": 6.0,
+    "description": "马氏体不锈钢，可淬火硬化"
+  },
+  {
+    "material_code": "SUS440C",
+    "material_name": "SUS440C不锈钢",
+    "category": "不锈钢",
+    "density": 7.7,
+    "typical_price": 7.2,
+    "description": "高碳高硬度马氏体不锈钢，硬度可达HRC58-60"
+  },
+  {
+    "material_code": "SUS630",
+    "material_name": "SUS630不锈钢",
+    "category": "不锈钢",
+    "density": 7.8,
+    "typical_price": 8.0,
+    "description": "17-4PH沉淀硬化不锈钢，添加铜和铌，高强度高硬度"
+  },
+  {
+    "material_code": "Q195",
+    "material_name": "Q195碳钢",
+    "category": "碳钢",
+    "density": 7.85,
+    "typical_price": 3.0,
+    "description": "极低碳钢，塑性和韧性好，焊接性优"
+  },
+  {
+    "material_code": "Q235",
+    "material_name": "Q235碳钢",
+    "category": "碳钢",
+    "density": 7.85,
+    "typical_price": 3.2,
+    "description": "低碳钢，最常用结构钢，焊接性能好"
+  },
+  {
+    "material_code": "20Steel",
+    "material_name": "20号钢",
+    "category": "碳钢",
+    "density": 7.85,
+    "typical_price": 3.5,
+    "description": "优质低碳钢，渗碳处理后表面硬度高"
+  },
+  {
+    "material_code": "45Steel",
+    "material_name": "45号钢",
+    "category": "碳钢",
+    "density": 7.85,
+    "typical_price": 3.8,
+    "description": "优质中碳钢，综合力学性能好，应用广泛"
+  },
+  {
+    "material_code": "Q345",
+    "material_name": "Q345低合金钢",
+    "category": "合金钢",
+    "density": 7.85,
+    "typical_price": 4.0,
+    "description": "低合金高强度结构钢，强度高于Q235"
+  },
+  {
+    "material_code": "40Cr",
+    "material_name": "40Cr合金钢",
+    "category": "合金钢",
+    "density": 7.85,
+    "typical_price": 4.5,
+    "description": "铬合金钢，适合调质处理，综合性能好"
+  },
+  {
+    "material_code": "42CrMo",
+    "material_name": "42CrMo合金钢",
+    "category": "合金钢",
+    "density": 7.85,
+    "typical_price": 5.5,
+    "description": "铬钼合金钢，强度、韧性和淬透性均好"
+  },
+  {
+    "material_code": "35CrMo",
+    "material_name": "35CrMo合金钢",
+    "category": "合金钢",
+    "density": 7.85,
+    "typical_price": 5.2,
+    "description": "铬钼合金钢，用于制造重要的调质件"
+  },
+  {
+    "material_code": "GCr15",
+    "material_name": "GCr15轴承钢",
+    "category": "合金钢",
+    "density": 7.81,
+    "typical_price": 6.5,
+    "description": "高碳铬轴承钢，淬火后硬度高，耐磨性好"
+  },
+  {
+    "material_code": "1080",
+    "material_name": "1080铝合金",
+    "category": "铝合金",
+    "density": 2.71,
+    "typical_price": 15.0,
+    "description": "工业纯铝，导电导热性能优异"
+  },
+  {
+    "material_code": "2024",
+    "material_name": "2024铝合金",
+    "category": "铝合金",
+    "density": 2.78,
+    "typical_price": 20.0,
+    "description": "铝铜镁合金，硬铝，强度高"
+  },
+  {
+    "material_code": "3003",
+    "material_name": "3003铝合金",
+    "category": "铝合金",
+    "density": 2.73,
+    "typical_price": 17.0,
+    "description": "铝锰合金，耐腐蚀性好，可焊性好"
+  },
+  {
+    "material_code": "5052",
+    "material_name": "5052铝合金",
+    "category": "铝合金",
+    "density": 2.68,
+    "typical_price": 16.5,
+    "description": "铝镁合金，耐腐蚀性和成型性优异"
+  },
+  {
+    "material_code": "6061",
+    "material_name": "6061铝合金",
+    "category": "铝合金",
+    "density": 2.7,
+    "typical_price": 18.5,
+    "description": "铝镁硅合金，可热处理强化，应用最广"
+  },
+  {
+    "material_code": "6063",
+    "material_name": "6063铝合金",
+    "category": "铝合金",
+    "density": 2.69,
+    "typical_price": 17.5,
+    "description": "建筑型材用铝合金，挤压性能优良"
+  },
+  {
+    "material_code": "7075",
+    "material_name": "7075铝合金",
+    "category": "铝合金",
+    "density": 2.81,
+    "typical_price": 22.0,
+    "description": "超硬铝，铝锌镁铜合金，航空航天用"
+  },
+  {
+    "material_code": "C1100",
+    "material_name": "C1100紫铜",
+    "category": "铜合金",
+    "density": 8.9,
+    "typical_price": 55.0,
+    "description": "纯铜，导电导热性能最好"
+  },
+  {
+    "material_code": "C1020",
+    "material_name": "C1020无氧铜",
+    "category": "铜合金",
+    "density": 8.94,
+    "typical_price": 58.0,
+    "description": "无氧铜，纯度99.95%以上，导电率高"
+  },
+  {
+    "material_code": "H59",
+    "material_name": "H59黄铜",
+    "category": "铜合金",
+    "density": 8.5,
+    "typical_price": 40.0,
+    "description": "普通黄铜，含锌40%，强度较高"
+  },
+  {
+    "material_code": "H62",
+    "material_name": "H62黄铜",
+    "category": "铜合金",
+    "density": 8.5,
+    "typical_price": 42.0,
+    "description": "普通黄铜，含锌38%，塑性好易加工"
+  },
+  {
+    "material_code": "H68",
+    "material_name": "H68黄铜",
+    "category": "铜合金",
+    "density": 8.53,
+    "typical_price": 43.0,
+    "description": "普通黄铜，含锌32%，塑性最好"
+  },
+  {
+    "material_code": "C3604",
+    "material_name": "C3604易切削黄铜",
+    "category": "铜合金",
+    "density": 8.5,
+    "typical_price": 45.0,
+    "description": "铅黄铜，易切削，适合自动车床加工"
+  },
+  {
+    "material_code": "QSn6.5-0.1",
+    "material_name": "锡青铜",
+    "category": "铜合金",
+    "density": 8.8,
+    "typical_price": 65.0,
+    "description": "锡磷青铜，弹性好，耐磨耐腐蚀"
+  },
+  {
+    "material_code": "TC4",
+    "material_name": "TC4钛合金",
+    "category": "钛合金",
+    "density": 4.51,
+    "typical_price": 200.0,
+    "description": "Ti-6Al-4V，综合性能最好的钛合金，航空航天用"
+  },
+  {
+    "material_code": "TA2",
+    "material_name": "TA2工业纯钛",
+    "category": "钛合金",
+    "density": 4.51,
+    "typical_price": 150.0,
+    "description": "工业纯钛，耐腐蚀性能优异"
+  },
+  {
+    "material_code": "AZ91D",
+    "material_name": "AZ91D镁合金",
+    "category": "镁合金",
+    "density": 1.81,
+    "typical_price": 35.0,
+    "description": "压铸镁合金，最轻的结构用金属材料"
+  },
+  {
+    "material_code": "POM",
+    "material_name": "POM聚甲醛",
+    "category": "工程塑料",
+    "density": 1.42,
+    "typical_price": 12.0,
+    "description": "赛钢，耐磨性和自润滑性优异"
+  },
+  {
+    "material_code": "PA66",
+    "material_name": "PA66尼龙",
+    "category": "工程塑料",
+    "density": 1.14,
+    "typical_price": 18.0,
+    "description": "尼龙66，强度高，耐磨耐油"
+  },
+  {
+    "material_code": "PC",
+    "material_name": "PC聚碳酸酯",
+    "category": "工程塑料",
+    "density": 1.2,
+    "typical_price": 16.0,
+    "description": "透明塑料，抗冲击强度高"
+  },
+  {
+    "material_code": "ABS",
+    "material_name": "ABS塑料",
+    "category": "工程塑料",
+    "density": 1.05,
+    "typical_price": 10.0,
+    "description": "丙烯腈-丁二烯-苯乙烯，综合性能好"
+  },
+  {
+    "material_code": "PEEK",
+    "material_name": "PEEK聚醚醚酮",
+    "category": "工程塑料",
+    "density": 1.32,
+    "typical_price": 350.0,
+    "description": "特种工程塑料，耐高温耐化学腐蚀，机器人轻量化材料"
+  },
+  {
+    "material_code": "PPS",
+    "material_name": "PPS聚苯硫醚",
+    "category": "工程塑料",
+    "density": 1.36,
+    "typical_price": 45.0,
+    "description": "特种工程塑料，耐高温和耐化学性优异"
+  },
+  {
+    "material_code": "PTFE",
+    "material_name": "PTFE聚四氟乙烯",
+    "category": "工程塑料",
+    "density": 2.2,
+    "typical_price": 65.0,
+    "description": "铁氟龙，摩擦系数最低，耐高低温"
+  }
+]

@@ -1,0 +1,131 @@
+═══════════════════════════════════════════════════════════════
+WSL端口转发配置说明 - 采购系统生产环境
+═══════════════════════════════════════════════════════════════
+
+【问题说明】
+由于您的后端部署在WSL中，而WSL2使用虚拟化网络，默认情况下无法从外部直接访问。
+需要配置Windows端口转发才能让公网IP（61.145.212.28）访问到WSL中的服务。
+
+【当前状态】
+✓ WSL IP地址: 172.22.47.181
+✓ 后端服务: 已在WSL中运行 (0.0.0.0:5001)
+✓ 前端服务: 在Windows运行 (localhost:3001)
+✗ 端口转发: 需要配置 (需要管理员权限)
+
+【解决方案 - 请选择其一】
+
+═══════════════════════════════════════════════════════════════
+方案1: 自动配置脚本 (推荐)
+═══════════════════════════════════════════════════════════════
+
+步骤:
+1. 找到文件: C:\Users\Admin\Desktop\采购\setup_wsl_port_forward.ps1
+2. 右键点击文件 → 选择"Run with PowerShell"
+3. 在弹出的UAC提示中点击"是"
+
+该脚本会自动:
+- 获取最新的WSL IP地址
+- 配置端口转发 (5001和3000端口)
+- 配置防火墙规则
+- 测试连接
+
+
+═══════════════════════════════════════════════════════════════
+方案2: 手动配置命令
+═══════════════════════════════════════════════════════════════
+
+以管理员身份打开PowerShell，然后执行:
+
+# 1. 删除旧规则
+netsh interface portproxy delete v4tov4 listenport=5000 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=5001 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=3000 listenaddress=0.0.0.0
+
+# 2. 添加端口转发 (替换WSL_IP为实际IP: 172.22.47.181)
+netsh interface portproxy add v4tov4 listenport=5001 listenaddress=0.0.0.0 connectport=5001 connectaddress=172.22.47.181
+netsh interface portproxy add v4tov4 listenport=3000 listenaddress=0.0.0.0 connectport=3000 connectaddress=172.22.47.181
+
+# 3. 配置防火墙
+netsh advfirewall firewall add rule name="WSL Backend API 5001" dir=in action=allow protocol=TCP localport=5001
+netsh advfirewall firewall add rule name="WSL Frontend 3000" dir=in action=allow protocol=TCP localport=3000
+
+# 4. 查看配置
+netsh interface portproxy show all
+
+
+═══════════════════════════════════════════════════════════════
+方案3: 直接访问WSL IP (临时方案)
+═══════════════════════════════════════════════════════════════
+
+如果不想配置端口转发，可以让前端直接使用WSL的内部IP:
+
+1. 修改前端.env文件:
+   VITE_API_BASE=http://172.22.47.181:5001
+
+注意: WSL IP可能在重启后变化,需要重新获取。
+
+获取WSL IP命令:
+wsl -d Ubuntu-22.04 -- bash -c "ip addr show eth0 | grep 'inet ' | awk '{print \$2}' | cut -d/ -f1"
+
+
+═══════════════════════════════════════════════════════════════
+配置完成后的访问方式
+═══════════════════════════════════════════════════════════════
+
+内网访问:
+- 后端API: http://192.168.5.125:5001
+- 前端页面: http://192.168.5.125:3001 (如果前端也转发)
+
+公网访问:
+- 后端API: http://61.145.212.28:5001
+- 前端页面: http://61.145.212.28:3001 (如果前端也转发)
+
+本地访问:
+- 后端API: http://localhost:5001
+- 前端页面: http://localhost:3001
+
+
+═══════════════════════════════════════════════════════════════
+验证配置
+═══════════════════════════════════════════════════════════════
+
+1. 检查端口转发:
+   netsh interface portproxy show all
+
+2. 测试后端API:
+   curl http://localhost:5001/api/health
+   curl http://192.168.5.125:5001/api/health
+
+3. 测试前端:
+   浏览器访问 http://localhost:3001
+
+
+═══════════════════════════════════════════════════════════════
+注意事项
+═══════════════════════════════════════════════════════════════
+
+1. WSL IP会在WSL重启后改变,需要重新配置端口转发
+2. 端口转发规则在Windows重启后仍然有效
+3. 如果WSL IP变化,使用setup_wsl_port_forward.ps1重新配置即可
+4. 防火墙规则已配置,DMZ映射应该能正常工作
+
+
+═══════════════════════════════════════════════════════════════
+故障排查
+═══════════════════════════════════════════════════════════════
+
+如果无法访问:
+1. 检查WSL服务是否运行:
+   wsl -d Ubuntu-22.04 -- bash -c "sudo systemctl status caigou-backend"
+
+2. 检查端口监听:
+   wsl -d Ubuntu-22.04 -- bash -c "ss -tuln | grep 5001"
+
+3. 检查Windows防火墙:
+   netsh advfirewall firewall show rule name="WSL Backend API 5001"
+
+4. 重启WSL:
+   wsl --shutdown
+   wsl -d Ubuntu-22.04
+
+═══════════════════════════════════════════════════════════════

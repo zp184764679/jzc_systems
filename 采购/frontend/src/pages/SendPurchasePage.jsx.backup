@@ -1,0 +1,817 @@
+import React, { useEffect, useMemo, useState } from "react";
+import RFQSendPanel from "../components/RFQSendPanel.jsx";
+import ManualQuoteModal from "../components/ManualQuoteModal.jsx";
+import { api } from "../api/http";
+import { useAuth } from "../auth/AuthContext";
+
+/**
+ * 功能完整的采购单发送页面
+ * 包含：PR列表 → 自动分类 → 供应商匹配 → 创建RFQ → 发送 → 追踪
+ */
+
+export default function SendPurchasePage() {
+  const { user } = useAuth();
+  
+  // PR 列表和选择
+  const [prList, setPrList] = useState([]);
+  const [selectedPr, setSelectedPr] = useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [loadingList, setLoadingList] = useState(false);
+
+  // 分类和匹配
+  const [groups, setGroups] = useState([]);
+  const [routes, setRoutes] = useState([]);
+  const [routesEdited, setRoutesEdited] = useState({});  // 用户调整后的供应商
+
+  // RFQ创建和追踪
+  const [rfqId, setRfqId] = useState(null);
+  const [rfqStatus, setRfqStatus] = useState(null);
+  const [rfqDetail, setRfqDetail] = useState(null);
+  const [rfqQuotes, setRfqQuotes] = useState([]);
+
+  // 全局状态
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [activeTab, setActiveTab] = useState("list");  // list/classify/send/track
+
+  // 手动报价Modal
+  const [showManualQuoteModal, setShowManualQuoteModal] = useState(false);
+  const [manualQuoteRfq, setManualQuoteRfq] = useState(null);
+
+  const totalQty = useMemo(
+    () => (selectedPr?.items?.length || 0) > 0 
+      ? selectedPr.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+      : 0,
+    [selectedPr]
+  );
+
+  // ============= 1. 加载已批准未发送的PR列表 =============
+  const loadApprovedPRList = async () => {
+    setLoadingList(true);
+    setErr("");
+    try {
+      const data = await api.get(`/api/v1/pr/approved-not-sent`);
+      
+      // ✅ 修复：确保 prList 始终是数组
+      // 处理多种可能的响应格式
+      let list = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data?.data && Array.isArray(data.data)) {
+        list = data.data;
+      } else if (data?.items && Array.isArray(data.items)) {
+        list = data.items;
+      }
+      
+      console.log("✅ 加载的PR列表:", list);  // 调试用
+      setPrList(list);
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      console.error("❌ 加载PR列表错误:", msg, e);  // 调试用
+      setErr(`加载PR列表失败: ${msg}`);
+      setPrList([]);
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  // 初始加载
+  useEffect(() => {
+    loadApprovedPRList();
+  }, []);
+
+  // ============= 2. 选择PR并加载详情 + 自动分类匹配 =============
+  const selectPR = async (pr) => {
+    setLoading(true);
+    setErr("");
+    try {
+      const detail = await api.get(`/api/v1/pr/requests/${pr.id}`);
+      setSelectedPr(detail);
+      setGroups([]);
+      setRoutes([]);
+      setRoutesEdited({});
+      setRfqId(null);
+      setRfqStatus(null);
+      setRfqQuotes([]);
+      setNote("");
+      setActiveTab("classify");
+
+      // 🚀 方案B：自动触发分类和匹配
+      if (detail.items && detail.items.length > 0) {
+        // 调用分类接口
+        const classifyData = await api.post(`/api/v1/ai/classify-batch`, {
+          items: detail.items
+        });
+        setGroups(classifyData.groups || []);
+
+        // 自动匹配供应商
+        const supplierData = await api.post(`/api/v1/rfqs/classify-suppliers`, {
+          groups: classifyData.groups || []
+        });
+        setRoutes(supplierData.routes || []);
+      }
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      setErr(`加载PR详情失败: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= 手动报价 =============
+  const openManualQuote = async (pr, e) => {
+    e.stopPropagation();  // 防止触发selectPR
+    setLoading(true);
+    setErr("");
+    try {
+      // 加载PR详情和RFQ信息
+      const detail = await api.get(`/api/v1/pr/requests/${pr.id}`);
+
+      // 检查是否已有RFQ
+      let rfqData = null;
+      try {
+        const rfqResponse = await api.get(`/api/v1/rfqs?pr_id=${pr.id}`);
+        if (rfqResponse.items && rfqResponse.items.length > 0) {
+          rfqData = rfqResponse.items[0];
+          // 加载RFQ详情（包括items）
+          const rfqDetailResponse = await api.get(`/api/v1/rfqs/${rfqData.id}`);
+          rfqData = rfqDetailResponse;
+        }
+      } catch (e) {
+        console.log('未找到已有RFQ，将创建新RFQ');
+      }
+
+      // 如果没有RFQ，先创建一个（跳过自动发送）
+      if (!rfqData) {
+        const createResponse = await api.post(`/api/v1/rfqs`, {
+          pr_id: pr.id,
+          note: "手动报价",
+          classification_results: [],
+          skip_send: true  // 跳过自动发送，只创建RFQ
+        });
+        rfqData = createResponse;
+      }
+
+      // 将PR信息附加到rfqData
+      rfqData.pr_detail = detail;
+
+      setManualQuoteRfq(rfqData);
+      setShowManualQuoteModal(true);
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      setErr(`打开手动报价失败: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualQuoteSuccess = (response) => {
+    setShowManualQuoteModal(false);
+    setManualQuoteRfq(null);
+    loadApprovedPRList();  // 刷新列表
+
+    // 显示成功信息
+    const posCount = response?.pos_created?.length || 0;
+    const message = `✅ 手动报价提交成功！\n已自动创建 ${posCount} 个采购订单\n下一步：去发票管理上传发票`;
+    alert(message);
+  };
+
+  // ============= 3. 自动分类和匹配 =============
+  const classify = async () => {
+    if (!selectedPr?.items?.length) return;
+    setLoading(true);
+    setErr("");
+    try {
+      // 调用分类接口
+      const classifyData = await api.post(`/api/v1/ai/classify-batch`, { 
+        items: selectedPr.items 
+      });
+      setGroups(classifyData.groups || []);
+
+      // 自动匹配供应商
+      const supplierData = await api.post(`/api/v1/rfqs/classify-suppliers`, { 
+        groups: classifyData.groups || [] 
+      });
+      setRoutes(supplierData.routes || []);
+      setRoutesEdited({});  // 重置编辑状态
+      setActiveTab("send");
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      setErr(`分类或匹配失败: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= 4. 创建并发送RFQ（方案B：一键完成）=============
+  const createAndSendRFQ = async () => {
+    if (!selectedPr || !routes.length) return;
+    setLoading(true);
+    setErr("");
+    try {
+      // 准备分类结果
+      const classificationResults = [];
+      if (groups && groups.length > 0) {
+        for (const group of groups) {
+          for (const item of (group.items || [])) {
+            const prItem = selectedPr.items.find(p =>
+              p.name === item.name && p.spec === item.spec
+            );
+            if (prItem) {
+              classificationResults.push({
+                pr_item_id: prItem.id,
+                category: group.category
+              });
+            }
+          }
+        }
+      }
+
+      // 🚀 创建RFQ（自动发送模式）
+      const data = await api.post(`/api/v1/rfqs`, {
+        pr_id: Number(selectedPr.id),
+        user_id: user?.id || 1,
+        note,
+        classification_results: classificationResults.length > 0 ? classificationResults : undefined,
+        // skip_send: false  // 默认自动发送
+      });
+
+      setRfqId(data.id);
+      setRfqDetail(data);
+      setActiveTab("track");
+
+      // 显示成功提示
+      alert("✅ RFQ已创建并发送给供应商！\n后台正在异步处理通知任务...");
+
+      // 立即获取状态
+      setTimeout(async () => {
+        try {
+          const status = await api.get(`/api/v1/rfqs/${data.id}/status`);
+          setRfqStatus(status);
+          const quotesData = await api.get(`/api/v1/rfqs/${data.id}/quotes`);
+          setRfqQuotes(quotesData.quotes || []);
+        } catch (e) {
+          console.error("获取初始状态失败", e);
+        }
+      }, 500);
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      setErr(`创建并发送RFQ失败: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= 5. 发送RFQ =============
+  const sendRFQ = async () => {
+    if (!rfqId) return;
+    setLoading(true);
+    setErr("");
+    try {
+      // 使用编辑后的路由，如果没有则使用原始路由
+      const routesToSend = routesEdited && Object.keys(routesEdited).length > 0 
+        ? routesEdited 
+        : routes.reduce((acc, r) => {
+            acc[r.category] = r.supplierIds;
+            return acc;
+          }, {});
+
+      await api.post(`/api/v1/rfqs/${rfqId}/send`, { 
+        routes: routesToSend
+      });
+      
+      // 刷新RFQ状态
+      await getRFQStatus();
+      alert("RFQ已成功发送");
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || String(e);
+      setErr(`发送RFQ失败: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= 6. 获取RFQ状态 =============
+  const getRFQStatus = async () => {
+    if (!rfqId) return;
+    try {
+      const status = await api.get(`/api/v1/rfqs/${rfqId}/status`);
+      setRfqStatus(status);
+    } catch (e) {
+      console.error("获取RFQ状态失败", e);
+    }
+  };
+
+  // ============= 7. 获取RFQ报价 =============
+  const getRFQQuotes = async () => {
+    if (!rfqId) return;
+    try {
+      const data = await api.get(`/api/v1/rfqs/${rfqId}/quotes`);
+      setRfqQuotes(data.quotes || []);
+    } catch (e) {
+      console.error("获取报价失败", e);
+    }
+  };
+
+  useEffect(() => {
+    if (rfqId && activeTab === "track") {
+      // 立即获取一次状态
+      getRFQStatus();
+      getRFQQuotes();
+
+      // 然后每3秒刷新一次
+      const timer = setInterval(() => {
+        getRFQStatus();
+        getRFQQuotes();
+      }, 3000);
+      return () => clearInterval(timer);
+    }
+  }, [rfqId, activeTab]);
+
+  // 编辑供应商选择
+  const toggleSupplier = (category, supplierId) => {
+    setRoutesEdited(prev => {
+      const updated = { ...prev };
+      if (!updated[category]) {
+        updated[category] = routes.find(r => r.category === category)?.supplierIds || [];
+      }
+      const list = updated[category];
+      if (list.includes(supplierId)) {
+        updated[category] = list.filter(id => id !== supplierId);
+      } else {
+        updated[category] = [...list, supplierId];
+      }
+      return updated;
+    });
+  };
+
+  // ✅ 修复：过滤PR列表时添加防御性检查
+  const filteredPRList = prList.filter(pr => {
+    // 确保 pr 有必要的字段
+    if (!pr || typeof pr !== 'object') return false;
+    
+    const prNum = String(pr.prNumber || pr.id || "").toLowerCase();
+    const title = String(pr.title || "").toLowerCase();
+    const search = searchText.toLowerCase();
+    
+    return prNum.includes(search) || title.includes(search);
+  });
+
+  return (
+    <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6 bg-gray-50 min-h-screen">
+      <div className="bg-white rounded-xl p-4 md:p-6 shadow">
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800">采购单发送系统</h1>
+        <p className="text-sm md:text-base text-gray-600 mt-2">智能分类 · 供应商匹配 · 进度追踪</p>
+      </div>
+
+      {err && (
+        <div className="p-4 rounded border border-red-300 bg-red-50 text-red-700">
+          ⚠️ {err}
+        </div>
+      )}
+
+      {/* 简化选项卡 - 方案B：2步流程 */}
+      <div className="flex flex-col sm:flex-row gap-2 bg-white rounded-lg p-2">
+        <button
+          onClick={() => setActiveTab("list")}
+          className={`px-3 md:px-4 py-2 text-sm md:text-base rounded transition ${
+            activeTab === "list"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          1️⃣ 选择PR
+        </button>
+        <button
+          onClick={() => setActiveTab("classify")}
+          disabled={!selectedPr}
+          className={`px-3 md:px-4 py-2 text-sm md:text-base rounded transition disabled:opacity-50 ${
+            activeTab === "classify"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          2️⃣ 预览并发送
+        </button>
+        <button
+          onClick={() => setActiveTab("track")}
+          disabled={!rfqId}
+          className={`px-3 md:px-4 py-2 text-sm md:text-base rounded transition disabled:opacity-50 ${
+            activeTab === "track"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          3️⃣ 追踪进度
+        </button>
+      </div>
+
+      {/* ===== TAB 1: PR列表 ===== */}
+      {activeTab === "list" && (
+        <div className="bg-white rounded-xl p-4 md:p-6 shadow space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <h2 className="text-lg md:text-xl font-semibold">
+              已批准但未发送RFQ的采购单
+              {/* ✅ 显示列表数量 */}
+              <span className="text-sm text-gray-500 ml-2">
+                (共 {prList.length} 个)
+              </span>
+            </h2>
+            <button
+              onClick={loadApprovedPRList}
+              disabled={loadingList}
+              className="px-3 md:px-4 py-2 text-sm md:text-base bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            >
+              {loadingList ? "刷新中..." : "🔄 刷新"}
+            </button>
+          </div>
+
+          {/* 搜索 */}
+          <input
+            type="text"
+            placeholder="搜索PR单号或标题..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {/* 列表 */}
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {filteredPRList.length > 0 ? (
+              filteredPRList.map(pr => (
+                <div
+                  key={pr.id}
+                  onClick={() => selectPR(pr)}
+                  className="p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      {/* ✅ 改进：添加 fallback 字段 */}
+                      <div className="font-semibold text-gray-800">
+                        {pr.prNumber || pr.id} - {pr.title || "无标题"}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        申请人: {pr.owner_name || "未知"} ({pr.owner_department || "未知部门"}) | 物料: {pr.items_count || 0} 项
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        创建时间: {pr.created_at ? new Date(pr.created_at).toLocaleString() : "-"} | 紧急度: {pr.urgency || "-"}
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 items-end sm:items-center">
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium whitespace-nowrap">
+                        已批准
+                      </span>
+                      <button
+                        onClick={(e) => openManualQuote(pr, e)}
+                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        手动报价
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : prList.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <div className="text-2xl mb-2">📭</div>
+                <p>暂无已批准未发送RFQ的采购单</p>
+                <button
+                  onClick={loadApprovedPRList}
+                  className="mt-3 text-blue-500 hover:text-blue-700"
+                >
+                  刷新列表
+                </button>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <p>搜索无结果，请尝试其他关键词</p>
+              </div>
+            )}
+          </div>
+
+          {/* 选中提示 */}
+          {selectedPr && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-blue-700">
+              ✅ 已选择: {selectedPr.prNumber} - {selectedPr.title}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB 2: 分类匹配 ===== */}
+      {activeTab === "classify" && selectedPr && (
+        <div className="bg-white rounded-xl p-4 md:p-6 shadow space-y-4">
+          <h2 className="text-lg md:text-xl font-semibold">物料分类与供应商匹配</h2>
+
+          {/* 物料列表 */}
+          {selectedPr.items && selectedPr.items.length > 0 && (
+            <div>
+              <h3 className="text-base md:text-lg font-semibold mb-2">待分类物料（共 {selectedPr.items.length} 项）</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {selectedPr.items.map((item, idx) => (
+                  <div key={idx} className="border rounded-lg p-3 bg-gradient-to-br from-blue-50 to-blue-100">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <span className="font-semibold text-gray-900">{item.name}</span>
+                      {item.spec && (
+                        <>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-gray-600">{item.spec}</span>
+                        </>
+                      )}
+                      <span className="text-gray-400">|</span>
+                      <span className="text-blue-600 font-medium">{item.qty} {item.unit}</span>
+                      {item.remark && (
+                        <>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-gray-500 text-xs">{item.remark}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 分类结果 */}
+          {groups.length > 0 && (
+            <div>
+              <h3 className="text-base md:text-lg font-semibold mb-2">
+                分类结果（共 {groups.length} 个品类）
+              </h3>
+              <div className="grid grid-cols-1 gap-3">
+                {groups.map((g, idx) => (
+                  <div key={idx} className="border-2 border-yellow-300 rounded-lg p-4 bg-gradient-to-br from-yellow-50 to-yellow-100">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-bold text-yellow-800 text-lg">
+                          {g.category}
+                        </div>
+                        {g.major_category && (
+                          <div className="text-sm text-yellow-700 mt-1">
+                            📦 大类: <span className="font-semibold">{g.major_category}</span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="px-3 py-1 bg-yellow-600 text-white rounded-full text-xs font-medium">
+                        {(g.items || []).length} 项物料
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-1">
+                      {(g.items || []).map((item, itemIdx) => (
+                        <div key={itemIdx} className="flex items-center gap-2 text-sm bg-white rounded px-3 py-2 border border-yellow-200 flex-wrap">
+                          <span className="font-semibold text-gray-800">{item.name}</span>
+                          {item.spec && (
+                            <>
+                              <span className="text-gray-400">|</span>
+                              <span className="text-gray-600">{item.spec}</span>
+                            </>
+                          )}
+                          <span className="text-gray-400 ml-auto">|</span>
+                          <span className="text-blue-600 font-semibold">{item.qty} {item.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 匹配的供应商 */}
+          {routes.length > 0 && (
+            <div>
+              <h3 className="text-base md:text-lg font-semibold mb-2">供应商匹配结果</h3>
+              <div className="grid grid-cols-1 gap-3">
+                {routes.map((route, idx) => {
+                  const hasSuppliers = route.supplierIds && route.supplierIds.length > 0;
+                  return (
+                    <div
+                      key={idx}
+                      className={`border-2 rounded-lg p-4 ${
+                        hasSuppliers
+                          ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100'
+                          : 'border-orange-300 bg-gradient-to-br from-orange-50 to-orange-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className={`font-bold text-lg ${hasSuppliers ? 'text-green-800' : 'text-orange-800'}`}>
+                            {route.category}
+                          </div>
+                          <div className={`text-sm mt-1 ${hasSuppliers ? 'text-green-700' : 'text-orange-700'}`}>
+                            {hasSuppliers ? (
+                              <>✅ 匹配到 <span className="font-semibold">{route.supplierIds.length}</span> 家供应商</>
+                            ) : (
+                              <>⚠️ 该分类暂无供应商</>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          hasSuppliers ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
+                        }`}>
+                          {route.supplierIds?.length || 0} 家
+                        </div>
+                      </div>
+                      {hasSuppliers && (
+                        <div className="mt-2 text-xs text-gray-600 bg-white rounded px-3 py-2 border border-green-200">
+                          供应商ID: {route.supplierIds.join(", ")}
+                        </div>
+                      )}
+                      {!hasSuppliers && (
+                        <div className="mt-2 text-xs text-orange-700 bg-white rounded px-3 py-2 border border-orange-200">
+                          💡 提示: 该分类已正确识别，但系统中还没有该类别的供应商。您可以先添加供应商，或继续发送RFQ供以后处理。
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 备注输入 */}
+          <div className="border-t pt-4">
+            <label className="block text-sm font-medium mb-2 text-gray-700">RFQ备注（可选）</label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="输入RFQ备注信息..."
+              rows={3}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 一键发送按钮 - 方案B */}
+          <div className="flex flex-col sm:flex-row gap-3 border-t pt-4">
+            {groups.length === 0 ? (
+              <div className="p-4 bg-gray-50 rounded-lg text-gray-600 text-center">
+                正在加载分类结果...
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={createAndSendRFQ}
+                  disabled={loading || routes.length === 0}
+                  className="flex-1 px-4 md:px-6 py-3 text-sm md:text-base bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-semibold transition shadow-lg"
+                >
+                  {loading ? "处理中..." : "✅ 确认发送RFQ给供应商"}
+                </button>
+                <button
+                  onClick={classify}
+                  disabled={loading}
+                  className="px-4 md:px-6 py-3 text-sm md:text-base bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+                >
+                  {loading ? "处理中..." : "🔄 重新分类"}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* 提示信息 */}
+          {routes.length === 0 && groups.length > 0 && (
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-orange-700">
+              ⚠️ 没有匹配到供应商，无法发送RFQ。请先在供应商管理中添加相应类别的供应商。
+            </div>
+          )}
+          {routes.length > 0 && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+              💡 点击"确认发送RFQ"后，系统将自动创建RFQ并发送邀请邮件给匹配的供应商。
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB 3: 追踪进度 ===== */}
+      {activeTab === "track" && rfqId && (
+        <div className="space-y-4">
+          {/* 进度卡片 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg p-4 shadow">
+              <div className="text-gray-600 text-sm md:text-base">RFQ编号</div>
+              <div className="text-xl md:text-2xl font-bold text-blue-600">{rfqId}</div>
+            </div>
+            {rfqStatus && (
+              <>
+                <div className="bg-white rounded-lg p-4 shadow">
+                  <div className="text-gray-600 text-sm md:text-base">已发送</div>
+                  <div className="text-xl md:text-2xl font-bold text-blue-600">{rfqStatus.tasks?.sent || 0}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    / {rfqStatus.tasks?.total || 0} 个任务
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow">
+                  <div className="text-gray-600 text-sm md:text-base">已报价</div>
+                  <div className="text-xl md:text-2xl font-bold text-green-600">{rfqStatus.quotes_received || 0}</div>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow">
+                  <div className="text-gray-600 text-sm md:text-base">失败</div>
+                  <div className="text-xl md:text-2xl font-bold text-red-600">{rfqStatus.tasks?.failed || 0}</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 发送状态详情 */}
+          {rfqStatus && (
+            <div className="bg-white rounded-xl p-4 md:p-6 shadow">
+              <h3 className="text-base md:text-lg font-semibold mb-4">通知任务进度</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>已发送</span>
+                  <span className="font-medium">{rfqStatus.tasks?.sent || 0} / {rfqStatus.tasks?.total || 0}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-blue-500 h-3 rounded-full transition-all"
+                    style={{
+                      width: rfqStatus.tasks?.total
+                        ? `${(rfqStatus.tasks?.sent / rfqStatus.tasks?.total) * 100}%`
+                        : "0%"
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-600 mt-4">
+                  <span>待处理: {rfqStatus.tasks?.pending}</span>
+                  <span>失败: {rfqStatus.tasks?.failed}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 报价列表 */}
+          {rfqQuotes.length > 0 && (
+            <div className="bg-white rounded-xl p-4 md:p-6 shadow">
+              <h3 className="text-base md:text-lg font-semibold mb-4">供应商报价</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="p-2 md:p-3 text-left text-xs md:text-sm">供应商</th>
+                      <th className="p-2 md:p-3 text-left text-xs md:text-sm">状态</th>
+                      <th className="p-2 md:p-3 text-left text-xs md:text-sm">报价时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rfqQuotes.map(quote => (
+                      <tr key={quote.id} className="border-t hover:bg-gray-50">
+                        <td className="p-2 md:p-3 text-xs md:text-sm">{quote.supplier_name || `供应商 ${quote.supplier_id}`}</td>
+                        <td className="p-2 md:p-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            quote.status === 'received'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {quote.status === 'received' ? '✓ 已报价' : '⏳ 待报价'}
+                          </span>
+                        </td>
+                        <td className="p-2 md:p-3 text-xs text-gray-600">
+                          {quote.responded_at ? new Date(quote.responded_at).toLocaleString() : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 操作按钮 */}
+          <div className="bg-white rounded-xl p-4 md:p-6 shadow flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => {
+                getRFQStatus();
+                getRFQQuotes();
+              }}
+              className="px-4 md:px-6 py-2 text-sm md:text-base border rounded-lg hover:bg-gray-100"
+            >
+              🔄 刷新状态
+            </button>
+            <button
+              onClick={() => setActiveTab("list")}
+              className="px-4 md:px-6 py-2 text-sm md:text-base bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              ← 返回列表
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 手动报价Modal */}
+      {showManualQuoteModal && manualQuoteRfq && (
+        <ManualQuoteModal
+          rfq={manualQuoteRfq}
+          onClose={() => {
+            setShowManualQuoteModal(false);
+            setManualQuoteRfq(null);
+          }}
+          onSuccess={handleManualQuoteSuccess}
+        />
+      )}
+    </div>
+  );
+}

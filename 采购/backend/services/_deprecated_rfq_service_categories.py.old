@@ -1,0 +1,422 @@
+# services/rfq_service_categories.py
+# -*- coding: utf-8 -*-
+"""
+RFQ服务（创建RFQ + 按品类匹配 + 通知任务生成 + Celery派发）
+- 仅依赖 SupplierCategory.category / SupplierCategory.major_category 两列
+- 兼容两参：match_suppliers_by_category(category, major_category=None)
+- 任务生成具备幂等性（避免重复）
+- ✅ 统一 RFQItem 字段：item_name / item_spec / quantity
+"""
+
+import logging
+from typing import Dict, List, Tuple
+from datetime import datetime
+
+from sqlalchemy import or_
+from sqlalchemy import func
+from extensions import db
+from models.supplier import Supplier
+from models.supplier_category import SupplierCategory
+from models.rfq import RFQ
+from models.rfq_item import RFQItem
+from models.rfq_notification_task import RFQNotificationTask
+from models.supplier_quote import SupplierQuote  # 备用：统计/扩展用
+
+logger = logging.getLogger(__name__)
+
+
+# ---------- 工具 ----------
+
+def _split_category(cat: str) -> Tuple[str, str]:
+    """
+    把 '刀具/车削刀具' 拆成 ('刀具', '车削刀具')
+    如果为空或无分隔符，则返回 (cat or None, None)
+    """
+    cat = (cat or "").strip()
+    if not cat:
+        return None, None
+    if "/" in cat:
+        p = cat.split("/", 1)
+        return (p[0] or None), (p[1] or None)
+    return cat, None
+
+
+def _take_item_fields_from_pr_item(pi) -> Tuple[str, str, int, str, str]:
+    """
+    从 PRItem pi 提取标准字段（兼容旧字段）:
+    return (item_name, item_spec, quantity, unit, category)
+    """
+    item_name = (
+        getattr(pi, "item_name", None)
+        or getattr(pi, "name", None)
+        or ""
+    )
+    item_spec = (
+        getattr(pi, "item_spec", None)
+        or getattr(pi, "spec", None)
+        or getattr(pi, "specification", None)
+        or ""
+    )
+    quantity = (
+        getattr(pi, "quantity", None)
+        or getattr(pi, "qty", None)
+        or getattr(pi, "quantity_requested", None)
+        or 1
+    )
+    try:
+        quantity = int(quantity or 1)
+    except Exception:
+        quantity = 1
+
+    unit = (
+        getattr(pi, "unit", None)
+        or getattr(pi, "uom", None)
+        or "个"
+    )
+    category = (
+        getattr(pi, "category", None)
+        or getattr(pi, "category_name", None)
+        or getattr(pi, "major_category", None)
+        or ""
+    )
+    return item_name, item_spec, quantity, unit, category
+
+
+# ---------- 服务 ----------
+
+class RFQService:
+    """RFQ服务（创建 + 分类匹配 + 通知任务 + Celery派发）"""
+
+    # ========== 创建 RFQ ==========
+
+    def create_rfq_from_pr(self, pr, user_id: int, note: str = "") -> RFQ:
+        """
+        从已审批的 PR 创建 RFQ（把 PR 的 items 复制为 RFQItem）
+        路由 /api/v1/rfqs 在未提供 classification_results 时调用本方法
+        """
+        try:
+            rfq = RFQ(
+                pr_id=pr.id,
+                created_by=user_id,
+                note=(note or "").strip(),
+                status='draft'
+            )
+            db.session.add(rfq)
+            db.session.flush()  # 需要 rfq.id
+
+            # 复制 PR 明细
+            for pi in getattr(pr, "items", []) or []:
+                item_name, item_spec, quantity, unit, category = _take_item_fields_from_pr_item(pi)
+                pr_item_id = getattr(pi, "id", None)  # ✅ 必填（避免 1048 约束）
+                maj, minor = _split_category(category)
+
+                ritem = RFQItem(
+                    rfq_id=rfq.id,
+                    pr_item_id=pr_item_id,
+                    item_name=item_name,
+                    item_spec=item_spec,
+                    quantity=int(quantity or 1),
+                    unit=unit,
+                    category=category,
+                    major_category=maj,
+                    minor_category=minor,
+                    classification_source="from_pr",
+                    classification_score=None
+                )
+                db.session.add(ritem)
+
+            db.session.commit()
+            logger.info(f"[create_rfq_from_pr] ✅ RFQ#{rfq.id} 已创建（来自 PR#{pr.id}）")
+            return rfq
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[create_rfq_from_pr] ❌ 失败: {e}", exc_info=True)
+            raise
+
+    def create_rfq_from_pr_with_classification(
+        self,
+        pr,
+        user_id: int,
+        note: str,
+        classification_results: List[dict]
+    ) -> RFQ:
+        """
+        从 PR 创建 RFQ，并用前端传入分类结果覆盖每行物料的 category
+        classification_results:
+        [
+          { "pr_item_id": 1, "category": "刀具/车削刀具", "score": 0.92 },
+          ...
+        ]
+        """
+        try:
+            rfq = RFQ(
+                pr_id=pr.id,
+                created_by=user_id,
+                note=(note or "").strip(),
+                status='draft'
+            )
+            db.session.add(rfq)
+            db.session.flush()
+
+            # pr_item_id → (category, score)
+            cr_map: Dict[int, dict] = {}
+            for row in (classification_results or []):
+                pid = row.get("pr_item_id")
+                try:
+                    pid = int(pid) if pid is not None else None
+                except Exception:
+                    pid = None
+                if pid:
+                    cr_map[pid] = {
+                        "category": (row.get("category") or "").strip(),
+                        "score": row.get("score")
+                    }
+
+            for pi in getattr(pr, "items", []) or []:
+                item_name, item_spec, quantity, unit, raw_category = _take_item_fields_from_pr_item(pi)
+                pr_item_id = getattr(pi, "id", None)  # ✅ 必填
+                cr = cr_map.get(pr_item_id, {})
+                category = (cr.get("category") or raw_category or "").strip()
+                score = cr.get("score")
+                maj, minor = _split_category(category)
+
+                ritem = RFQItem(
+                    rfq_id=rfq.id,
+                    pr_item_id=pr_item_id,
+                    item_name=item_name,              # ✅ 新字段
+                    item_spec=item_spec,              # ✅ 新字段
+                    quantity=int(quantity or 1),      # ✅ 新字段
+                    unit=unit,
+                    category=category,
+                    major_category=maj,
+                    minor_category=minor,
+                    classification_source="preclassified",
+                    classification_score=(str({"score": score}) if score is not None else None)
+                )
+                db.session.add(ritem)
+
+            db.session.commit()
+            logger.info(f"[create_rfq_from_pr_with_classification] ✅ RFQ#{rfq.id} 已创建（带预分类，来自 PR#{pr.id}）")
+            return rfq
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[create_rfq_from_pr_with_classification] ❌ 失败: {e}", exc_info=True)
+            raise
+
+    # ========== 供应商匹配 ==========
+
+    def match_suppliers_by_category(self, category: str, major_category: str = None) -> List[int]:
+        try:
+            if not category and not major_category:
+                logger.warning("[match_suppliers_by_category] category 和 major_category 都为空")
+                return []
+
+            if not major_category:
+                from constants.categories import get_major_category
+                major_category = get_major_category(category)
+
+            if not major_category:
+                logger.warning(f"[match_suppliers_by_category] 无法提取大类: category='{category}'")
+                return []
+
+            q = (
+                db.session.query(Supplier.id)
+                .join(SupplierCategory, Supplier.id == SupplierCategory.supplier_id)
+                .filter(
+                    Supplier.status == 'approved',
+                    SupplierCategory.major_category == major_category
+                )
+            )
+            supplier_ids = [sid for (sid,) in q.all()]
+            return list(dict.fromkeys(supplier_ids))
+        except Exception as e:
+            logger.error(f"[match_suppliers_by_category] ❌ 异常: {str(e)}", exc_info=True)
+            return []
+
+
+    def match_suppliers_for_rfq(self, rfq: RFQ) -> Dict[str, List[int]]:
+        """
+        为 RFQ 的所有物料匹配供应商（按品类分组）
+        返回: { "刀具/车削刀具": [supplier_id, ...], ... }
+        """
+        routes: Dict[str, List[int]] = {}
+        try:
+            if not rfq or not getattr(rfq, "items", None):
+                logger.warning(f"[match_suppliers_for_rfq] RFQ#{getattr(rfq, 'id', None)} 没有物料")
+                return routes
+
+            # 按品类聚合
+            category_items: Dict[str, List[RFQItem]] = {}
+            for it in rfq.items:
+                cat = (it.category or "").strip()
+                if not cat:
+                    logger.debug(f"[match_suppliers_for_rfq] item#{it.id} 无分类，跳过")
+                    continue
+                category_items.setdefault(cat, []).append(it)
+
+            # 为每个品类匹配供应商
+            for cat, items in category_items.items():
+                maj = cat.split('/')[0] if '/' in cat else cat
+                supplier_ids = self.match_suppliers_by_category(cat, maj)
+                routes[cat] = supplier_ids
+                logger.debug(f"[match_suppliers_for_rfq] 品类 '{cat}'（{len(items)} 项）→ {len(supplier_ids)} 个供应商")
+
+            logger.info(
+                f"[match_suppliers_for_rfq] RFQ#{rfq.id} {len(category_items)} 个品类，总计 {sum(len(v) for v in routes.values())} 个供应商"
+            )
+            return routes
+        except Exception as e:
+            logger.error(f"[match_suppliers_for_rfq] 异常: {e}", exc_info=True)
+            return routes
+
+    # ========== 通知任务（入库 + Celery派发） ==========
+
+    def _task_exists(self, rfq_id: int, supplier_id: int, category: str) -> bool:
+        """幂等检查：同一 RFQ + 供应商 + 品类 的任务是否已存在"""
+        existing = RFQNotificationTask.query.filter_by(
+            rfq_id=rfq_id,
+            supplier_id=supplier_id,
+            category=category
+        ).first()
+        return existing is not None
+
+    def generate_notification_tasks(self, rfq: RFQ, routes: Dict[str, List[int]]) -> List[int]:
+        """
+        生成通知任务（幂等）并派发 Celery
+        routes: { "刀具/车削刀具": [12, 15], ... }
+        返回: 创建的任务ID列表
+        """
+        task_ids: List[int] = []
+        try:
+            if not routes:
+                logger.warning(f"[generate_notification_tasks] RFQ#{rfq.id} routes 为空")
+                return task_ids
+
+            total_suppliers = 0
+            for category, supplier_ids in routes.items():
+                if not supplier_ids:
+                    continue
+                for sid in supplier_ids:
+                    total_suppliers += 1
+                    if self._task_exists(rfq.id, sid, category):
+                        logger.debug(f"[generate_notification_tasks] 已存在: RFQ#{rfq.id} → S#{sid} ({category})")
+                        continue
+                    task = RFQNotificationTask(
+                        rfq_id=rfq.id,
+                        supplier_id=int(sid),
+                        category=category,
+                        status='pending',
+                        retry_count=0,
+                        max_retries=5
+                    )
+                    db.session.add(task)
+                    db.session.flush()
+                    task_ids.append(task.id)
+                    logger.debug(f"[generate_notification_tasks] 创建任务: RFQ#{rfq.id} → S#{sid} ({category})")
+                    exists_quote = SupplierQuote.query.filter_by(
+                        rfq_id=rfq.id, supplier_id=int(sid)
+                    ).first()
+                    if not exists_quote:
+                        # 简单生成一个报价单号；如你已有统一生成器，用你项目里的
+                        qno = "Q" + datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:-3]
+                        sq = SupplierQuote(
+                            rfq_id=rfq.id,
+                            supplier_id=int(sid),
+                            quote_number=qno,
+                            status='published',          # 供应商端可见、可参与
+                            total_participated=0,
+                        )
+                        db.session.add(sq)                    
+
+            db.session.commit()
+            logger.info(f"[generate_notification_tasks] RFQ#{rfq.id} 创建 {len(task_ids)}/{total_suppliers} 个通知任务")
+
+            # Celery 异步派发
+            if task_ids:
+                try:
+                    from tasks.notify_rfq import send_rfq_notification
+                    for tid in task_ids:
+                        try:
+                            res = send_rfq_notification.delay(tid)
+                            logger.debug(f"[generate_notification_tasks] Celery 派发: task_id={tid}, celery_id={res.id}")
+                        except Exception as ce:
+                            logger.error(f"[generate_notification_tasks] Celery 派发失败 task_id={tid}: {ce}", exc_info=True)
+                except Exception as ie:
+                    logger.error(f"[generate_notification_tasks] 无法导入或派发 Celery 任务: {ie}", exc_info=True)
+
+            return task_ids
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[generate_notification_tasks] 异常: {e}", exc_info=True)
+            return task_ids
+    def _gen_quote_number(self) -> str:
+        # 简单生成：Q + 时间戳（可换成你的规则）
+        return "Q" + datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:-3]
+
+    def generate_notification_tasks(self, rfq: RFQ, routes: Dict[str, List[int]]) -> List[int]:
+        """
+        routes: { "刀具/铣削刀具": [supplier_id, ...], ... }
+        需要：为每个 supplier_id 生成一条 SupplierQuote(status='published')，避免重复
+        """
+        task_ids = []
+        try:
+            for cat, supplier_ids in (routes or {}).items():
+                if not supplier_ids:
+                    continue
+
+                for sid in supplier_ids:
+                    # 幂等：已存在则跳过
+                    exists = (
+                        db.session.query(SupplierQuote.id)
+                        .filter_by(rfq_id=rfq.id, supplier_id=sid)
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    sq = SupplierQuote(
+                        rfq_id=rfq.id,
+                        supplier_id=sid,
+                        quote_number=self._gen_quote_number(),
+                        status='published',
+                        item_name=None,              # 如模型要求可填默认
+                        item_description=None,
+                        quantity_requested=None,
+                        unit=None,
+                        deadline=None,
+                        total_participated=0,
+                    )
+                    db.session.add(sq)
+
+                    # 可选：同时入库 RFQNotificationTask（若你有通知队列）
+                    nt = RFQNotificationTask(
+                        rfq_id=rfq.id,
+                        supplier_id=sid,
+                        category=cat,
+                        status='pending',
+                    )
+                    db.session.add(nt)
+                    db.session.flush()
+                    task_ids.append(nt.id)
+
+            db.session.commit()
+            return task_ids
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[generate_notification_tasks] ❌ {e}", exc_info=True)
+            raise
+
+    def mark_rfq_sent(self, rfq: RFQ) -> None:
+        """标记 RFQ 为已发送（任务已创建并派发）"""
+        try:
+            rfq.status = 'sent'
+            rfq.sent_at = datetime.utcnow()
+            db.session.commit()
+            logger.info(f"[mark_rfq_sent] ✅ RFQ#{rfq.id} 已标记为 sent")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"[mark_rfq_sent] ❌ 标记失败: {e}", exc_info=True)
+            raise

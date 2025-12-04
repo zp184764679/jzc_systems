@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试工序API加载</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>工序API测试</h1>
+    <button onclick="testAPI()">测试加载工序</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>正在加载...</p>';
+
+            try {
+                console.log('开始加载工序库...');
+                const response = await fetch('http://localhost:8001/api/processes?limit=100');
+
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('工序库加载成功，总数:', data.total, '返回:', data.items?.length);
+
+                if (data.items && data.items.length > 0) {
+                    const options = data.items.map(p => ({
+                        code: p.process_code,
+                        name: p.process_name,
+                        icon: p.icon || '⚙️',
+                        category: p.category
+                    }));
+
+                    resultDiv.innerHTML = `
+                        <h2>✅ 成功！加载了 ${options.length} 个工序</h2>
+                        <h3>前5个工序:</h3>
+                        <ul>
+                            ${options.slice(0, 5).map(p => `
+                                <li>${p.icon} ${p.name} (${p.code}) - ${p.category}</li>
+                            `).join('')}
+                        </ul>
+                        <p>查看控制台获取完整数据</p>
+                    `;
+                    console.log('所有工序:', options);
+                } else {
+                    throw new Error('API返回数据为空');
+                }
+            } catch (error) {
+                console.error('加载工序库失败:', error);
+                resultDiv.innerHTML = `
+                    <h2>❌ 失败</h2>
+                    <p style="color: red;">${error.message}</p>
+                    <p>请检查:</p>
+                    <ul>
+                        <li>后端服务是否在 http://localhost:8001 运行</li>
+                        <li>浏览器控制台(F12)中的详细错误</li>
+                    </ul>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

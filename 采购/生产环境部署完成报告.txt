@@ -1,0 +1,200 @@
+═══════════════════════════════════════════════════════════════
+采购系统 - 生产环境部署完成报告
+═══════════════════════════════════════════════════════════════
+生成时间: 2025-01-09
+
+【部署架构】
+
+网络架构:
+┌─────────────────────────────────────────────────────────┐
+│ 公网 IP: 61.145.212.28 (DMZ映射)                        │
+│   ↓                                                      │
+│ 内网 IP: 192.168.5.125 (Windows主机)                    │
+│   ├─ WSL Ubuntu 22.04 (IP: 172.22.47.181)               │
+│   │   ├─ 后端 Flask API (0.0.0.0:5001) - systemd       │
+│   │   ├─ Celery Worker - systemd                       │
+│   │   ├─ Redis (localhost:6379)                        │
+│   │   └─ Ollama LLM (localhost:11434)                  │
+│   │                                                      │
+│   └─ Windows 服务                                        │
+│       └─ MySQL 9.0 (172.22.32.1:3306)                  │
+└─────────────────────────────────────────────────────────┘
+
+【已完成配置】
+
+✅ 1. MySQL 数据库 (Windows)
+   - 数据库名: caigou
+   - 监听地址: 0.0.0.0:3306
+   - 用户: root
+   - WSL访问地址: 172.22.32.1:3306
+
+✅ 2. WSL 后端服务
+   - 位置: ~/caigou-prod/backend
+   - 服务名: caigou-backend.service
+   - 监听地址: 0.0.0.0:5001
+   - 状态: active (running)
+   - 自动启动: 已启用
+
+✅ 3. Celery 异步任务服务 (WSL)
+   - 服务名: caigou-celery.service
+   - Broker: redis://localhost:6379/0
+   - Backend: redis://localhost:6379/1
+   - 状态: active (running)
+   - 自动启动: 已启用
+
+✅ 4. Redis 服务 (WSL)
+   - 监听地址: localhost:6379
+   - 状态: active (running)
+
+✅ 5. Ollama LLM 服务
+   - 监听地址: localhost:11434
+   - 模型: qwen3:8b, qwen3-vl:8b-instruct
+   - 状态: running
+
+✅ 6. WSL 端口转发配置
+   - 5001端口: 0.0.0.0:5001 → 172.22.47.181:5001 (后端API)
+   - 3000端口: 0.0.0.0:3000 → 172.22.47.181:3000 (前端)
+
+✅ 7. Windows 防火墙规则
+   - 规则名: WSL Backend API 5001
+   - 方向: 入站
+   - 协议: TCP
+   - 端口: 5001
+   - 动作: 允许
+
+✅ 8. 后端环境配置 (WSL)
+   - 配置文件: ~/caigou-prod/backend/.env
+   - 公网域名: http://61.145.212.28
+   - 后端API: http://61.145.212.28:5001
+   - 前端H5: http://61.145.212.28:3000
+   - CORS: 已配置支持多源访问
+
+【访问地址】
+
+本地访问 (Windows主机):
+- 后端API: http://localhost:5001
+- 前端页面: http://localhost:3000
+
+内网访问:
+- 后端API: http://192.168.5.125:5001
+- 前端页面: http://192.168.5.125:3000
+
+公网访问 (通过DMZ映射):
+- 后端API: http://61.145.212.28:5001
+- 前端页面: http://61.145.212.28:3000
+
+【测试结果】
+
+✅ localhost:5001/api/health - 测试通过
+   响应: {"message": "Server is running", "status": "healthy"}
+
+✅ 192.168.5.125:5001/api/health - 测试通过
+   响应: {"message": "Server is running", "status": "healthy"}
+
+✅ 端口转发配置验证通过
+✅ 防火墙规则配置验证通过
+
+【服务管理命令】
+
+在 WSL 中管理服务:
+# 查看后端服务状态
+sudo systemctl status caigou-backend
+
+# 重启后端服务
+sudo systemctl restart caigou-backend
+
+# 查看后端日志
+sudo journalctl -u caigou-backend -f
+
+# 查看 Celery 服务状态
+sudo systemctl status caigou-celery
+
+# 重启 Celery 服务
+sudo systemctl restart caigou-celery
+
+# 查看 Celery 日志
+sudo journalctl -u caigou-celery -f
+
+# 查看所有服务状态
+sudo systemctl status caigou-*
+
+【重要提示】
+
+1. WSL IP 地址变化
+   - WSL IP (172.22.47.181) 可能在WSL重启后变化
+   - 如果WSL重启，需要重新运行端口转发配置脚本
+   - 脚本位置: C:\Users\Admin\Desktop\采购\setup_wsl_port_forward.ps1
+   - 运行方式: 右键 → "以管理员身份运行PowerShell"
+
+2. 服务自动启动
+   - WSL 服务 (caigou-backend, caigou-celery) 会在 WSL 启动时自动运行
+   - MySQL 服务会在 Windows 启动时自动运行
+   - Ollama 需要手动启动或配置自动启动
+
+3. 端口转发规则
+   - 端口转发规则在 Windows 重启后仍然有效
+   - 但如果 WSL IP 变化，需要更新规则
+
+4. 防火墙配置
+   - 防火墙规则已永久配置
+   - 如果外网无法访问，检查路由器DMZ配置
+
+【故障排查】
+
+如果外网无法访问:
+
+1. 检查 WSL 服务状态:
+   wsl -d Ubuntu-22.04 -- bash -c "sudo systemctl status caigou-backend"
+
+2. 检查端口转发配置:
+   netsh interface portproxy show all
+
+3. 检查防火墙规则:
+   netsh advfirewall firewall show rule name="WSL Backend API 5001"
+
+4. 检查 WSL 端口监听:
+   wsl -d Ubuntu-22.04 -- bash -c "ss -tuln | grep 5001"
+
+5. 测试本地连接:
+   curl http://localhost:5001/api/health
+
+6. 测试内网连接:
+   curl http://192.168.5.125:5001/api/health
+
+7. 检查路由器 DMZ 配置:
+   - 确认 61.145.212.28 正确映射到 192.168.5.125
+   - 确认 5001 端口已开放
+
+【配置文件位置】
+
+WSL 后端:
+- 代码目录: ~/caigou-prod/backend
+- 配置文件: ~/caigou-prod/backend/.env
+- 服务文件: /etc/systemd/system/caigou-backend.service
+- 日志位置: journalctl -u caigou-backend
+
+Windows 配置:
+- 端口转发脚本: C:\Users\Admin\Desktop\采购\setup_wsl_port_forward.ps1
+- 配置说明: C:\Users\Admin\Desktop\采购\WSL端口转发配置说明.txt
+
+【下一步操作】
+
+1. 部署前端应用 (如需要)
+   - 可以部署到 WSL 或 Windows
+   - 建议部署到 WSL 以使用同一套端口转发
+
+2. 配置SSL证书 (生产环境建议)
+   - 使用 Nginx 反向代理
+   - 配置 HTTPS 访问
+
+3. 设置监控和告警
+   - 配置服务状态监控
+   - 配置日志轮转
+
+4. 数据库备份策略
+   - 配置自动备份脚本
+   - 设置备份保留策略
+
+═══════════════════════════════════════════════════════════════
+部署完成！系统已就绪，可以开始使用。
+═══════════════════════════════════════════════════════════════

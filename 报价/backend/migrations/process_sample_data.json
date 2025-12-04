@@ -1,0 +1,122 @@
+[
+  {
+    "process_code": "CNC_TURNING",
+    "process_name": "CNC车削",
+    "category": "车削",
+    "icon": "🔄",
+    "defect_rate": 1.0,
+    "daily_output": 480,
+    "setup_time": 0.125,
+    "daily_fee": 400,
+    "hourly_rate": 50,
+    "description": "CNC数控车床加工，适用于回转体零件"
+  },
+  {
+    "process_code": "MILLING",
+    "process_name": "铣削",
+    "category": "铣削",
+    "icon": "⚙️",
+    "defect_rate": 1.0,
+    "daily_output": 1500,
+    "setup_time": 0.125,
+    "daily_fee": 0,
+    "hourly_rate": 60,
+    "description": "铣扁加工"
+  },
+  {
+    "process_code": "GRINDING",
+    "process_name": "无芯磨",
+    "category": "磨削",
+    "icon": "✨",
+    "defect_rate": 0.0,
+    "daily_output": 3000,
+    "setup_time": 0.125,
+    "daily_fee": 200,
+    "hourly_rate": 45,
+    "description": "无芯磨床精密磨削"
+  },
+  {
+    "process_code": "DRILLING",
+    "process_name": "钻孔",
+    "category": "钻孔",
+    "icon": "🔩",
+    "defect_rate": 0.5,
+    "daily_output": 2000,
+    "setup_time": 0.1,
+    "daily_fee": 150,
+    "hourly_rate": 40,
+    "description": "钻孔加工"
+  },
+  {
+    "process_code": "DEBURRING_AUTO",
+    "process_name": "机动去披锋",
+    "category": "去毛刺",
+    "icon": "🔧",
+    "defect_rate": 0.0,
+    "daily_output": 1500,
+    "setup_time": 0.125,
+    "daily_fee": 0,
+    "hourly_rate": 30,
+    "description": "机动去毛刺"
+  },
+  {
+    "process_code": "DEBURRING_MANUAL",
+    "process_name": "手工去披锋",
+    "category": "去毛刺",
+    "icon": "🔧",
+    "defect_rate": 0.0,
+    "daily_output": 3000,
+    "setup_time": 0.125,
+    "daily_fee": 0,
+    "hourly_rate": 25,
+    "description": "手工去毛刺"
+  },
+  {
+    "process_code": "HEAT_TREAT",
+    "process_name": "热处理",
+    "category": "热处理",
+    "icon": "🔥",
+    "defect_rate": 0.5,
+    "daily_output": 1000,
+    "setup_time": 0.2,
+    "daily_fee": 300,
+    "hourly_rate": 0,
+    "description": "淬火、回火、调质等热处理"
+  },
+  {
+    "process_code": "PLATING",
+    "process_name": "电镀",
+    "category": "表面处理",
+    "icon": "💎",
+    "defect_rate": 1.0,
+    "daily_output": 1000,
+    "setup_time": 0,
+    "daily_fee": 0,
+    "hourly_rate": 0,
+    "description": "电镀表面处理"
+  },
+  {
+    "process_code": "INSPECTION",
+    "process_name": "检查",
+    "category": "质检",
+    "icon": "✓",
+    "defect_rate": 0.0,
+    "daily_output": 3000,
+    "setup_time": 0.125,
+    "daily_fee": 100,
+    "hourly_rate": 35,
+    "description": "质量检验"
+  },
+  {
+    "process_code": "PACKING",
+    "process_name": "包装",
+    "category": "包装",
+    "icon": "📦",
+    "defect_rate": 0.2,
+    "daily_output": 2000,
+    "setup_time": 0.05,
+    "daily_fee": 80,
+    "hourly_rate": 20,
+    "description": "产品包装"
+  }
+]

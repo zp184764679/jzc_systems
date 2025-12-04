@@ -1,0 +1,103 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Checkbox,
+  message,
+  Typography,
+  Space,
+  Tabs,
+  Tag,
+} from 'antd';
+import {
+  CheckOutlined,
+  CloseOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
+import { getRegistrationRequests, approveRequest, rejectRequest } from '../services/api';
+import dayjs from 'dayjs';
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+const AdminPanel = () => {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('pending');
+  const [approveModalVisible, setApproveModalVisible] = useState(false);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [approveForm] = Form.useForm();
+  const [rejectForm] = Form.useForm();
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getRegistrationRequests(activeTab);
+      setRequests(data);
+    } catch (error) {
+      message.error(error.message || '获取申请列表失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchRequests();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchRequests]);
+
+  const handleApproveClick = (record) => {
+    setSelectedRequest(record);
+    setApproveModalVisible(true);
+    approveForm.setFieldsValue({
+      username: record.empNo.toLowerCase(),
+      password: '',
+      permissions: [],
+    });
+  };
+
+  const handleRejectClick = (record) => {
+    setSelectedRequest(record);
+    setRejectModalVisible(true);
+    rejectForm.resetFields();
+  };
+
+  const handleApproveSubmit = async (values) => {
+    try {
+      await approveRequest(
+        selectedRequest._id,
+        values.username,
+        values.password,
+        values.permissions || []
+      );
+      message.success('申请已批准');
+      setApproveModalVisible(false);
+      approveForm.resetFields();
+      fetchRequests();
+    } catch (error) {
+      message.error(error.message || '批准失败');
+    }
+  };
+
+  const handleRejectSubmit = async (values) => {
+    try {
+      await rejectRequest(selectedRequest._id, values.reason);
+      message.success('申请已拒绝');
+      setRejectModalVisible(false);
+      rejectForm.resetFields();
+      fetchRequests();
+    } catch (error) {
+      message.error(error.message || '拒绝失败');
+    }
+  };

@@ -1,0 +1,126 @@
+from sqlalchemy import Integer, String, DateTime, BigInteger
+from sqlalchemy.dialects.mysql import BIGINT
+from extensions import db
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+
+DEPARTMENT_ENUM = [
+    "生产部/走心机", "生产部/磨床", "生产部/加工中心",
+    "采购部", "仓库", "品质", "财务", "行政", "研发", "销售"
+]
+
+# 角色定义和级别（数值越大权限越高）
+ROLE_LEVELS = {
+    'user': 0,          # 普通员工
+    'supervisor': 0.5,  # 主管
+    'admin': 1,         # 管理员
+    'super_admin': 2    # 超级管理员
+}
+
+class User(db.Model):
+    __tablename__ = 'users'
+    __table_args__ = (
+        db.UniqueConstraint('employee_no', name='uq_users_employee_no'),
+    )
+
+    id = db.Column(BIGINT(unsigned=True), primary_key=True, autoincrement=True)
+    username = db.Column(String(50), unique=True, nullable=False)
+    email = db.Column(String(120), unique=True, nullable=False)
+    password_hash = db.Column(String(255), nullable=False)
+    status = db.Column(String(20), default='pending')
+    role = db.Column(String(20), default='user')  # user, supervisor, admin, super_admin
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    created_by = db.Column(BIGINT(unsigned=True), nullable=True)  # 记录谁创建的用户
+
+    department = db.Column(String(50), nullable=True, default='')
+    employee_no = db.Column(String(50), nullable=True)
+    phone = db.Column(String(30), nullable=True)
+    wework_user_id = db.Column(String(100), nullable=True, unique=True)  # 企业微信UserID
+
+    prs = db.relationship(
+        'PR',
+        back_populates='owner',
+        lazy=True,
+        cascade='all, delete-orphan'
+    )
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    @classmethod
+    def create_user(cls, username, email, password, status='pending',
+                    department=None, employee_no=None, phone=None, created_by=None):
+        user = cls(
+            username=username,
+            email=email,
+            status=status,
+            department=department or '',
+            employee_no=employee_no,
+            phone=phone,
+            created_by=created_by,
+        )
+        user.set_password(password)
+        return user
+
+    def is_approved(self):
+        return self.status == 'approved'
+
+    def approve(self):
+        self.status = 'approved'
+
+    def get_role_level(self):
+        """获取角色级别（数值越大权限越高）"""
+        return ROLE_LEVELS.get(self.role, 0)
+
+    def can_manage(self, target_user):
+        """
+        检查当前用户是否可以管理目标用户
+        - super_admin 可以管理所有人
+        - admin 可以管理 user（不能管理 admin 或 super_admin）
+        - user 不能管理任何人
+        """
+        if not isinstance(target_user, User):
+            return False
+        
+        # 不能管理自己
+        if self.id == target_user.id:
+            return False
+        
+        # 获取角色级别
+        my_level = self.get_role_level()
+        target_level = target_user.get_role_level()
+        
+        # 只能管理级别更低的用户
+        return my_level > target_level
+
+    def can_assign_role(self, new_role):
+        """
+        检查当前用户是否可以分配某个角色
+        - super_admin 可以分配所有角色
+        - admin 可以分配 user 和 supervisor 角色
+        """
+        if self.role == 'super_admin':
+            return True
+        if self.role == 'admin' and new_role in ['user', 'supervisor']:
+            return True
+        return False
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'status': self.status,
+            'role': self.role,
+            'department': self.department or '',
+            'employee_no': self.employee_no or '',
+            'phone': self.phone or '',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by': self.created_by,
+        }

@@ -1,0 +1,313 @@
+# -*- coding: utf-8 -*-
+"""
+采购订单管理路由
+Purchase Order Management Routes
+"""
+from flask import Blueprint, jsonify, request
+from models.purchase_order import PurchaseOrder
+from models.supplier import Supplier
+from models.rfq import RFQ
+from extensions import db
+from sqlalchemy import desc
+
+URL_PREFIX = '/api/v1/purchase-orders'
+bp = Blueprint('purchase_order', __name__)
+
+@bp.route('', methods=['GET', 'OPTIONS'])
+def list_purchase_orders():
+    """
+    获取采购订单列表
+
+    GET /api/v1/purchase-orders?page=1&per_page=20&status=created&supplier_id=5
+
+    Query Parameters:
+        - page: 页码 (default: 1)
+        - per_page: 每页数量 (default: 20)
+        - status: 状态筛选 (created/confirmed/received/completed/cancelled)
+        - supplier_id: 供应商ID筛选
+        - search: 搜索PO号或供应商名称
+
+    Returns:
+        {
+            "items": [
+                {
+                    "id": 1,
+                    "po_number": "PO-20251103-00001",
+                    "supplier_id": 5,
+                    "supplier_name": "XX供应商",
+                    "rfq_id": 10,
+                    "quote_id": 25,
+                    "total_price": 15000.00,
+                    "lead_time": 7,
+                    "status": "created",
+                    "invoice_due_date": "2025-11-10T00:00:00",
+                    "invoice_uploaded": false,
+                    "created_at": "2025-11-03T10:00:00",
+                    "confirmed_at": null
+                }
+            ],
+            "total": 100,
+            "page": 1,
+            "per_page": 20,
+            "pages": 5
+        }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+
+    try:
+        # 获取查询参数
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status', '').strip()
+        supplier_id = request.args.get('supplier_id', type=int)
+        search = request.args.get('search', '').strip()
+
+        # 构建查询
+        query = PurchaseOrder.query
+
+        # 状态筛选
+        if status:
+            query = query.filter(PurchaseOrder.status == status)
+
+        # 供应商筛选
+        if supplier_id:
+            query = query.filter(PurchaseOrder.supplier_id == supplier_id)
+
+        # 搜索
+        if search:
+            query = query.filter(
+                db.or_(
+                    PurchaseOrder.po_number.like(f'%{search}%'),
+                    PurchaseOrder.supplier_name.like(f'%{search}%')
+                )
+            )
+
+        # 按创建时间倒序
+        query = query.order_by(desc(PurchaseOrder.created_at))
+
+        # 分页
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        items = []
+        for po in pagination.items:
+            items.append({
+                'id': po.id,
+                'po_number': po.po_number,
+                'supplier_id': po.supplier_id,
+                'supplier_name': po.supplier_name,
+                'rfq_id': po.rfq_id,
+                'quote_id': po.quote_id,
+                'total_price': float(po.total_price) if po.total_price else 0,
+                'lead_time': po.lead_time,
+                'status': po.status,
+                'invoice_due_date': po.invoice_due_date.isoformat() if po.invoice_due_date else None,
+                'invoice_uploaded': po.invoice_uploaded,
+                'created_at': po.created_at.isoformat() if po.created_at else None,
+                'confirmed_at': po.confirmed_at.isoformat() if po.confirmed_at else None
+            })
+
+        return jsonify({
+            'items': items,
+            'total': pagination.total,
+            'page': page,
+            'per_page': per_page,
+            'pages': pagination.pages
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/<int:po_id>', methods=['GET', 'OPTIONS'])
+def get_purchase_order_detail(po_id):
+    """
+    获取采购订单详情
+
+    GET /api/v1/purchase-orders/<po_id>
+
+    Returns:
+        {
+            "id": 1,
+            "po_number": "PO-20251103-00001",
+            "supplier_id": 5,
+            "supplier_name": "XX供应商",
+            "supplier": {
+                "id": 5,
+                "company_name": "XX供应商",
+                "contact_name": "张三",
+                "contact_phone": "13800138000"
+            },
+            "rfq_id": 10,
+            "rfq": {
+                "id": 10,
+                "pr_id": 100,
+                "status": "po_created"
+            },
+            "quote_id": 25,
+            "quote_data": {
+                "item_name": "螺丝刀",
+                "quantity": 100,
+                "unit_price": 150.00
+            },
+            "total_price": 15000.00,
+            "lead_time": 7,
+            "status": "created",
+            "invoice_due_date": "2025-11-10T00:00:00",
+            "invoice_uploaded": false,
+            "created_at": "2025-11-03T10:00:00",
+            "confirmed_at": null,
+            "invoices": [],
+            "receipts": []
+        }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+
+    try:
+        po = PurchaseOrder.query.get(po_id)
+        if not po:
+            return jsonify({'error': f'采购订单 #{po_id} 不存在'}), 404
+
+        # 获取供应商信息
+        supplier = None
+        if po.supplier_id:
+            s = Supplier.query.get(po.supplier_id)
+            if s:
+                supplier = {
+                    'id': s.id,
+                    'company_name': s.company_name,
+                    'contact_name': s.contact_name,
+                    'contact_phone': s.contact_phone,
+                    'contact_email': s.contact_email
+                }
+
+        # 获取RFQ信息
+        rfq = None
+        if po.rfq_id:
+            r = RFQ.query.get(po.rfq_id)
+            if r:
+                rfq = {
+                    'id': r.id,
+                    'pr_id': r.pr_id,
+                    'status': r.status
+                }
+
+        # 获取发票
+        invoices = []
+        if hasattr(po, 'invoices'):
+            for inv in po.invoices:
+                invoices.append({
+                    'id': inv.id,
+                    'invoice_number': inv.invoice_number,
+                    'amount': float(inv.amount) if inv.amount else 0,
+                    'status': inv.status,
+                    'created_at': inv.created_at.isoformat() if inv.created_at else None
+                })
+
+        # 获取收货回执
+        receipts = []
+        if hasattr(po, 'receipts'):
+            for rec in po.receipts:
+                receipts.append({
+                    'id': rec.id,
+                    'receipt_number': rec.receipt_number,
+                    'quality_status': rec.quality_status,
+                    'status': rec.status,
+                    'received_date': rec.received_date.isoformat() if rec.received_date else None
+                })
+
+        import json
+        quote_data = None
+        if po.quote_data:
+            try:
+                quote_data = json.loads(po.quote_data) if isinstance(po.quote_data, str) else po.quote_data
+            except:
+                quote_data = str(po.quote_data)
+
+        return jsonify({
+            'id': po.id,
+            'po_number': po.po_number,
+            'supplier_id': po.supplier_id,
+            'supplier_name': po.supplier_name,
+            'supplier': supplier,
+            'rfq_id': po.rfq_id,
+            'rfq': rfq,
+            'quote_id': po.quote_id,
+            'quote_data': quote_data,
+            'total_price': float(po.total_price) if po.total_price else 0,
+            'lead_time': po.lead_time,
+            'status': po.status,
+            'invoice_due_date': po.invoice_due_date.isoformat() if po.invoice_due_date else None,
+            'invoice_uploaded': po.invoice_uploaded,
+            'created_at': po.created_at.isoformat() if po.created_at else None,
+            'confirmed_at': po.confirmed_at.isoformat() if po.confirmed_at else None,
+            'invoices': invoices,
+            'receipts': receipts
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats', methods=['GET', 'OPTIONS'])
+def get_purchase_order_stats():
+    """
+    获取采购订单统计数据
+
+    GET /api/v1/purchase-orders/stats
+
+    Returns:
+        {
+            "total": 100,
+            "by_status": {
+                "created": 30,
+                "confirmed": 20,
+                "received": 40,
+                "completed": 10,
+                "cancelled": 0
+            },
+            "invoice_pending": 15,
+            "invoice_overdue": 5
+        }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+
+    try:
+        from datetime import datetime
+
+        total = PurchaseOrder.query.count()
+
+        # 按状态统计
+        by_status = {}
+        for status in ['created', 'confirmed', 'received', 'completed', 'cancelled']:
+            count = PurchaseOrder.query.filter_by(status=status).count()
+            by_status[status] = count
+
+        # 待上传发票数量
+        invoice_pending = PurchaseOrder.query.filter_by(invoice_uploaded=False).filter(
+            PurchaseOrder.invoice_due_date.isnot(None)
+        ).count()
+
+        # 发票逾期数量
+        now = datetime.utcnow()
+        invoice_overdue = PurchaseOrder.query.filter_by(invoice_uploaded=False).filter(
+            PurchaseOrder.invoice_due_date < now
+        ).count()
+
+        return jsonify({
+            'total': total,
+            'by_status': by_status,
+            'invoice_pending': invoice_pending,
+            'invoice_overdue': invoice_overdue
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

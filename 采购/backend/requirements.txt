@@ -1,0 +1,53 @@
+# Flask核心依赖
+Flask>=3.0.0
+flask-cors
+flask-marshmallow
+Flask-Migrate
+Flask-SQLAlchemy>=3.0.0
+
+# 数据库
+PyMySQL
+SQLAlchemy>=2.0.0
+
+# Celery异步任务
+celery>=5.0.0
+redis>=4.0.0
+celery[redis]
+
+# API与数据验证
+marshmallow
+marshmallow-sqlalchemy
+pydantic
+pydantic_core
+
+# 认证与安全
+passlib
+bcrypt
+PyJWT
+Werkzeug
+
+# HTTP请求
+requests
+
+# 环境配置
+python-dotenv
+
+# 数据库迁移
+alembic
+
+# 工具
+python-dateutil
+pytz
+
+# 企业微信集成
+wechatpy>=1.8.0
+
+# AI/OCR功能（可选，视需求安装）
+# paddlepaddle
+# paddleocr>=2.6.0
+# opencv-python
+# Pillow
+# shapely
+# openai-whisper
+# torch
+# tiktoken

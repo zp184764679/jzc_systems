@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(celery:*)",
+      "Bash(ipconfig:*)",
+      "Bash(netsh advfirewall firewall:*)",
+      "Bash(netsh advfirewall firewall add rule:*)",
+      "Bash(sc query:*)",
+      "Bash(start explorer \"C:\\Users\\Admin\\Desktop\\采购\\部署工具\")",
+      "Bash(start \"\" \"C:\\Users\\Admin\\Desktop\\采购\\部署工具\\一键初始化.bat\")",
+      "Bash(start \"\" \"C:\\Users\\Admin\\Desktop\\采购\\部署工具\\数据库配置菜单.bat\")",
+      "Bash(net start:*)",
+      "Bash(start \"\" \"C:\\Users\\Admin\\Desktop\\采购\\READ ME - 数据库初始化步骤.txt\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

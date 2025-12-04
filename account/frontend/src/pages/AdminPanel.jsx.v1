@@ -1,0 +1,12 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Table, Button, Modal, Form, Input, Checkbox, message, Typography, Space, Tabs, Tag } from 'antd';
+import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
+import { getRegistrationRequests, approveRequest, rejectRequest } from '../services/api';
+import dayjs from 'dayjs';
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+const AdminPanel = () => { return <div>Admin Panel Content - Full implementation required</div>; };
+
+export default AdminPanel;

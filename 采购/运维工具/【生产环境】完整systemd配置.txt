@@ -1,0 +1,229 @@
+==========================================
+生产环境 - 完整systemd配置 (WSL Ollama)
+==========================================
+更新时间：2025-11-12
+版本：v2.1 - WSL Ollama使用11435端口
+
+==========================================
+服务架构
+==========================================
+
+1. Ollama (11435)        ← WSL本地AI服务 [新端口]
+2. Redis (6380)          ← 消息队列
+3. Backend (5001)        ← Flask + OCR，依赖Ollama+Redis
+4. Celery Worker         ← 异步任务，依赖Ollama+Redis
+5. Frontend (5000)       ← React界面
+
+说明：WSL Ollama使用11435端口，与Windows Ollama (11434)共存
+
+启动顺序：Ollama → Redis → Backend & Celery → Frontend
+
+==========================================
+配置命令（在WSL中执行）
+==========================================
+
+sudo bash << 'EOFSETUP'
+
+PROJECT_PATH="/home/admin/caigou-prod"
+SYSTEMD_PATH="/etc/systemd/system"
+
+echo "====================================="
+echo "  配置生产环境systemd服务 (含Ollama)"
+echo "====================================="
+echo ""
+
+# 1. Ollama服务
+echo "[1/5] 创建Ollama服务配置..."
+cat > $SYSTEMD_PATH/ollama.service <<EOF
+[Unit]
+Description=Ollama AI Service
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+Environment="HOME=/home/admin"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="OLLAMA_HOST=0.0.0.0:11435"
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/ollama.log
+StandardError=append:/var/log/ollama.error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 2. Backend服务（依赖Ollama+Redis）
+echo "[2/5] 创建Backend服务配置..."
+cat > $SYSTEMD_PATH/caigou-backend.service <<EOF
+[Unit]
+Description=采购系统后端服务 (Flask + OCR)
+After=network.target ollama.service redis-server.service
+Wants=ollama.service redis-server.service
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=$PROJECT_PATH/backend
+Environment="PATH=$PROJECT_PATH/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="LLM_BASE=http://localhost:11435"
+ExecStart=$PROJECT_PATH/backend/venv/bin/python app.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/caigou-backend.log
+StandardError=append:/var/log/caigou-backend.error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 3. 前端服务
+echo "[3/5] 创建Frontend服务配置..."
+cat > $SYSTEMD_PATH/caigou-frontend.service <<EOF
+[Unit]
+Description=采购系统前端服务 (Vite)
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=$PROJECT_PATH/frontend
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 5000
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/caigou-frontend.log
+StandardError=append:/var/log/caigou-frontend.error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 4. Celery服务（依赖Ollama+Redis）
+echo "[4/5] 创建Celery服务配置..."
+cat > $SYSTEMD_PATH/caigou-celery.service <<EOF
+[Unit]
+Description=采购系统Celery Worker
+After=network.target ollama.service redis-server.service
+Wants=ollama.service redis-server.service
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=$PROJECT_PATH/backend
+Environment="PATH=$PROJECT_PATH/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="LLM_BASE=http://localhost:11435"
+ExecStart=$PROJECT_PATH/backend/venv/bin/python start_celery_wsl.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/caigou-celery.log
+StandardError=append:/var/log/caigou-celery.error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 重载并启用服务
+echo ""
+echo "[5/5] 重载systemd并启用服务..."
+systemctl daemon-reload
+systemctl enable ollama caigou-backend caigou-frontend caigou-celery
+
+echo ""
+echo "✅ systemd服务配置完成！"
+echo ""
+echo "服务依赖关系："
+echo "  Ollama (11434) ← AI推理"
+echo "  Redis (6380) ← 消息队列"
+echo "  Backend (5001) ← 依赖 Ollama + Redis"
+echo "  Celery ← 依赖 Ollama + Redis"
+echo "  Frontend (5000) ← 独立运行"
+echo ""
+EOFSETUP
+
+==========================================
+启动服务
+==========================================
+
+# 停止旧进程
+pkill -f 'python.*app.py'
+pkill -f 'node.*vite.*5000'
+pkill -f 'python.*celery'
+pkill -f 'ollama serve'
+sleep 3
+
+# 启动服务（按依赖顺序自动启动）
+sudo systemctl start ollama
+sudo systemctl start caigou-backend caigou-frontend caigou-celery
+
+# 验证服务状态
+sleep 5
+sudo systemctl status ollama
+sudo systemctl status caigou-backend
+sudo systemctl status caigou-frontend
+sudo systemctl status caigou-celery
+sudo systemctl status redis-server
+
+==========================================
+验证配置
+==========================================
+
+# 检查端口
+netstat -tlnp | grep -E '11435|6380|5000|5001'
+
+# 预期结果：
+# 11435: ollama serve (WSL)
+# 6380:  redis-server
+# 5001:  python (app.py)
+# 5000:  node (vite)
+
+# 测试Ollama连接
+curl http://localhost:11435/api/tags
+
+==========================================
+管理命令
+==========================================
+
+# Ollama
+sudo systemctl restart ollama
+sudo systemctl status ollama
+tail -f /var/log/ollama.log
+
+# Backend
+sudo systemctl restart caigou-backend
+sudo journalctl -u caigou-backend -f
+
+# Frontend
+sudo systemctl restart caigou-frontend
+sudo journalctl -u caigou-frontend -f
+
+# Celery
+sudo systemctl restart caigou-celery
+sudo journalctl -u caigou-celery -f
+
+# 查看所有服务
+sudo systemctl status ollama redis-server caigou-backend caigou-frontend caigou-celery
+
+==========================================
+环境说明
+==========================================
+
+生产环境 (WSL)：
+- 使用 WSL 本地的 Ollama
+- systemd 管理所有服务
+- 自动重启保护
+- 开机自启动
+
+开发环境 (Windows)：
+- 可以使用 Windows 的 Ollama
+- 手动启动服务
+- 用于开发调试
+
+分离方式：
+- 通过 LLM_BASE 环境变量切换
+- 生产：http://localhost:11434 (WSL Ollama)
+- 开发：可以指向 Windows Ollama或远程服务
+
+==========================================

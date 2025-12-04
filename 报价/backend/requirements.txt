@@ -1,0 +1,48 @@
+# FastAPI核心
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# 数据库
+sqlalchemy==2.0.25
+alembic==1.13.1
+# psycopg2-binary==2.9.9  # 使用SQLite不需要PostgreSQL
+# asyncpg==0.29.0  # 使用SQLite不需要PostgreSQL
+
+# 数据验证
+pydantic==2.5.3
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# 认证和安全
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+
+# OCR和Vision
+requests==2.31.0
+Pillow>=10.3.0
+PyMuPDF>=1.24.0
+pdf2image==1.17.0
+rapidocr-onnxruntime>=1.3.0  # 轻量级OCR引擎
+opencv-python>=4.8.0  # 图像预处理增强
+numpy>=1.24.0  # OpenCV依赖
+
+# Excel处理
+openpyxl==3.1.2
+xlrd==2.0.1
+xlwt==1.3.0
+xlutils==2.0.0
+pandas>=2.2.4
+
+# PDF生成
+reportlab==4.0.9
+WeasyPrint==60.2
+
+# 任务队列
+celery==5.3.6
+redis==5.0.1
+
+# 工具库
+python-dateutil==2.8.2
+pytz==2024.1

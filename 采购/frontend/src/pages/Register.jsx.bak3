@@ -1,0 +1,323 @@
+// src/pages/Register.jsx
+// 供应商和员工注册页面
+// 供应商注册支持：
+// 1) 多选经营品类（复选框形式）
+// 2) 主联系人邮箱默认使用登录邮箱
+// 3) 经营品类与采购申请分类系统保持一致
+
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { DEPARTMENTS, DEPARTMENT_ENUM } from "../constants/departments";
+import { MAJOR_CATEGORIES } from "../constants/categories";
+import { BASE_URL } from "../api/http";
+
+export default function Register() {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState("employee"); // 'employee' | 'supplier'
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  // ===== 员工表单 =====
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [employeeNo, setEmployeeNo] = useState("");
+  const [deptTop, setDeptTop] = useState("生产部");
+  const [deptSub, setDeptSub] = useState("走心机");
+
+  // ===== 供应商表单 =====
+  const [sEmail, setSEmail] = useState("");
+  const [sPassword, setSPassword] = useState("");
+  const [company, setCompany] = useState("");
+  const [taxId, setTaxId] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]); // 多选经营品类
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [licenseFile, setLicenseFile] = useState(null);
+
+
+  const api = {
+    employee: ,
+    supplier: ,
+  };
+
+  // ===== 员工提交 =====
+  const handleEmployeeSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!username || !email || !password || !phone) {
+      setError("请填写完整信息（含手机号）");
+      return;
+    }
+
+    const department = deptTop === "生产部" ? `生产部/${deptSub}` : deptTop;
+    if (!DEPARTMENT_ENUM.includes(department)) {
+      setError("部门不在可选范围，请重新选择");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(api.employee, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          phone,
+          employee_no: employeeNo || undefined,
+          department,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) setSuccess(true);
+      else setError(data.error || "注册失败");
+    } catch (err) {
+      setError("网络错误，请检查服务器");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ===== 供应商提交 =====
+  const handleSupplierSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!sEmail || !sPassword || !company || !taxId || !contactName || !contactPhone) {
+      setError("请填写必填项：邮箱、密码、公司、税号、主联系人姓名/手机");
+      return;
+    }
+
+    if (selectedCategories.length === 0) {
+      setError("请至少选择一个经营品类");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let licenseMeta = {};
+      if (licenseFile) {
+        const sizeMB = (licenseFile.size / (1024 * 1024)).toFixed(2);
+        const ext = licenseFile.name.split(".").pop().toLowerCase();
+        if (!["pdf", "jpg", "jpeg", "png"].includes(ext)) {
+          setError("营业执照格式只支持 PDF/JPG/PNG");
+          setLoading(false);
+          return;
+        }
+        if (parseFloat(sizeMB) > 10) {
+          setError("营业执照文件过大（≤10MB）");
+          setLoading(false);
+          return;
+        }
+        const b64 = await toBase64(licenseFile);
+        licenseMeta = { business_license_url: b64, license_file_type: ext, license_file_size: sizeMB };
+      }
+
+      const res = await fetch(api.supplier, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: sEmail,
+          password: sPassword,
+          company_name: company,
+          tax_id: taxId,
+          business_scope: selectedCategories.join(", "), // 多选品类，用逗号分隔
+          contact_name: contactName,
+          contact_phone: contactPhone,
+          contact_email: sEmail, // 使用登录邮箱作为联系邮箱
+          ...licenseMeta,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) setSuccess(true);
+      else setError(data.error || "注册失败");
+    } catch (err) {
+      setError("网络错误，请检查服务器");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-100">
+        <div className="bg-white p-4 md:p-8 rounded-2xl shadow-lg w-full max-w-[420px] mx-4 text-center">
+          <div className="text-green-500 text-4xl mb-4">✓</div>
+          <h2 className="text-xl font-semibold mb-4">注册成功</h2>
+          <p className="text-gray-600 mb-6">您的账户已提交审核，请等待管理员审批。</p>
+          <button onClick={() => navigate("/login")} className="bg-blue-600 text-white rounded-lg p-2 w-full hover:bg-blue-700 transition">
+            前往登录
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-center items-center min-h-screen bg-gray-100 py-8">
+      <div className="bg-white p-4 md:p-6 rounded-2xl shadow-lg w-full max-w-[860px] mx-4">
+        <div className="flex mb-4 gap-2">
+          <button onClick={() => setMode("employee")} className={`px-3 py-2 rounded-lg text-sm border ${mode === "employee" ? "bg-blue-600 text-white" : "bg-white"}`}>
+            员工注册
+          </button>
+          <button onClick={() => setMode("supplier")} className={`px-3 py-2 rounded-lg text-sm border ${mode === "supplier" ? "bg-blue-600 text-white" : "bg-white"}`}>
+            供应商注册
+          </button>
+        </div>
+
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">{error}</div>}
+
+        {mode === "employee" ? (
+          <form onSubmit={handleEmployeeSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="姓名" value={username} onChange={setUsername} required />
+            <Input label="邮箱" type="email" value={email} onChange={setEmail} required />
+            <Input label="手机号" value={phone} onChange={setPhone} required />
+            <Input label="工号（可选）" value={employeeNo} onChange={setEmployeeNo} />
+
+            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>部门</Label>
+                <select className="border rounded-lg p-2 w-full" value={deptTop} onChange={(e) => setDeptTop(e.target.value)}>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d.name} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {deptTop === "生产部" && (
+                <div>
+                  <Label>生产部子类</Label>
+                  <select className="border rounded-lg p-2 w-full" value={deptSub} onChange={(e) => setDeptSub(e.target.value)}>
+                    {(DEPARTMENTS.find((d) => d.name === "生产部")?.children || []).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <Input label="密码" type="password" value={password} onChange={setPassword} required className="col-span-1 md:col-span-2" />
+
+            <div className="col-span-1 md:col-span-2">
+              <button type="submit" disabled={loading} className="w-full bg-green-600 text-white rounded-lg p-2 hover:bg-green-700 disabled:bg-green-400">
+                {loading ? "提交中…" : "提交注册（员工）"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSupplierSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="登录邮箱" type="email" value={sEmail} onChange={setSEmail} required />
+            <Input label="登录密码" type="password" value={sPassword} onChange={setSPassword} required />
+            <Input label="公司全称（营业执照）" value={company} onChange={setCompany} required className="col-span-1 md:col-span-2" />
+            <Input label="统一社会信用代码/税号" value={taxId} onChange={setTaxId} required className="col-span-1 md:col-span-2" />
+
+            {/* 经营范围/主营品类（多选） */}
+            <div className="col-span-1 md:col-span-2">
+              <Label>经营范围/主营品类（可多选）<span className="text-red-500"> *</span></Label>
+              <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-gray-50">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {MAJOR_CATEGORIES.map((category) => (
+                    <label
+                      key={category}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition ${
+                        selectedCategories.includes(category)
+                          ? "bg-blue-50 border-blue-400"
+                          : "bg-white border-gray-300 hover:border-blue-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCategories.includes(category)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCategories([...selectedCategories, category]);
+                          } else {
+                            setSelectedCategories(selectedCategories.filter((c) => c !== category));
+                          }
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">{category}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {selectedCategories.length > 0 && (
+                <div className="mt-2 text-xs text-gray-600">
+                  已选择 {selectedCategories.length} 个品类：{selectedCategories.join("、")}
+                </div>
+              )}
+            </div>
+
+            <Input label="主联系人姓名" value={contactName} onChange={setContactName} required />
+            <Input label="主联系人手机" value={contactPhone} onChange={setContactPhone} required />
+            <div className="col-span-1 md:col-span-2">
+              <div className="text-xs text-gray-500 italic">
+                注：主联系人邮箱默认使用登录邮箱（{sEmail || "未填写"}）
+              </div>
+            </div>
+
+            <div className="col-span-1 md:col-span-2">
+              <Label>营业执照（PDF/JPG/PNG，≤10MB）</Label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setLicenseFile(e.target.files?.[0] || null)}
+              />
+              {licenseFile && (
+                <div className="text-xs text-gray-600 mt-1">已选：{licenseFile.name}</div>
+              )}
+            </div>
+
+            <div className="col-span-1 md:col-span-2">
+              <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white rounded-lg p-2 hover:bg-blue-700 disabled:bg-blue-400">
+                {loading ? "提交中…" : "提交注册（供应商）"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="text-sm text-center mt-4">
+          已有账号？<Link to="/login" className="text-blue-600 hover:underline ml-1">去登录</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Label({ children }) {
+  return <div className="text-xs text-gray-600 mb-1">{children}</div>;
+}
+
+function Input({ label, className = "", value, onChange, type = "text", required = false }) {
+  return (
+    <div className={className}>
+      <Label>
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </Label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+        required={required}
+      />
+    </div>
+  );
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}

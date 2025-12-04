@@ -1,0 +1,171 @@
+====================================================
+MySQL本地部署配置 - 进度总结
+生成时间: 2025-11-07 21:26
+====================================================
+
+## ✅ 已完成的配置
+
+### 1. Backend配置文件更新 ✅
+文件: C:\Users\Admin\Desktop\采购\backend\.env
+状态: 已完成
+
+更改内容:
+- 数据库连接从远程 (61.145.212.28) 改为本地 (localhost)
+- 原配置: mysql+pymysql://zhoupeng:exak472008@61.145.212.28:3306/caigou
+- 新配置: mysql+pymysql://caigou_admin:caigou2025!@#@localhost:3306/caigou_local
+
+已添加配置:
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=caigou_admin
+DB_PASSWORD=caigou2025!@#
+DB_NAME=caigou_local
+
+备份文件: backend/.env.backup.*
+
+### 2. 部署工具包创建 ✅
+位置: C:\Users\Admin\Desktop\采购\部署工具\
+
+已创建文件:
+✅ setup_mysql_local.sql - MySQL数据库初始化SQL脚本
+✅ create_database.py - Python自动创建数据库脚本
+✅ modify_mysql_config.py - Python修改my.ini配置脚本
+✅ test_mysql_connection.py - 数据库连接测试脚本
+✅ 修改MySQL配置.ps1 - PowerShell配置脚本
+✅ 运行-修改MySQL配置.bat - 管理员权限运行脚本
+✅ 1_配置MySQL本机访问.bat - 分步配置脚本1
+✅ 2_更新Backend配置.bat - 分步配置脚本2
+✅ 3_测试数据库连接.bat - 测试脚本
+✅ ubuntu_deploy_config.sh - Ubuntu部署配置脚本
+✅ README.txt - 完整使用说明
+✅ 配置完成总结.txt - 配置总结文档
+✅ 快速配置指南.bat - 快速配置指南 (NEW)
+✅ 配置进度总结.txt - 本文件
+
+## ⚠️ 需要手动完成的步骤
+
+由于需要管理员权限和MySQL root密码,以下步骤需要您手动完成:
+
+### 步骤1: 修改MySQL配置文件 (需要管理员权限)
+方法: 双击运行 "运行-修改MySQL配置.bat"
+目标: 在my.ini中添加 bind-address = 0.0.0.0
+文件: C:\ProgramData\MySQL\MySQL Server 9.0\my.ini
+
+为什么需要:
+- 允许外网访问MySQL
+- 允许Ubuntu从网络连接MySQL
+
+### 步骤2: 创建数据库和用户 (需要MySQL root密码)
+方法A - 使用MySQL命令 (推荐):
+   打开命令提示符,执行:
+   cd C:\Users\Admin\Desktop\采购\部署工具
+   mysql -u root -p < setup_mysql_local.sql
+
+方法B - 使用Python脚本:
+   python create_database.py
+   (会自动尝试常见密码)
+
+方法C - 手动执行SQL:
+   1. mysql -u root -p
+   2. 输入密码后执行每条SQL语句
+
+创建内容:
+- 数据库: caigou_local
+- 用户: caigou_admin@localhost
+- 用户: caigou_admin@192.168.0.%
+- 用户: caigou_admin@172.%
+- 用户: caigou_admin@%
+- 密码: caigou2025!@#
+- 权限: ALL PRIVILEGES on caigou_local.*
+
+### 步骤3: 配置Windows防火墙 (需要管理员权限)
+方法: 以管理员身份运行命令提示符,执行:
+netsh advfirewall firewall add rule name="MySQL Port 3306" dir=in action=allow protocol=TCP localport=3306
+
+为什么需要:
+- 允许局域网访问MySQL (192.168.0.x)
+- 允许Ubuntu访问MySQL
+- 允许外网访问MySQL (需配置路由器)
+
+### 步骤4: 重启MySQL服务 (需要管理员权限)
+方法: 以管理员身份运行命令提示符,执行:
+net stop MySQL90
+net start MySQL90
+
+为什么需要:
+- 使my.ini配置生效
+
+### 步骤5: 测试数据库连接
+方法: 双击运行 "3_测试数据库连接.bat"
+
+验证内容:
+- MySQL连接成功
+- 数据库caigou_local存在
+- 用户caigou_admin可以访问
+
+## 📊 数据库配置信息
+
+数据库名: caigou_local
+用户名: caigou_admin
+密码: caigou2025!@#
+端口: 3306
+
+## 🌐 网络配置
+
+本机IP:
+- 内网: 192.168.0.6
+- 外网: 61.145.212.28 (代理)
+- WSL2: 172.x.x.x
+
+访问地址:
+- 本地开发: localhost:3306
+- 局域网: 192.168.0.6:3306
+- Ubuntu (WSL2): 172.x.x.x:3306
+- 外网: 61.145.212.28:3306 (需路由器端口映射)
+
+## 🎯 快速开始
+
+### 如果您有MySQL root密码:
+
+1. 以管理员身份运行命令提示符
+2. 执行: cd C:\Users\Admin\Desktop\采购\部署工具
+3. 执行: mysql -u root -p < setup_mysql_local.sql
+4. 输入MySQL root密码
+5. 执行: netsh advfirewall firewall add rule name="MySQL Port 3306" dir=in action=allow protocol=TCP localport=3306
+6. 执行: net stop MySQL90 && net start MySQL90
+7. 双击运行: 3_测试数据库连接.bat
+
+### 如果忘记MySQL root密码:
+
+1. Google搜索: "MySQL 9.0 重置root密码"
+2. 或使用MySQL Workbench图形界面创建数据库
+3. 或联系系统管理员
+
+## 📞 下一步
+
+完成上述步骤后:
+1. 运行 "3_测试数据库连接.bat" 验证配置
+2. 启动Backend应用测试连接
+3. 如需Ubuntu部署,使用 ubuntu_deploy_config.sh
+
+## 💡 重要提示
+
+1. 安全建议:
+   ⚠️ 生产环境请修改默认密码
+   ⚠️ 建议配置SSL加密连接
+   ⚠️ 限制数据库访问IP范围
+
+2. 备份:
+   ✅ 原.env文件已备份
+   ✅ my.ini修改时会自动备份
+
+3. 故障排查:
+   - 如果无法连接,检查MySQL服务是否运行
+   - 检查Windows防火墙3306端口
+   - 检查my.ini配置是否生效
+   - 使用 netstat -an | findstr 3306 查看端口监听
+
+====================================================
+完整文档请查看: README.txt
+快速配置请运行: 快速配置指南.bat
+====================================================

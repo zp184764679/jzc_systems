@@ -1,0 +1,127 @@
+# 采购系统 - 生产环境部署文档
+
+## 📋 项目概述
+
+完整的采购管理系统，管理采购申请、供应商、询价、订单、发票等全流程业务。
+
+**访问地址：** http://61.145.212.28:5000  
+**环境：** WSL Ubuntu 22.04
+
+---
+
+## 🏗️ 技术栈
+
+**后端：** Flask 3.x + MySQL 8.0 + SQLAlchemy + Celery + Redis 7.x + Ollama  
+**前端：** React 18 + Vite 6 + React Router 7 + Tailwind CSS
+
+---
+
+## 🚀 服务端口
+
+| 服务 | 端口 | 外网访问 |
+|------|------|----------|
+| 后端API (主) | 5001 | http://61.145.212.28:5001 |
+| 后端API (备) | 5002 | http://61.145.212.28:5002 |
+| 前端界面 | 5000 | http://61.145.212.28:5000 |
+| MySQL | 3307 | 内网 |
+| Redis (WSL) | 6380 | 内网 |
+| Redis (Windows) | 6379 | 内网 |
+
+---
+
+## 🗄️ 数据库
+
+**连接：** mysql -u zhoupeng -p'ZPexak472008@' -h 127.0.0.1 -P 3307 caigou  
+**字符集：** utf8mb4_unicode_ci
+
+---
+
+## 👤 管理员
+
+- 用户：周鹏  
+- 邮箱：jzchardware@gmail.com  
+- 角色：super_admin  
+- 部门：生产部/走心机
+
+---
+
+## 🔧 启动服务
+
+**后端5001：**
+```bash
+cd /home/admin/caigou-prod/backend && source venv/bin/activate && python app.py
+```
+
+**后端5002：**
+```bash
+cd /home/admin/caigou-prod/backend && source venv/bin/activate && flask run --host=0.0.0.0 --port=5002
+```
+
+**前端5003：**
+```bash
+cd /home/admin/caigou-prod/frontend && npm run dev
+```
+
+---
+
+## 🔍 常用命令
+
+**查看服务：**
+```bash
+ps aux | grep 'python.*app.py\|node.*vite'
+netstat -tlnp | grep '500[0-9]'
+```
+
+**数据库：**
+```bash
+# 查看用户
+mysql -u zhoupeng -p'ZPexak472008@' -h 127.0.0.1 -P 3307 caigou -e "SELECT * FROM users;"
+
+# 备份
+mysqldump -u zhoupeng -p'ZPexak472008@' -h 127.0.0.1 -P 3307 caigou > backup.sql
+```
+
+---
+
+## 🐛 问题排查
+
+**端口占用：** `lsof -i :5001 && kill -9 <PID>`  
+**DB连接失败：** 确认端口3307，使用127.0.0.1不用localhost  
+**500错误：** 检查数据库schema是否匹配模型定义
+
+---
+
+## 📅 维护记录
+
+### 2025-11-12
+- ✅ 前端端口从5003改为5000，配置systemd自启动服务
+- ✅ 修复路由器端口映射问题（删除错误的5000端口映射规则）
+- ✅ 配置WSL Redis服务（端口6380）并设置自启动
+- ✅ Windows Redis保持6379端口，两个Redis并行运行
+- ✅ 更新后端Celery配置使用WSL Redis (6380端口)
+- ✅ 配置WSL自启动脚本（start-wsl.bat在Windows启动文件夹）
+- ✅ Windows防火墙开放5000端口（TCP/UDP）
+
+### 2025-11-11
+
+- 修复数据库schema不匹配，添加所有缺失字段
+- 设置周鹏为超级管理员
+- 升级Node.js v20, Vite 6
+- 统一端口到5000段
+- 修改UI权限和标题
+
+---
+
+## 📚 核心API
+
+- POST /api/v1/login - 登录
+- GET /api/v1/pr/requests - 采购申请列表
+- GET /api/v1/suppliers - 供应商列表
+- GET /api/v1/rfqs - 询价单列表
+- GET /api/v1/purchase-orders - 订单列表
+
+---
+
+**联系：** 周鹏 13590217332 | jzchardware@gmail.com  
+**路径：** /home/admin/caigou-prod/  
+**版本：** v1.0 (生产环境) | 更新：2025-11-11
