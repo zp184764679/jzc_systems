@@ -11,12 +11,15 @@
 | SHM | 出货管理 | 8006 | /shm |
 | EAM | 设备资产管理 | 8008 | /eam |
 | MES | 制造执行系统 | 8007 | /mes |
+| account | 账户管理 | 8001 | /account |
+| 报价 | 报价管理系统 | 8009 | /quote |
+| 采购 | 采购管理系统 | 8010 | /purchase |
 
 ## 快速开始
 
 ### 1. 克隆仓库
 ```bash
-git clone https://github.com/your-username/jzc_systems.git
+git clone https://github.com/zp184764679/jzc_systems.git
 cd jzc_systems
 ```
 
