@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
-// 门户地址
-const PORTAL_URL = "http://localhost:3001";
-// Portal后端地址（验证token）
-const PORTAL_API = "http://localhost:3002";
+// 门户地址 - 使用环境变量
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || "/";
+// Portal后端地址（验证token）- 使用环境变量
+const PORTAL_API = import.meta.env.VITE_PORTAL_API || "/api";
 
 export default function Login() {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
 // src/api/http.js
 
-// 从环境变量获取后端 API 地址，默认使用 http://localhost:5001
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5001";
+// 从环境变量获取后端 API 地址
+const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 // —— 工具：安全取整
 function toIntId(v) {

@@ -3,7 +3,8 @@
  * Handles token from Portal SSO system
  */
 
-const API_BASE_URL = 'http://localhost:8001'; // 报价系统后端地址
+// 使用环境变量配置 API 地址
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/quotation/api';
 
 /**
  * Check if there's a token in URL parameters from Portal SSO
@@ -18,8 +19,8 @@ export const checkSSOToken = async () => {
     if (token) {
       console.log('[SSO] Token found in URL, validating...');
 
-      // 验证token并获取用户信息
-      const response = await fetch(`${API_BASE_URL}/api/auth/sso-login`, {
+      // 验证token并获取用户信息（API_BASE_URL 已包含 /api）
+      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +108,8 @@ export const logout = () => {
   localStorage.removeItem('emp_no');
 
   // Redirect to Portal login
-  window.location.href = 'http://localhost:3001';
+  const portalUrl = import.meta.env.VITE_PORTAL_URL || '/';
+  window.location.href = portalUrl;
 };
 
 /**

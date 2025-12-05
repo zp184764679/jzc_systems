@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ENDPOINTS } from '../api/endpoints';
 
-const API_BASE_URL = "http://localhost:5001";
+// 使用环境变量配置API地址
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 export function useSupplierInvoices(page = 1, status = null, keyword = '') {
   const { user } = useAuth();

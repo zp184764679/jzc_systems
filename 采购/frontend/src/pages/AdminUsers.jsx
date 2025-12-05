@@ -3,14 +3,15 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import UserSearchPanel from "../components/admin/UserSearchPanel.jsx";
 import UserEditModal from "../components/admin/UserEditModal.jsx";
 
-// 根据当前环境自动选择API地址
+// 使用环境变量配置API地址
 const getApiBaseURL = () => {
-  return window.location.hostname === 'localhost'
-    ? "http://localhost:5001"
-    : "http://61.145.212.28:5001";  // 暂时使用IP+端口，等DNS配置后改为域名
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) return envUrl;
+  // 开发环境默认
+  return "http://localhost:5001";
 };
 
-const API_BASE_URL = getApiBaseURL() + "/api/v1";
+const API_BASE_URL = getApiBaseURL() + "/v1";
 
 export default function AdminUsers() {
   console.log("AdminUsers component rendered");

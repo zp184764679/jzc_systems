@@ -13,7 +13,8 @@ export default function NavBar() {
   };
 
   const handleBackToPortal = () => {
-    window.location.href = 'http://localhost:3001';
+    const portalUrl = import.meta.env.VITE_PORTAL_URL || '/';
+    window.location.href = portalUrl;
   };
 
   // 员工菜单

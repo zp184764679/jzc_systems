@@ -46,7 +46,7 @@ function ProtectedLayout() {
           <Button
             icon={<HomeOutlined />}
             size={isMobile ? "small" : "middle"}
-            onClick={() => window.location.href = 'http://localhost:3001'}
+            onClick={() => window.location.href = import.meta.env.VITE_PORTAL_URL || '/'}
           >
             {!isMobile && "回到门户"}
           </Button>

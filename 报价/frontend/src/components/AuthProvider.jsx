@@ -35,7 +35,8 @@ export function AuthProvider({ children }) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch("http://localhost:8001/api/auth/me", {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '/quotation/api';
+      const response = await fetch(`${apiBase}/auth/me`, {
         credentials: "include",
         headers: headers,
       });

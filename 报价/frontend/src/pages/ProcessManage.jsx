@@ -11,7 +11,8 @@ import {
 import axios from 'axios'
 
 const { Option } = Select
-const API_BASE = import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api` : 'http://localhost:8001/api'
+// 使用环境变量配置 API 地址 (生产环境 VITE_API_BASE_URL=/quotation/api，不需要再加 /api)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/quotation/api'
 
 export default function ProcessManage() {
   // 列表数据
