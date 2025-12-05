@@ -36,7 +36,8 @@ const LayoutWrapper = ({ children }) => {
   const user = getCurrentUser();
 
   const handleBackToPortal = () => {
-    window.location.href = 'http://localhost:3001';
+    const portalUrl = import.meta.env.VITE_PORTAL_URL || '/';
+    window.location.href = portalUrl;
   };
 
   const handleLogout = () => {
