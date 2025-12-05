@@ -1,8 +1,18 @@
 import axios from 'axios';
 
 // Create axios instance with default config
+// 生产环境使用相对路径，开发环境使用完整 URL
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  // 生产环境：使用空字符串让请求相对于当前域名
+  if (import.meta.env.PROD) return '';
+  // 开发环境：使用本地后端地址
+  return 'http://localhost:8001';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8004',
+  baseURL: getBaseURL(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
