@@ -13,7 +13,13 @@ export default defineConfig({
       'jzchardware.cn',
       '.jzchardware.cn',
       '192.168.5.49'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+      }
+    }
   },
   preview: {
     host: '0.0.0.0',
