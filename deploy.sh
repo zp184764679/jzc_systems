@@ -64,22 +64,28 @@ echo "=== 部署后端服务 ==="
 
 deploy_backend "Portal" "Portal" 3002
 deploy_backend "HR" "HR" 8003
+deploy_backend "Account" "account" 8004
 deploy_backend "CRM" "CRM" 8002
 deploy_backend "SCM" "SCM" 8005
 deploy_backend "SHM" "SHM" 8006
 deploy_backend "EAM" "EAM" 8008
 deploy_backend "MES" "MES" 8007
+deploy_backend "Quotation" "报价" 8001
+deploy_backend "Caigou" "采购" 5001
 
 echo ""
 echo "=== 构建前端 ==="
 
 deploy_frontend "Portal" "Portal"
 deploy_frontend "HR" "HR"
+deploy_frontend "Account" "account"
 deploy_frontend "CRM" "CRM"
 deploy_frontend "SCM" "SCM"
 deploy_frontend "SHM" "SHM"
 deploy_frontend "EAM" "EAM"
 deploy_frontend "MES" "MES"
+deploy_frontend "Quotation" "报价"
+deploy_frontend "Caigou" "采购"
 
 echo ""
 echo "=== 重启服务 ==="
