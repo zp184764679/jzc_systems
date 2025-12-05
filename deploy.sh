@@ -2,7 +2,7 @@
 # JZC Systems 部署脚本
 # 在服务器上执行
 
-set -e  # 遇到错误立即退出
+# set -e  # 不要遇到错误就退出，让所有系统都尝试构建
 
 echo "========================================="
 echo "JZC Systems 部署开始: $(date)"
@@ -47,14 +47,17 @@ deploy_frontend() {
     if [ -d "$dir/frontend" ]; then
         cd "$dir/frontend"
 
-        # 检查是否有 package.json 变化需要重新安装
         if [ -f "package.json" ]; then
-            npm install --silent 2>/dev/null || true
-            npm run build --silent 2>/dev/null || true
+            echo "Installing dependencies for $name..."
+            npm install || { echo "npm install failed for $name"; cd $PROJECT_DIR; return 1; }
+            echo "Building $name..."
+            npm run build || { echo "npm run build failed for $name"; cd $PROJECT_DIR; return 1; }
         fi
 
         cd $PROJECT_DIR
         echo -e "${GREEN}✓ $name 前端构建完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ $dir/frontend 目录不存在，跳过${NC}"
     fi
 }
 
