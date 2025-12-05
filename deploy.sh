@@ -48,6 +48,8 @@ deploy_frontend() {
         cd "$dir/frontend"
 
         if [ -f "package.json" ]; then
+            # 强制重新构建：删除旧的构建产物
+            rm -rf dist
             echo "Installing dependencies for $name..."
             npm install || { echo "npm install failed for $name"; cd $PROJECT_DIR; return 1; }
             echo "Building $name..."

@@ -1,0 +1,163 @@
+# JZC Systems 服务器目录结构
+# /www/jzc_systems/
+
+jzc_systems/
+├── .claude/                    # Claude Code 配置
+│   ├── agents/
+│   │   ├── backend.md
+│   │   ├── db.md
+│   │   ├── deploy.md
+│   │   └── frontend.md
+│   ├── commands/
+│   │   ├── backup-db.md
+│   │   ├── build.md
+│   │   ├── deploy.md
+│   │   └── status.md
+│   ├── settings.json
+│   └── settings.local.json
+├── .github/
+│   └── workflows/
+│       └── deploy.yml          # GitHub Actions 部署
+├── CLAUDE.md                   # Claude Code 项目说明
+├── deploy.sh                   # 部署脚本
+├── .env                        # 全局环境变量
+├── .env.production
+│
+├── Portal/                     # 门户系统 (统一登录)
+│   ├── backend/
+│   │   ├── venv/               # Python虚拟环境
+│   │   ├── main.py             # Flask入口
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── dist/                   # 前端构建产物
+│
+├── HR/                         # 人事系统
+│   ├── backend/
+│   │   ├── venv/
+│   │   ├── main.py
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── src/
+│       ├── dist/
+│       ├── package.json
+│       └── vite.config.js
+│
+├── account/                    # 账户管理系统
+│   ├── backend/
+│   │   ├── venv/
+│   │   ├── main.py
+│   │   ├── app/
+│   │   │   ├── routes/
+│   │   │   │   ├── auth.py
+│   │   │   │   ├── hr_sync.py
+│   │   │   │   ├── register.py
+│   │   │   │   └── users.py
+│   │   │   └── models/
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── src/
+│       │   ├── App.jsx
+│       │   ├── main.jsx
+│       │   ├── pages/
+│       │   ├── services/
+│       │   │   └── api.js
+│       │   └── utils/
+│       ├── dist/
+│       ├── .env.production
+│       ├── package.json
+│       └── vite.config.js
+│
+├── 报价/                       # 报价系统 (quotation)
+│   ├── backend/
+│   │   ├── venv/
+│   │   ├── main.py             # FastAPI (uvicorn)
+│   │   ├── api/
+│   │   ├── models/
+│   │   ├── services/
+│   │   ├── config/
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── src/
+│       ├── dist/
+│       ├── package.json
+│       └── vite.config.js
+│
+├── 采购/                       # 采购系统 (caigou)
+│   ├── backend/
+│   │   ├── venv/
+│   │   ├── app.py              # Flask入口
+│   │   ├── routes/
+│   │   ├── models/
+│   │   ├── services/
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── src/
+│       ├── dist/
+│       ├── package.json
+│       └── vite.config.js
+│
+├── SHM/                        # 出货管理系统
+│   ├── backend/
+│   │   ├── venv/
+│   │   ├── app.py              # Flask入口
+│   │   ├── routes/
+│   │   ├── .env
+│   │   └── requirements.txt
+│   └── frontend/
+│       ├── src/
+│       ├── dist/
+│       ├── package.json
+│       └── vite.config.js
+│
+├── shared/                     # 共享模块
+│   └── auth/                   # 统一认证
+│       ├── __init__.py
+│       ├── models.py
+│       ├── password_utils.py
+│       └── token_utils.py
+│
+├── CRM/                        # CRM系统 (未完全部署)
+│   ├── backend/
+│   └── frontend/
+│
+├── EAM/                        # 资产管理 (未完全部署)
+│   ├── backend/
+│   └── frontend/
+│
+├── MES/                        # 制造执行 (未完全部署)
+│   ├── backend/
+│   └── frontend/
+│
+└── SCM/                        # 供应链 (未完全部署)
+    ├── backend/
+    └── frontend/
+
+
+# 服务端口分配
+# ─────────────────────────────────────
+# portal-backend     3002   Flask
+# hr-backend         8003   Flask
+# account-backend    8004   Flask
+# quotation-backend  8001   FastAPI (uvicorn)
+# caigou-backend     5001   Flask
+# shm-backend        8006   Flask
+
+
+# Nginx 路由
+# ─────────────────────────────────────
+# /              → Portal/dist
+# /api/          → portal-backend:3002
+# /hr/           → HR/frontend/dist
+# /hr/api/       → hr-backend:8003
+# /account/      → account/frontend/dist
+# /account/api/  → account-backend:8004
+# /quotation/    → 报价/frontend/dist
+# /quotation/api/→ quotation-backend:8001
+# /caigou/       → 采购/frontend/dist
+# /caigou/api/   → caigou-backend:5001
+# /shm/          → SHM/frontend/dist
+# /shm/api/      → shm-backend:8006
