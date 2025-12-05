@@ -14,7 +14,7 @@ import shared.auth.models as auth_models
 # Initialize auth database
 init_auth_db()
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 
 @auth_bp.route('/login', methods=['POST'])

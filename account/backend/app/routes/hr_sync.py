@@ -13,7 +13,7 @@ from shared.auth import User, verify_token
 import shared.auth.models as auth_models
 from functools import wraps
 
-hr_sync_bp = Blueprint('hr_sync', __name__, url_prefix='/api/hr-sync')
+hr_sync_bp = Blueprint('hr_sync', __name__, url_prefix='/hr-sync')
 
 # HR Backend URL
 HR_BACKEND_URL = os.getenv('HR_BACKEND_URL', 'http://localhost:8003')

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pm2 *)",
+      "Bash(npm *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(mysql *)",
+      "Bash(mysqldump *)",
+      "Read(*)",
+      "Edit(*)",
+      "Write(*.py)",
+      "Write(*.jsx)",
+      "Write(*.tsx)",
+      "Write(*.js)",
+      "Write(*.json)",
+      "Write(*.css)",
+      "Write(*.md)"
+    ]
+  }
+}

@@ -10,7 +10,7 @@ from shared.auth import User, hash_password, verify_token
 import shared.auth.models as auth_models
 from functools import wraps
 
-users_bp = Blueprint('users', __name__, url_prefix='/api/users')
+users_bp = Blueprint('users', __name__, url_prefix='/users')
 
 
 def require_admin(f):

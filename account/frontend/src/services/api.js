@@ -54,7 +54,7 @@ api.interceptors.response.use(
  */
 export const login = async (username, password) => {
   try {
-    const response = await api.post('/api/auth/login', {
+    const response = await api.post('/auth/login', {
       username,
       password,
     });
@@ -71,7 +71,7 @@ export const login = async (username, password) => {
  */
 export const submitRegistration = async (data) => {
   try {
-    const response = await api.post('/api/register/submit', {
+    const response = await api.post('/register/submit', {
       emp_no: data.empNo,
       full_name: data.fullName,
       username: data.username,
@@ -99,7 +99,7 @@ export const submitRegistration = async (data) => {
  */
 export const getRegistrationRequests = async (status = 'pending') => {
   try {
-    const response = await api.get('/api/register/requests', {
+    const response = await api.get('/register/requests', {
       params: { status },
     });
     return response.data;
@@ -116,7 +116,7 @@ export const getRegistrationRequests = async (status = 'pending') => {
  */
 export const approveRequest = async (requestId, permissions) => {
   try {
-    const response = await api.post(`/api/register/approve/${requestId}`, {
+    const response = await api.post(`/register/approve/${requestId}`, {
       permissions,
     });
     return response.data;
@@ -133,7 +133,7 @@ export const approveRequest = async (requestId, permissions) => {
  */
 export const rejectRequest = async (requestId, reason) => {
   try {
-    const response = await api.post(`/api/register/reject/${requestId}`, {
+    const response = await api.post(`/register/reject/${requestId}`, {
       reason,
     });
     return response.data;
@@ -147,32 +147,32 @@ export const rejectRequest = async (requestId, reason) => {
  */
 export const userAPI = {
   getUsers: async () => {
-    const response = await api.get('/api/users');
+    const response = await api.get('/users');
     return response.data;
   },
 
   getUser: async (userId) => {
-    const response = await api.get(`/api/users/${userId}`);
+    const response = await api.get(`/users/${userId}`);
     return response.data;
   },
 
   updateUser: async (userId, data) => {
-    const response = await api.put(`/api/users/${userId}`, data);
+    const response = await api.put(`/users/${userId}`, data);
     return response.data;
   },
 
   deleteUser: async (userId) => {
-    const response = await api.delete(`/api/users/${userId}`);
+    const response = await api.delete(`/users/${userId}`);
     return response.data;
   },
 
   toggleUserActive: async (userId) => {
-    const response = await api.post(`/api/users/${userId}/toggle-active`);
+    const response = await api.post(`/users/${userId}/toggle-active`);
     return response.data;
   },
 
   resetPassword: async (userId, newPassword) => {
-    const response = await api.post(`/api/users/${userId}/reset-password`, { new_password: newPassword });
+    const response = await api.post(`/users/${userId}/reset-password`, { new_password: newPassword });
     return response.data;
   }
 };
@@ -182,7 +182,7 @@ export const userAPI = {
  */
 export const getOrgOptions = async () => {
   try {
-    const response = await api.get('/api/hr-sync/org-options');
+    const response = await api.get('/hr-sync/org-options');
     return response.data;
   } catch (error) {
     throw error;
@@ -195,25 +195,25 @@ export const getOrgOptions = async () => {
 export const hrSyncAPI = {
   // 获取HR系统在职员工
   getHREmployees: async () => {
-    const response = await api.get('/api/hr-sync/employees');
+    const response = await api.get('/hr-sync/employees');
     return response.data;
   },
 
   // 预览同步结果
   previewSync: async () => {
-    const response = await api.get('/api/hr-sync/preview');
+    const response = await api.get('/hr-sync/preview');
     return response.data;
   },
 
   // 执行同步
   executeSync: async (options = {}) => {
-    const response = await api.post('/api/hr-sync/execute', options);
+    const response = await api.post('/hr-sync/execute', options);
     return response.data;
   },
 
   // 批量创建用户
   batchCreateUsers: async (empNos, defaultPassword = 'jzc123456', permissions = []) => {
-    const response = await api.post('/api/hr-sync/batch-create', {
+    const response = await api.post('/hr-sync/batch-create', {
       emp_nos: empNos,
       default_password: defaultPassword,
       default_permissions: permissions

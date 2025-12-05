@@ -18,7 +18,7 @@ HR_BACKEND_URL = os.getenv('HR_BACKEND_URL', 'http://localhost:8003')
 init_db()  # Initialize registration database
 init_auth_db()  # Initialize shared auth database
 
-register_bp = Blueprint('register', __name__, url_prefix='/api/register')
+register_bp = Blueprint('register', __name__, url_prefix='/register')
 
 
 @register_bp.route('/submit', methods=['POST'])
