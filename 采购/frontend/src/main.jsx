@@ -57,7 +57,9 @@ const router = createBrowserRouter([
       </div>
     ),
   },
-]);
+], {
+  basename: "/caigou",
+});
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

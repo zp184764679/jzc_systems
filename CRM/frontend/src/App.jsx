@@ -236,7 +236,7 @@ function App() {
           },
         }}
       >
-        <BrowserRouter>
+        <BrowserRouter basename="/crm">
           <AppContent />
         </BrowserRouter>
       </ConfigProvider>

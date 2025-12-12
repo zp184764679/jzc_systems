@@ -238,7 +238,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider locale={zhCN}>
-        <BrowserRouter>
+        <BrowserRouter basename="/scm">
           <AppContent />
         </BrowserRouter>
       </ConfigProvider>
