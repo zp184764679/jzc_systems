@@ -3,12 +3,13 @@
  * Handles token from Portal SSO system
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''; // CRM系统后端地址
+// Portal后端地址 - 本地开发默认 localhost:3002
+const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002';
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/'; // Portal前端地址
 
 /**
  * Check if there's a token in URL parameters from Portal SSO
- * If found, validate it with backend and store user info
+ * If found, validate it with Portal backend and store user info
  * @returns {boolean} true if login successful
  */
 export const checkSSOToken = async () => {
@@ -18,11 +19,10 @@ export const checkSSOToken = async () => {
     const token = urlParams.get('token');
 
     if (token) {
-      console.log('[SSO] Token found in URL, validating...');
+      console.log('[SSO] Token found in URL, validating with Portal...');
 
-      // 验证token并获取用户信息
-      // API_BASE_URL 已包含 /api，所以只需 /auth/sso-login
-      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
+      // 使用Portal后端验证token
+      const response = await fetch(`${PORTAL_API}/api/auth/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -32,7 +32,7 @@ export const checkSSOToken = async () => {
 
       const data = await response.json();
 
-      if (response.ok && data.user) {
+      if (response.ok && data.valid && data.user) {
         console.log('[SSO] Login successful:', data.user);
 
         // 存储token和用户信息到localStorage

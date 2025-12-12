@@ -3,12 +3,12 @@
  * Handles token from Portal SSO system
  */
 
-// 使用环境变量配置 API 地址
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/account/api';
+// Portal后端地址 - 本地开发默认 localhost:3002
+const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002';
 
 /**
  * Check if there's a token in URL parameters from Portal SSO
- * If found, validate it with backend and store user info
+ * If found, validate it with Portal backend and store user info
  */
 export const checkSSOToken = async () => {
   try {
@@ -17,10 +17,10 @@ export const checkSSOToken = async () => {
     const token = urlParams.get('token');
 
     if (token) {
-      console.log('[SSO] Token found in URL, validating...');
+      console.log('[SSO] Token found in URL, validating with Portal...');
 
-      // 验证token并获取用户信息
-      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
+      // 使用Portal后端验证token
+      const response = await fetch(`${PORTAL_API}/api/auth/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -30,7 +30,7 @@ export const checkSSOToken = async () => {
 
       const data = await response.json();
 
-      if (response.ok && data.user) {
+      if (response.ok && data.valid && data.user) {
         console.log('[SSO] Login successful:', data.user);
 
         // 存储token和用户信息到localStorage

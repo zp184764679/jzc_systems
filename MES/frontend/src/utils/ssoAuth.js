@@ -3,7 +3,7 @@
  * Handles token from Portal SSO system
  */
 
-const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || ''; // Portal后端地址
+const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002'; // Portal后端地址
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/'; // Portal前端地址
 
 /**

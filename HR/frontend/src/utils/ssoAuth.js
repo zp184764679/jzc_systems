@@ -3,13 +3,13 @@
  * Handles token from Portal SSO system
  */
 
-// HR系统后端地址 - 生产环境为 /hr/api，开发环境为空（使用 vite proxy）
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+// Portal后端地址 - 本地开发默认 localhost:3002
+const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002';
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/'; // Portal前端地址
 
 /**
  * Check if there's a token in URL parameters from Portal SSO
- * If found, validate it with backend and store user info
+ * If found, validate it with Portal backend and store user info
  */
 export const checkSSOToken = async () => {
   console.log('[SSO] checkSSOToken called, URL:', window.location.href);
@@ -20,11 +20,10 @@ export const checkSSOToken = async () => {
     console.log('[SSO] Token from URL:', token ? 'found' : 'not found');
 
     if (token) {
-      console.log('[SSO] Token found in URL, validating...');
+      console.log('[SSO] Token found in URL, validating with Portal...');
 
-      // 验证token并获取用户信息
-      // API_BASE_URL 已包含 /hr/api，所以只需 /auth/sso-login
-      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
+      // 使用Portal后端验证token
+      const response = await fetch(`${PORTAL_API}/api/auth/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -35,7 +34,7 @@ export const checkSSOToken = async () => {
       const data = await response.json();
       console.log('[SSO] Response status:', response.status, 'data:', data);
 
-      if (response.ok && data.user) {
+      if (response.ok && data.valid && data.user) {
         console.log('[SSO] Login successful:', data.user);
 
         // 存储token和用户信息到localStorage

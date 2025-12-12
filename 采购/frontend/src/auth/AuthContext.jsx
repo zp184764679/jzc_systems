@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../api/http";
 
+// Portal后端地址 - 本地开发默认 localhost:3002
+const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002';
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -8,22 +11,75 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 从 localStorage 恢复用户信息
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        // 确保 id 字段存在（兼容 user_id）
-        if (!userData.id && userData.user_id) {
-          userData.id = userData.user_id;
+    // SSO Token 检查
+    const checkSSOToken = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (token) {
+        console.log('[SSO] Token found in URL, validating with Portal...');
+        try {
+          const response = await fetch(`${PORTAL_API}/api/auth/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.valid && data.user) {
+            console.log('[SSO] Login successful:', data.user);
+
+            // 存储token和用户信息
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+
+            if (data.user.user_id || data.user.id) {
+              localStorage.setItem('User-ID', String(data.user.user_id || data.user.id));
+              localStorage.setItem('user_id', String(data.user.user_id || data.user.id));
+            }
+            if (data.user.role) {
+              localStorage.setItem('User-Role', data.user.role);
+            }
+
+            // 设置用户状态
+            const userData = {
+              ...data.user,
+              id: data.user.id || data.user.user_id,
+            };
+            setUser(userData);
+
+            // 清除URL中的token参数
+            window.history.replaceState({}, '', window.location.pathname);
+            setLoading(false);
+            return;
+          } else {
+            console.error('[SSO] Token validation failed:', data.error);
+          }
+        } catch (e) {
+          console.error('[SSO] Error validating token:', e);
         }
-        setUser(userData);
-      } catch (e) {
-        console.error("Failed to parse stored user:", e);
-        localStorage.removeItem("user");
       }
-    }
-    setLoading(false);
+
+      // 从 localStorage 恢复用户信息
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          // 确保 id 字段存在（兼容 user_id）
+          if (!userData.id && userData.user_id) {
+            userData.id = userData.user_id;
+          }
+          setUser(userData);
+        } catch (e) {
+          console.error("Failed to parse stored user:", e);
+          localStorage.removeItem("user");
+        }
+      }
+      setLoading(false);
+    };
+
+    checkSSOToken();
   }, []);
 
   // ✅ 新增：登录时自动从 API 获取完整信息（仅执行一次）
