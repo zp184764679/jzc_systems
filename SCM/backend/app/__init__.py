@@ -56,10 +56,13 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # CORS configuration
+    # CORS configuration - allow all origins in development
     cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
     CORS(app,
-         resources={r"/api/*": {"origins": cors_origins}},
+         resources={
+             r"/api/*": {"origins": cors_origins},
+             r"/auth/*": {"origins": cors_origins}
+         },
          supports_credentials=True,
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
          allow_headers=["Content-Type", "Authorization", "User-ID", "User-Role"])
