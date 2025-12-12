@@ -55,11 +55,25 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Configure CORS to support authentication cookies
-    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+    # 安全修复：CORS 配置 - 仅允许已知域名
+    cors_origins = os.getenv('CORS_ORIGINS', '')
+    if cors_origins:
+        cors_origins_list = [o.strip() for o in cors_origins.split(',') if o.strip()]
+    else:
+        cors_origins_list = [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173',
+            'http://61.145.212.28:3000',
+            'http://61.145.212.28',
+            'https://jzchardware.cn:8888',
+            'https://jzchardware.cn',
+        ]
+
     CORS(app, resources={
         r"/api/*": {
-            "origins": cors_origins,
+            "origins": cors_origins_list,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True

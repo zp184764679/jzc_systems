@@ -1,6 +1,11 @@
+"""
+SHM 客户地址管理路由
+安全修复：添加认证装饰器
+"""
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models.shipment import CustomerAddress
+from middleware.jwt_auth import jwt_required
 
 addresses_bp = Blueprint('addresses', __name__)
 
@@ -34,8 +39,9 @@ def get_addresses():
 
 
 @addresses_bp.route('/addresses', methods=['POST'])
+@jwt_required
 def create_address():
-    """创建地址"""
+    """创建地址 - 需要认证"""
     data = request.get_json()
 
     # 如果设为默认，取消其他默认地址
@@ -93,8 +99,9 @@ def get_address(id):
 
 
 @addresses_bp.route('/addresses/<int:id>', methods=['PUT'])
+@jwt_required
 def update_address(id):
-    """更新地址"""
+    """更新地址 - 需要认证"""
     address = CustomerAddress.query.get_or_404(id)
     data = request.get_json()
 
@@ -138,8 +145,9 @@ def update_address(id):
 
 
 @addresses_bp.route('/addresses/<int:id>', methods=['DELETE'])
+@jwt_required
 def delete_address(id):
-    """删除地址"""
+    """删除地址 - 需要认证"""
     address = CustomerAddress.query.get_or_404(id)
 
     db.session.delete(address)

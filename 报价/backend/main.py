@@ -17,15 +17,16 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-# 配置CORS - 从环境变量读取允许的域名
-import os
+# 配置CORS - 安全修复：限制允许的方法和头
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'https://jzchardware.cn:8888,https://jzchardware.cn,http://localhost:3000,http://localhost:6001').split(',')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # 安全修复：仅允许必要的 HTTP 方法
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # 安全修复：仅允许必要的请求头
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
 )
 
 # 挂载静态文件目录

@@ -10,4 +10,7 @@ app = create_app()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 8003))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # 安全修复：从环境变量读取 debug 模式，默认关闭
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    print(f"HR Backend starting on port {port}, debug={debug_mode}")
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)

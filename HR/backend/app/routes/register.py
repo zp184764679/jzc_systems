@@ -1,12 +1,16 @@
 """
 User registration request routes for HR system
 Allows active employees to submit registration requests for approval
+安全修复：添加管理员权限验证
 """
 from flask import Blueprint, request, jsonify
 import sys
 import os
 from datetime import datetime
 import json
+
+# 安全修复：导入认证装饰器
+from middleware.jwt_auth import admin_required
 
 # Add shared module to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..', '../..', '..'))
@@ -148,8 +152,9 @@ def submit_registration():
 
 
 @register_bp.route('/requests', methods=['GET'])
+@admin_required
 def get_registration_requests():
-    """Get all registration requests (admin only)"""
+    """Get all registration requests (admin only) - 安全修复：需要管理员权限"""
     status_filter = request.args.get('status', 'pending')
 
     auth_session = auth_models.AuthSessionLocal()
@@ -170,8 +175,9 @@ def get_registration_requests():
 
 
 @register_bp.route('/approve/<int:request_id>', methods=['POST'])
+@admin_required
 def approve_registration(request_id):
-    """Approve registration request and create user account"""
+    """Approve registration request and create user account - 安全修复：需要管理员权限"""
     data = request.get_json() or {}
 
     permissions = data.get('permissions', [])
@@ -230,8 +236,9 @@ def approve_registration(request_id):
 
 
 @register_bp.route('/reject/<int:request_id>', methods=['POST'])
+@admin_required
 def reject_registration(request_id):
-    """Reject registration request"""
+    """Reject registration request - 安全修复：需要管理员权限"""
     data = request.get_json()
     reason = data.get('reason', '') if data else ''
 

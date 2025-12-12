@@ -13,16 +13,36 @@ load_dotenv()
 class Config:
     """Base configuration class"""
 
-    # Flask
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    # Flask - 安全修复：强制环境变量配置
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    if not SECRET_KEY:
+        import logging
+        logger = logging.getLogger(__name__)
+        if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
+            logger.warning("SECRET_KEY 未设置，使用开发临时密钥")
+            SECRET_KEY = "dev-only-temp-key-" + str(os.getpid())
+        else:
+            raise RuntimeError("SECRET_KEY 环境变量未设置（生产环境必须配置）")
+
     DEBUG = False
     TESTING = False
 
-    # Database
+    # Database - 安全修复：移除弱默认凭证
     DB_HOST = os.getenv('DB_HOST', 'localhost')
-    DB_USER = os.getenv('MYSQL_USER', 'root')
-    DB_PASSWORD = os.getenv('MYSQL_PASSWORD', 'root')
-    DB_NAME = os.getenv('MYSQL_DATABASE', 'cncplan')
+    DB_USER = os.getenv('MYSQL_USER')
+    DB_PASSWORD = os.getenv('MYSQL_PASSWORD')
+    DB_NAME = os.getenv('MYSQL_DATABASE', 'hr_system')
+
+    # 验证数据库凭证
+    if not DB_USER or not DB_PASSWORD:
+        import logging
+        logger = logging.getLogger(__name__)
+        if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
+            logger.warning("MYSQL_USER/MYSQL_PASSWORD 未设置，使用开发默认值")
+            DB_USER = DB_USER or "root"
+            DB_PASSWORD = DB_PASSWORD or "root"
+        else:
+            raise RuntimeError("MYSQL_USER 和 MYSQL_PASSWORD 环境变量必须设置（生产环境）")
 
     SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False

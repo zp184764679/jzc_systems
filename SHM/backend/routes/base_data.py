@@ -1,7 +1,12 @@
+"""
+SHM 基础数据管理路由
+安全修复：添加认证装饰器
+"""
 from flask import Blueprint, jsonify, request
 from extensions import db
 from models.base_data import ShipmentStatus, ShippingMethod, PackagingType, PackagingMaterial, Warehouse, UnitOfMeasure
 from sqlalchemy import or_
+from middleware.jwt_auth import jwt_required
 
 bp = Blueprint('base_data', __name__, url_prefix='/api/base')
 
@@ -63,14 +68,17 @@ def get_shipment_statuses():
     return get_list(ShipmentStatus, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/shipment-statuses', methods=['POST'])
+@jwt_required
 def create_shipment_status():
     return create_item(ShipmentStatus, '出货状态')
 
 @bp.route('/shipment-statuses/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_shipment_status(item_id):
     return update_item(ShipmentStatus, item_id, '出货状态')
 
 @bp.route('/shipment-statuses/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_shipment_status(item_id):
     return delete_item(ShipmentStatus, item_id, '出货状态')
 
@@ -81,14 +89,17 @@ def get_shipping_methods():
     return get_list(ShippingMethod, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/shipping-methods', methods=['POST'])
+@jwt_required
 def create_shipping_method():
     return create_item(ShippingMethod, '运输方式')
 
 @bp.route('/shipping-methods/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_shipping_method(item_id):
     return update_item(ShippingMethod, item_id, '运输方式')
 
 @bp.route('/shipping-methods/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_shipping_method(item_id):
     return delete_item(ShippingMethod, item_id, '运输方式')
 
@@ -99,14 +110,17 @@ def get_packaging_types():
     return get_list(PackagingType, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/packaging-types', methods=['POST'])
+@jwt_required
 def create_packaging_type():
     return create_item(PackagingType, '包装类型')
 
 @bp.route('/packaging-types/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_packaging_type(item_id):
     return update_item(PackagingType, item_id, '包装类型')
 
 @bp.route('/packaging-types/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_packaging_type(item_id):
     return delete_item(PackagingType, item_id, '包装类型')
 
@@ -117,14 +131,17 @@ def get_packaging_materials():
     return get_list(PackagingMaterial, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/packaging-materials', methods=['POST'])
+@jwt_required
 def create_packaging_material():
     return create_item(PackagingMaterial, '包装材料')
 
 @bp.route('/packaging-materials/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_packaging_material(item_id):
     return update_item(PackagingMaterial, item_id, '包装材料')
 
 @bp.route('/packaging-materials/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_packaging_material(item_id):
     return delete_item(PackagingMaterial, item_id, '包装材料')
 
@@ -135,14 +152,17 @@ def get_warehouses():
     return get_list(Warehouse, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/warehouses', methods=['POST'])
+@jwt_required
 def create_warehouse():
     return create_item(Warehouse, '仓库')
 
 @bp.route('/warehouses/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_warehouse(item_id):
     return update_item(Warehouse, item_id, '仓库')
 
 @bp.route('/warehouses/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_warehouse(item_id):
     return delete_item(Warehouse, item_id, '仓库')
 
@@ -153,13 +173,16 @@ def get_units_of_measure():
     return get_list(UnitOfMeasure, request.args.get('search', ''), request.args.get('active_only', 'true').lower() == 'true')
 
 @bp.route('/units-of-measure', methods=['POST'])
+@jwt_required
 def create_unit_of_measure():
     return create_item(UnitOfMeasure, '计量单位')
 
 @bp.route('/units-of-measure/<int:item_id>', methods=['PUT'])
+@jwt_required
 def update_unit_of_measure(item_id):
     return update_item(UnitOfMeasure, item_id, '计量单位')
 
 @bp.route('/units-of-measure/<int:item_id>', methods=['DELETE'])
+@jwt_required
 def delete_unit_of_measure(item_id):
     return delete_item(UnitOfMeasure, item_id, '计量单位')

@@ -1,10 +1,43 @@
 # config/settings.py
 """
 系统配置文件
+安全修复：移除硬编码凭证，强制环境变量配置
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os
+
+
+def _get_database_url() -> str:
+    """安全构建数据库连接字符串"""
+    url = os.getenv('DATABASE_URL')
+    if url:
+        return url
+    # 从各环境变量构建
+    user = os.getenv('MYSQL_USER')
+    password = os.getenv('MYSQL_PASSWORD')
+    host = os.getenv('DB_HOST', 'localhost')
+    db = os.getenv('MYSQL_DATABASE', 'quotation')
+    if user and password:
+        return f"mysql+pymysql://{user}:{password}@{host}/{db}?charset=utf8mb4"
+    # 开发环境回退
+    if os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG', '').lower() == 'true':
+        import logging
+        logging.warning("数据库凭证未设置，使用开发默认值")
+        return "mysql+pymysql://root:root@localhost/quotation?charset=utf8mb4"
+    raise RuntimeError("DATABASE_URL 或 MYSQL_USER/MYSQL_PASSWORD 环境变量必须设置")
+
+
+def _get_secret_key() -> str:
+    """安全获取 JWT 密钥"""
+    key = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
+    if key:
+        return key
+    if os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG', '').lower() == 'true':
+        import logging
+        logging.warning("JWT_SECRET 未设置，使用开发临时密钥")
+        return f"dev-only-temp-key-{os.getpid()}"
+    raise RuntimeError("JWT_SECRET 环境变量必须设置（生产环境）")
 
 
 class Settings(BaseSettings):
@@ -13,15 +46,14 @@ class Settings(BaseSettings):
     # 基础配置
     APP_NAME: str = "机加工报价系统"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    # 安全修复：默认关闭 debug 模式
+    DEBUG: bool = os.getenv('DEBUG', 'false').lower() == 'true'
 
-    # 数据库配置
-    # MySQL: mysql+pymysql://username:password@localhost:3306/database_name
-    # SQLite: sqlite:///./quote_system.db
-    DATABASE_URL: str = "mysql+pymysql://app:app@localhost/quotation?charset=utf8mb4"
+    # 数据库配置 - 安全修复：不再硬编码凭证
+    DATABASE_URL: str = _get_database_url()
 
-    # JWT认证
-    SECRET_KEY: str = os.getenv('JWT_SECRET', 'change-this-secret-in-production-immediately')
+    # JWT认证 - 安全修复：强制环境变量
+    SECRET_KEY: str = _get_secret_key()
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
