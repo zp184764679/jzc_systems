@@ -6,6 +6,12 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sys
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file before importing shared.auth
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Add shared module to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
@@ -26,12 +32,30 @@ cors_origins = os.getenv('CORS_ORIGINS', '')
 if cors_origins:
     cors_origins_list = [o.strip() for o in cors_origins.split(',') if o.strip()]
 else:
-    # 默认允许的域名（不再默认为 '*'）
+    # 默认允许的域名（本地开发 + 生产环境）
     cors_origins_list = [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5173',
+        # 本地开发 - 所有子系统前端端口
+        'http://localhost:6000',   # Portal
+        'http://localhost:6001',   # HR
+        'http://localhost:6002',   # CRM
+        'http://localhost:6003',   # Account
+        'http://localhost:6005',   # 报价
+        'http://localhost:7000',   # SCM
+        'http://localhost:7100',   # SHM
+        'http://localhost:7200',   # EAM
+        'http://localhost:7300',   # MES
+        'http://localhost:7500',   # 采购
+        'http://127.0.0.1:6000',
+        'http://127.0.0.1:6001',
+        'http://127.0.0.1:6002',
+        'http://127.0.0.1:6003',
+        'http://127.0.0.1:6005',
+        'http://127.0.0.1:7000',
+        'http://127.0.0.1:7100',
+        'http://127.0.0.1:7200',
+        'http://127.0.0.1:7300',
+        'http://127.0.0.1:7500',
+        # 生产环境
         'http://61.145.212.28:3000',
         'http://61.145.212.28',
         'https://jzchardware.cn:8888',
