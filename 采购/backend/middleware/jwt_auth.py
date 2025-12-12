@@ -16,9 +16,12 @@ def jwt_required(f):
     """JWT token验证装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 从URL参数或Authorization header获取token
-        token = request.args.get('token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+        # 仅从 Authorization Header 获取 token（安全做法）
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': '缺少认证token'}), 401
 
+        token = auth_header[7:]  # 移除 'Bearer ' 前缀
         if not token:
             return jsonify({'error': '缺少认证token'}), 401
 
@@ -38,9 +41,12 @@ def supplier_only(f):
     """仅供应商可访问"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 先验证JWT
-        token = request.args.get('token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+        # 仅从 Authorization Header 获取 token
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': '缺少认证token'}), 401
 
+        token = auth_header[7:]
         if not token:
             return jsonify({'error': '缺少认证token'}), 401
 
@@ -62,9 +68,12 @@ def employee_only(f):
     """仅员工可访问"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 先验证JWT
-        token = request.args.get('token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+        # 仅从 Authorization Header 获取 token
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': '缺少认证token'}), 401
 
+        token = auth_header[7:]
         if not token:
             return jsonify({'error': '缺少认证token'}), 401
 

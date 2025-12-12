@@ -14,8 +14,6 @@ const getApiBaseURL = () => {
 const API_BASE_URL = getApiBaseURL() + "/v1";
 
 export default function AdminUsers() {
-  console.log("AdminUsers component rendered");
-
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
@@ -30,7 +28,6 @@ export default function AdminUsers() {
   // 获取用户列表
   const fetchUsers = async () => {
     try {
-      console.log("开始获取用户列表...");
       setLoading(true);
       setError("");
 
@@ -40,25 +37,14 @@ export default function AdminUsers() {
         credentials: "include",
       });
 
-      console.log("API响应状态:", response.status);
-      console.log("API响应头:", Object.fromEntries(response.headers.entries()));
-
       if (response.ok) {
         const data = await response.json();
-        console.log("获取到的用户数据:", data);
         setUsers(Array.isArray(data) ? data : []);
         setError("");
       } else {
-        const errorText = await response.text();
-        console.error("获取用户列表失败:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-        });
         setError(`获取用户列表失败: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      console.error("获取用户列表时发生网络错误:", error);
       setError(`网络错误: ${error.message}`);
     } finally {
       setLoading(false);
@@ -68,7 +54,6 @@ export default function AdminUsers() {
   // 审批用户
   const approveUser = async (userId) => {
     try {
-      console.log(`审批用户 ID: ${userId}`);
       setActionLoading((prev) => ({ ...prev, [userId]: "approving" }));
       setError("");
 
@@ -78,8 +63,6 @@ export default function AdminUsers() {
         credentials: "include",
       });
 
-      console.log("审批响应状态:", response.status);
-
       if (response.ok) {
         await response.json().catch(() => ({}));
         setUsers((prev) =>
@@ -88,16 +71,9 @@ export default function AdminUsers() {
         setSuccess("用户审批成功");
         setTimeout(() => setSuccess(""), 3000);
       } else {
-        const errorText = await response.text();
-        console.error("审批失败:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-        });
         setError(`审批失败: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      console.error("审批用户时发生网络错误:", error);
       setError(`网络错误: ${error.message}`);
     } finally {
       setActionLoading((prev) => ({ ...prev, [userId]: null }));
@@ -107,7 +83,6 @@ export default function AdminUsers() {
   // 拒绝用户
   const rejectUser = async (userId) => {
     try {
-      console.log(`拒绝用户 ID: ${userId}`);
       setActionLoading((prev) => ({ ...prev, [userId]: "rejecting" }));
       setError("");
 
@@ -117,8 +92,6 @@ export default function AdminUsers() {
         credentials: "include",
       });
 
-      console.log("拒绝响应状态:", response.status);
-
       if (response.ok) {
         await response.json().catch(() => ({}));
         setUsers((prev) =>
@@ -127,16 +100,9 @@ export default function AdminUsers() {
         setSuccess("用户已拒绝");
         setTimeout(() => setSuccess(""), 3000);
       } else {
-        const errorText = await response.text();
-        console.error("拒绝失败:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-        });
         setError(`拒绝失败: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      console.error("拒绝用户时发生网络错误:", error);
       setError(`网络错误: ${error.message}`);
     } finally {
       setActionLoading((prev) => ({ ...prev, [userId]: null }));
@@ -148,7 +114,6 @@ export default function AdminUsers() {
     if (!window.confirm("确定要删除这个用户吗？此操作不可撤销。")) return;
 
     try {
-      console.log(`删除用户 ID: ${userId}`);
       setActionLoading((prev) => ({ ...prev, [userId]: "deleting" }));
       setError("");
 
@@ -158,24 +123,15 @@ export default function AdminUsers() {
         credentials: "include",
       });
 
-      console.log("删除响应状态:", response.status);
-
       if (response.ok) {
         await response.json().catch(() => ({}));
         setUsers((prev) => prev.filter((u) => u.id !== userId));
         setSuccess("用户已删除");
         setTimeout(() => setSuccess(""), 3000);
       } else {
-        const errorText = await response.text();
-        console.error("删除失败:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText,
-        });
         setError(`删除失败: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      console.error("删除用户时发生网络错误:", error);
       setError(`网络错误: ${error.message}`);
     } finally {
       setActionLoading((prev) => ({ ...prev, [userId]: null }));
@@ -195,7 +151,6 @@ export default function AdminUsers() {
   // 保存成功后的本地更新
   const handleSaved = (updated) => {
     if (!updated) return;
-    console.log("用户已更新:", updated);
     setUsers((prev) => prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
     setSuccess("用户信息已更新");
     setTimeout(() => setSuccess(""), 3000);

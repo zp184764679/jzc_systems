@@ -148,14 +148,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{
-          marginTop: "20px",
-          textAlign: "center",
-          fontSize: "12px",
-          color: "#888",
-        }}>
-          默认账户: admin / admin123
-        </div>
+{/* 安全修复：移除默认账户显示，避免暴露凭证 */}
       </div>
     </div>
   );

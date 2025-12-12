@@ -7,17 +7,36 @@ from app.routes.auth import auth_bp
 from app.routes.users import users_bp
 from app.routes.hr_sync import hr_sync_bp
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Secret key for sessions
-app.secret_key = os.getenv('SECRET_KEY', 'jzc-hardware-account-management-secret-key-2025')
+# 安全修复：强制要求 SECRET_KEY 环境变量
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
+        logger.warning("SECRET_KEY 未设置，使用开发临时密钥")
+        secret_key = "dev-only-temp-secret-key-" + str(os.getpid())
+    else:
+        raise RuntimeError("SECRET_KEY 环境变量未设置（生产环境必须配置）")
+app.secret_key = secret_key
 
-# Database configuration
-DB_USER = os.getenv('MYSQL_USER', 'app')
-DB_PASSWORD = os.getenv('MYSQL_PASSWORD', 'app')
+# 安全修复：强制要求数据库凭证环境变量
+DB_USER = os.getenv('MYSQL_USER')
+DB_PASSWORD = os.getenv('MYSQL_PASSWORD')
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_NAME = os.getenv('MYSQL_DATABASE', 'account')
+
+if not DB_USER or not DB_PASSWORD:
+    if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
+        logger.warning("MYSQL_USER/MYSQL_PASSWORD 未设置，使用开发默认值")
+        DB_USER = DB_USER or "app"
+        DB_PASSWORD = DB_PASSWORD or "app"
+    else:
+        raise RuntimeError("MYSQL_USER 和 MYSQL_PASSWORD 环境变量必须设置（生产环境）")
+
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}?charset=utf8mb4'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -25,8 +44,23 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# Enable CORS with credentials
-CORS(app, supports_credentials=True, origins=['*'], allow_headers=['Content-Type', 'Authorization'])
+# 安全修复：CORS 配置 - 仅允许已知域名
+cors_origins = os.getenv('CORS_ORIGINS', '')
+if cors_origins:
+    cors_origins_list = [o.strip() for o in cors_origins.split(',') if o.strip()]
+else:
+    cors_origins_list = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+        'http://61.145.212.28:3000',
+        'http://61.145.212.28',
+        'https://jzchardware.cn:8888',
+        'https://jzchardware.cn',
+    ]
+
+CORS(app, supports_credentials=True, origins=cors_origins_list, allow_headers=['Content-Type', 'Authorization'])
 
 # Register blueprints
 app.register_blueprint(register_bp)

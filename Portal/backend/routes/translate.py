@@ -6,9 +6,13 @@ import subprocess
 import tempfile
 from flask import Blueprint, request, jsonify
 
-# 设置代理
-os.environ['HTTP_PROXY'] = 'http://127.0.0.1:8800'
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:8800'
+# 从环境变量设置代理（如果未设置则不使用代理）
+http_proxy = os.getenv('HTTP_PROXY', os.getenv('http_proxy', ''))
+https_proxy = os.getenv('HTTPS_PROXY', os.getenv('https_proxy', ''))
+if http_proxy:
+    os.environ['HTTP_PROXY'] = http_proxy
+if https_proxy:
+    os.environ['HTTPS_PROXY'] = https_proxy
 
 translate_bp = Blueprint('translate', __name__, url_prefix='/api/translate')
 
@@ -47,27 +51,38 @@ def translate_text():
 原文：
 {content}'''
 
+    pf = None
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.txt', delete=False) as f:
             f.write(prompt)
             pf = f.name
 
+        # 安全修复：避免 shell=True，改用 PowerShell 读取文件内容传递给 claude
+        # 使用列表参数构建命令，避免命令注入
         result = subprocess.run(
-            f'type "{pf}" | claude -p - --model claude-opus-4-5-20251101',
-            capture_output=True, text=True, encoding='utf-8',
-            timeout=180, shell=True
+            ['powershell', '-Command', f'Get-Content -Raw -Path "{pf}" | claude -p - --model claude-opus-4-5-20251101'],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=180,
+            shell=False  # 安全：不使用 shell
         )
         os.unlink(pf)
+        pf = None
 
         if result.stdout.strip():
             return jsonify({'result': result.stdout.strip()})
         else:
-            return jsonify({'error': result.stderr or '翻译失败'}), 500
+            return jsonify({'error': '翻译失败，请稍后重试'}), 500
 
     except subprocess.TimeoutExpired:
+        if pf and os.path.exists(pf):
+            os.unlink(pf)
         return jsonify({'error': '翻译超时，请重试'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        if pf and os.path.exists(pf):
+            os.unlink(pf)
+        return jsonify({'error': '翻译服务暂时不可用'}), 500
 
 
 @translate_bp.route('/detect', methods=['POST'])

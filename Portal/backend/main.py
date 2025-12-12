@@ -21,11 +21,26 @@ from routes.doc_translate import doc_translate_bp
 
 app = Flask(__name__)
 
-# Configure CORS - 允许所有子系统前端访问
-cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+# Configure CORS - 安全修复：仅允许已知域名
+cors_origins = os.getenv('CORS_ORIGINS', '')
+if cors_origins:
+    cors_origins_list = [o.strip() for o in cors_origins.split(',') if o.strip()]
+else:
+    # 默认允许的域名（不再默认为 '*'）
+    cors_origins_list = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+        'http://61.145.212.28:3000',
+        'http://61.145.212.28',
+        'https://jzchardware.cn:8888',
+        'https://jzchardware.cn',
+    ]
+
 CORS(app, resources={
     r"/api/*": {
-        "origins": cors_origins,
+        "origins": cors_origins_list,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
@@ -82,8 +97,8 @@ def login():
             'user': user_dict
         }), 200
         
-    except Exception as e:
-        return jsonify({'error': f'登录失败: {str(e)}'}), 500
+    except Exception:
+        return jsonify({'error': '登录失败，请稍后重试'}), 500
     finally:
         session.close()
 
@@ -129,8 +144,8 @@ def supplier_login():
             'user': user_dict
         }), 200
         
-    except Exception as e:
-        return jsonify({'error': f'登录失败: {str(e)}'}), 500
+    except Exception:
+        return jsonify({'error': '登录失败，请稍后重试'}), 500
     finally:
         session.close()
 
@@ -178,9 +193,11 @@ def index():
 
 
 if __name__ == '__main__':
-    import os
     port = int(os.getenv('PORT', 3002))
-    print(f"🚀 Portal Backend API starting on port {port}")
-    print(f"📍 Employee Login: http://localhost:{port}/api/auth/login")
-    print(f"📍 Supplier Login: http://localhost:{port}/api/auth/supplier-login")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # 安全修复：从环境变量读取 debug 模式，默认关闭
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    print(f"Portal Backend API starting on port {port}")
+    print(f"Employee Login: http://localhost:{port}/api/auth/login")
+    print(f"Supplier Login: http://localhost:{port}/api/auth/supplier-login")
+    print(f"Debug mode: {debug_mode}")
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)

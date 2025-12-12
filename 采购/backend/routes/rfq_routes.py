@@ -27,7 +27,7 @@ rfq_service = RFQService()
 
 @bp.before_request
 def check_auth():
-    """JWT认证检查"""
+    """JWT认证检查 - 仅接受 JWT Token 认证"""
     if request.method == 'OPTIONS':
         return None
 
@@ -40,13 +40,7 @@ def check_auth():
             request.current_user_role = payload.get('role')
             return None
 
-    # 回退检查 User-ID header
-    user_id = request.headers.get('User-ID')
-    if user_id:
-        request.current_user_id = user_id
-        request.current_user_role = request.headers.get('User-Role')
-        return None
-
+    # 安全修复：移除 User-ID Header 回退机制，强制要求 JWT 认证
     return jsonify({"error": "未授权：请先登录"}), 401
 
 def iso(dt):
@@ -152,7 +146,10 @@ def rfqs_endpoint():
     try:
         data = request.get_json() or {}
         pr_id = data.get('pr_id')
-        user_id = data.get('user_id') or 1  # 如果未提供，使用默认值1（系统用户）
+        # 安全修复：从 JWT 认证中获取 user_id，不接受客户端传递
+        user_id = getattr(request, 'current_user_id', None)
+        if not user_id:
+            return jsonify({"error": "无法获取用户信息，请重新登录"}), 401
         note = (data.get('note') or '').strip()
         classification_results = data.get('classification_results')
         skip_send = data.get('skip_send', False)  # 是否跳过发送（用于手动报价）

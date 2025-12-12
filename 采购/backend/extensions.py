@@ -51,8 +51,8 @@ def init_celery(app):
         result_backend=backend,
         task_default_queue=os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default"),
         worker_concurrency=int(os.getenv("CELERY_WORKER_CONCURRENCY", "2")),
-        task_time_limit=int(os.getenv("CELERY_TASK_TIME_LIMIT", "60")),
-        task_soft_time_limit=int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "30")),
+        task_time_limit=int(os.getenv("CELERY_TASK_TIME_LIMIT", "180")),  # 硬限制3分钟
+        task_soft_time_limit=int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "120")),  # 软限制2分钟
         timezone="Asia/Shanghai",
         enable_utc=True,
         imports=(

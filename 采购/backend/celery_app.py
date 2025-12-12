@@ -17,12 +17,13 @@ os.chdir(backend_dir)
 env_path = os.path.join(backend_dir, '.env')
 load_dotenv(env_path)
 
-# 强制设置数据库URI到环境变量（确保worker子进程也能获取）
+# 检查数据库URI是否已从.env加载
 if not os.environ.get('SQLALCHEMY_DATABASE_URI'):
-    os.environ['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://zhoupeng:ZPexak472008%40@127.0.0.1:3307/caigou?charset=utf8mb4'
+    print('[celery_app] 警告: SQLALCHEMY_DATABASE_URI 未在 .env 中配置')
+    raise RuntimeError('SQLALCHEMY_DATABASE_URI 环境变量未设置，请检查 .env 文件')
 
 print(f'[celery_app] 工作目录: {os.getcwd()}')
-print(f'[celery_app] DATABASE_URI: {os.environ.get("SQLALCHEMY_DATABASE_URI", "NOT_SET")}')
+print(f'[celery_app] DATABASE_URI: ***已配置***')
 
 # 现在才导入app
 from app import app

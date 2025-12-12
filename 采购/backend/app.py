@@ -36,10 +36,12 @@ app.config["SECRET_KEY"] = SECRET
 # =========================
 # SQLAlchemy 配置（含稳连接）
 # =========================
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-    "SQLALCHEMY_DATABASE_URI",
-    "mysql+pymysql://zhoupeng:ZPexak472008@127.0.0.1:3307/caigou?charset=utf8mb4"
-)
+# 数据库配置 - 必须从环境变量获取
+db_uri = os.getenv("SQLALCHEMY_DATABASE_URI")
+if not db_uri:
+    logger.error("SQLALCHEMY_DATABASE_URI 环境变量未设置，请检查 .env 文件")
+    raise RuntimeError("SQLALCHEMY_DATABASE_URI 环境变量未设置")
+app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # 防止闲置 "Lost connection" 的关键配置
@@ -76,16 +78,14 @@ except Exception as e:
 CORS(
     app,
     origins=[
-        r"http://localhost:\d+",  # 允许所有 localhost 端口
-        r"http://127.0.0.1:\d+",  # 允许所有 127.0.0.1 端口
-        r"http://10\.\d+\.\d+\.\d+:\d+",  # 允许10.x.x.x内网
-        r"http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+",  # 允许172.16-31.x.x内网
-        r"http://192\.168\.\d+\.\d+:\d+",  # 允许192.168.x.x内网
-        r"http://\d+\.\d+\.\d+\.\d+:\d+",  # 允许所有IP地址（包括外网）
-        r"https://\d+\.\d+\.\d+\.\d+:\d+",  # 允许所有HTTPS IP地址
-        "http://61.145.212.28:3000",
-        "http://61.145.212.28:9000",
-        "http://61.145.212.28"
+        r"http://localhost:\d+",  # 本地开发
+        r"http://127.0.0.1:\d+",  # 本地开发
+        r"http://192\.168\.\d+\.\d+:\d+",  # 内网开发
+        "http://61.145.212.28:3000",  # 生产服务器
+        "http://61.145.212.28:9000",  # 生产服务器
+        "http://61.145.212.28",  # 生产服务器
+        "https://jzchardware.cn:8888",  # 生产域名
+        "https://jzchardware.cn",  # 生产域名
     ],
     supports_credentials=True,
     allow_headers=[

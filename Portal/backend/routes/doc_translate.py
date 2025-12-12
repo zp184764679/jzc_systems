@@ -12,9 +12,13 @@ import fitz  # PyMuPDF
 from PIL import Image
 from io import BytesIO
 
-# 设置代理
-os.environ['HTTP_PROXY'] = 'http://127.0.0.1:8800'
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:8800'
+# 从环境变量设置代理（如果未设置则不使用代理）
+http_proxy = os.getenv('HTTP_PROXY', os.getenv('http_proxy', ''))
+https_proxy = os.getenv('HTTPS_PROXY', os.getenv('https_proxy', ''))
+if http_proxy:
+    os.environ['HTTP_PROXY'] = http_proxy
+if https_proxy:
+    os.environ['HTTPS_PROXY'] = https_proxy
 
 doc_translate_bp = Blueprint('doc_translate', __name__, url_prefix='/api/doc-translate')
 
@@ -46,12 +50,21 @@ def extract_pdf_pages_as_images(pdf_path):
 
 def translate_image_with_claude(image_data, page_num, target_lang='中文'):
     """使用Claude翻译图片中的文字"""
-    # 将图片保存为临时文件
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-        f.write(image_data)
-        img_path = f.name
+    # 安全修复：验证 target_lang 只能是预定义的语言
+    allowed_langs = {'中文', '英文', '日文', 'English', 'Chinese', 'Japanese'}
+    if target_lang not in allowed_langs:
+        target_lang = '中文'  # 默认为中文
 
-    prompt = f'''这是一份日本购买仕样书（采购规格书）的第{page_num}页。
+    img_path = None
+    prompt_path = None
+
+    try:
+        # 将图片保存为临时文件
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            f.write(image_data)
+            img_path = f.name
+
+        prompt = f'''这是一份日本购买仕样书（采购规格书）的第{page_num}页。
 
 请将图片中的所有日文内容翻译成{target_lang}，包括：
 1. 标题、表头
@@ -68,30 +81,46 @@ def translate_image_with_claude(image_data, page_num, target_lang='中文'):
 
 直接输出翻译内容，不需要任何解释或前言。'''
 
-    try:
-        # 使用claude CLI的图片输入功能
+        # 将 prompt 写入临时文件，避免命令注入
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.txt', delete=False) as f:
+            f.write(prompt)
+            prompt_path = f.name
+
+        # 安全修复：避免 shell=True，使用 PowerShell 列表参数
+        # 从文件读取 prompt 内容，避免命令行参数注入
         result = subprocess.run(
-            f'claude -p "{prompt}" "{img_path}"',
+            ['powershell', '-Command',
+             f'$prompt = Get-Content -Raw -Path "{prompt_path}"; claude -p $prompt "{img_path}"'],
             capture_output=True,
             text=True,
             encoding='utf-8',
             timeout=300,  # 5分钟超时
-            shell=True
+            shell=False  # 安全：不使用 shell
         )
-        os.unlink(img_path)
+
+        # 清理临时文件
+        if os.path.exists(img_path):
+            os.unlink(img_path)
+            img_path = None
+        if os.path.exists(prompt_path):
+            os.unlink(prompt_path)
+            prompt_path = None
 
         if result.stdout.strip():
             return result.stdout.strip()
         else:
-            return f"[第{page_num}页翻译失败: {result.stderr or '未知错误'}]"
+            return f"[第{page_num}页翻译失败]"
 
     except subprocess.TimeoutExpired:
-        os.unlink(img_path)
         return f"[第{page_num}页翻译超时]"
-    except Exception as e:
-        if os.path.exists(img_path):
+    except Exception:
+        return f"[第{page_num}页翻译错误]"
+    finally:
+        # 确保清理临时文件
+        if img_path and os.path.exists(img_path):
             os.unlink(img_path)
-        return f"[第{page_num}页翻译错误: {str(e)}]"
+        if prompt_path and os.path.exists(prompt_path):
+            os.unlink(prompt_path)
 
 
 def create_translated_pdf(images, translations, output_path):
