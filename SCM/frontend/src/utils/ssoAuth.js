@@ -21,7 +21,8 @@ export const checkSSOToken = async () => {
       console.log('[SSO] Token found in URL, validating...');
 
       // 验证token并获取用户信息
-      const response = await fetch(`${API_BASE_URL}/api/auth/sso-login`, {
+      // API_BASE_URL 已包含 /api，所以只需 /auth/sso-login
+      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
