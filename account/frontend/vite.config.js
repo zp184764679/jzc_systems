@@ -7,7 +7,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 6003,
-    allowedHosts: ['jzchardware.cn', 'localhost', '127.0.0.1']
+    allowedHosts: ['jzchardware.cn', 'localhost', '127.0.0.1'],
+    proxy: {
+      '/account/api': {
+        target: 'http://localhost:8004',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/account\/api/, '')
+      }
+    }
   },
   preview: {
     host: '0.0.0.0',

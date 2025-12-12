@@ -3,7 +3,8 @@
  * Handles token from Portal SSO system
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''; // HR系统后端地址
+// HR系统后端地址 - 生产环境为 /hr/api，开发环境为空（使用 vite proxy）
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/'; // Portal前端地址
 
 /**
@@ -22,7 +23,8 @@ export const checkSSOToken = async () => {
       console.log('[SSO] Token found in URL, validating...');
 
       // 验证token并获取用户信息
-      const response = await fetch(`${API_BASE_URL}/api/auth/sso-login`, {
+      // API_BASE_URL 已包含 /hr/api，所以只需 /auth/sso-login
+      const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

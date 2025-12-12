@@ -41,7 +41,8 @@ export default function Login() {
 
       // 3. 验证token
       try {
-        const res = await fetch(`${PORTAL_API}/api/auth/verify`, {
+        // PORTAL_API 已包含 /api，所以只需 /auth/verify
+        const res = await fetch(`${PORTAL_API}/auth/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
