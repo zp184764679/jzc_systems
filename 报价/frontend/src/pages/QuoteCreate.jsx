@@ -158,7 +158,7 @@ function QuoteCreate() {
       try {
         console.log('开始加载工序库...')
         const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-        const response = await fetch(`${apiBase}/api/processes?limit=100`)
+        const response = await fetch(`${apiBase}/processes?limit=100`)
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)

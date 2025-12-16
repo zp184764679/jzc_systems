@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { ConfigProvider, Layout, Menu, Spin, Button, Drawer } from 'antd'
-import { HomeOutlined, InboxOutlined, ImportOutlined, ExportOutlined, CheckCircleOutlined, LogoutOutlined, MenuOutlined, HistoryOutlined, SettingOutlined, DashboardOutlined, CarOutlined } from '@ant-design/icons'
+import { HomeOutlined, InboxOutlined, ImportOutlined, ExportOutlined, CheckCircleOutlined, LogoutOutlined, MenuOutlined, HistoryOutlined, SettingOutlined, DashboardOutlined, CarOutlined, AppstoreOutlined, FileAddOutlined, AuditOutlined, BarChartOutlined, SwapOutlined, BarcodeOutlined, ClusterOutlined } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import Dashboard from './pages/Dashboard'
 import Stock from './pages/inventory/Stock'
@@ -12,10 +12,19 @@ import DeliveryCheck from './pages/inventory/DeliveryCheck'
 import TransactionHistory from './pages/inventory/TransactionHistory'
 import PendingShipments from './pages/inventory/PendingShipments'
 import BaseDataSettings from './pages/settings/BaseDataSettings'
-import { getCurrentUser, isLoggedIn, checkSSOToken } from './utils/ssoAuth'
+import MaterialList from './pages/materials/MaterialList'
+import InboundList from './pages/inbound/InboundList'
+import StocktakeList from './pages/stocktake/StocktakeList'
+import InventoryReports from './pages/reports/InventoryReports'
+import TransferList from './pages/transfer/TransferList'
+import BatchList from './pages/batch-serial/BatchList'
+import SerialList from './pages/batch-serial/SerialList'
+import { authEvents, AUTH_EVENTS } from './utils/authEvents'
 import './App.css'
 
 const { Header, Content } = Layout
+
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +41,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isRedirecting = useRef(false)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -39,18 +49,89 @@ function AppContent() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) return
+    isRedirecting.current = true
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
+    window.location.href = PORTAL_URL
+  }
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      if (!response.ok) return null
+      const data = await response.json()
+      if (!data.valid || !data.user) return null
+      return data.user
+    } catch (error) {
+      return null
+    }
+  }
+
+  // 初始化认证 - 只执行一次
   useEffect(() => {
     const initAuth = async () => {
-      await checkSSOToken()
+      // 1. 检查 URL 中是否有新 token
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlToken = urlParams.get('token')
 
-      if (isLoggedIn()) {
-        setUser(getCurrentUser())
-        setLoading(false)
-      } else {
-        window.location.href = import.meta.env.VITE_PORTAL_URL || '/'
+      if (urlToken) {
+        const validatedUser = await validateUrlToken(urlToken)
+        if (validatedUser) {
+          localStorage.setItem('token', urlToken)
+          localStorage.setItem('user', JSON.stringify(validatedUser))
+          if (validatedUser.user_id || validatedUser.id) {
+            localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id))
+          }
+          if (validatedUser.role) {
+            localStorage.setItem('User-Role', validatedUser.role)
+          }
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, '', cleanUrl)
+          setUser(validatedUser)
+          setLoading(false)
+          return
+        }
+        redirectToPortal()
+        return
       }
+
+      // 2. 没有 URL token，检查 localStorage
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      if (storedToken && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser)
+          setUser(parsedUser)
+          setLoading(false)
+          return
+        } catch (e) {}
+      }
+
+      // 3. 没有任何认证信息，跳转 Portal
+      redirectToPortal()
     }
     initAuth()
+  }, [])
+
+  // 订阅 401 事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      alert('登录已过期，请重新登录')
+      redirectToPortal()
+    }
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized)
+    return () => unsubscribe()
   }, [])
 
   if (loading) {
@@ -60,6 +141,13 @@ function AppContent() {
   }
 
   const selectedKey = location.pathname === '/dashboard' ? 'dashboard'
+    : location.pathname === '/materials' ? 'materials'
+    : location.pathname === '/inbound' ? 'inbound'
+    : location.pathname === '/stocktake' ? 'stocktake'
+    : location.pathname === '/transfer' ? 'transfer'
+    : location.pathname === '/reports' ? 'reports'
+    : location.pathname === '/batches' ? 'batches'
+    : location.pathname === '/serials' ? 'serials'
     : location.pathname === '/stock' ? 'stock'
     : location.pathname === '/in' ? 'in'
     : location.pathname === '/out' ? 'out'
@@ -79,6 +167,41 @@ function AppContent() {
       key: 'dashboard',
       icon: <DashboardOutlined />,
       label: <Link to="/dashboard">统计面板</Link>,
+    },
+    {
+      key: 'materials',
+      icon: <AppstoreOutlined />,
+      label: <Link to="/materials">物料管理</Link>,
+    },
+    {
+      key: 'inbound',
+      icon: <FileAddOutlined />,
+      label: <Link to="/inbound">入库管理</Link>,
+    },
+    {
+      key: 'stocktake',
+      icon: <AuditOutlined />,
+      label: <Link to="/stocktake">库存盘点</Link>,
+    },
+    {
+      key: 'transfer',
+      icon: <SwapOutlined />,
+      label: <Link to="/transfer">库存转移</Link>,
+    },
+    {
+      key: 'reports',
+      icon: <BarChartOutlined />,
+      label: <Link to="/reports">库存报表</Link>,
+    },
+    {
+      key: 'batches',
+      icon: <ClusterOutlined />,
+      label: <Link to="/batches">批次管理</Link>,
+    },
+    {
+      key: 'serials',
+      icon: <BarcodeOutlined />,
+      label: <Link to="/serials">序列号管理</Link>,
     },
     {
       key: 'stock',
@@ -118,13 +241,16 @@ function AppContent() {
   ]
 
   const handleBackToPortal = () => {
-    window.location.href = import.meta.env.VITE_PORTAL_URL || '/'
+    window.location.href = PORTAL_URL
   }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    window.location.href = import.meta.env.VITE_PORTAL_URL || '/'
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
+    window.location.href = PORTAL_URL
   }
 
   const handleMenuClick = () => {
@@ -221,6 +347,13 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/materials" element={<MaterialList />} />
+          <Route path="/inbound" element={<InboundList />} />
+          <Route path="/stocktake" element={<StocktakeList />} />
+          <Route path="/transfer" element={<TransferList />} />
+          <Route path="/reports" element={<InventoryReports />} />
+          <Route path="/batches" element={<BatchList />} />
+          <Route path="/serials" element={<SerialList />} />
           <Route path="/stock" element={<Stock />} />
           <Route path="/in" element={<In />} />
           <Route path="/out" element={<Out />} />

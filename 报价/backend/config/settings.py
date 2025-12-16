@@ -6,6 +6,10 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os
+from dotenv import load_dotenv
+
+# 在类定义前加载 .env 文件
+load_dotenv()
 
 
 def _get_database_url() -> str:
@@ -80,6 +84,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # 忽略 .env 中的额外字段（如 AUTH_DB_* 供 shared/auth 使用）
 
 
 # 创建全局配置实例

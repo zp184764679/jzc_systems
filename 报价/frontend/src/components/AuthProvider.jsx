@@ -1,94 +1,106 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { createContext, useState, useContext, useEffect, useRef } from "react";
+import { authEvents, AUTH_EVENTS } from "../utils/authEvents";
 
 const AuthContext = createContext(null);
+
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const isRedirecting = useRef(false);
+
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) return;
+    isRedirecting.current = true;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('User-ID');
+    localStorage.removeItem('User-Role');
+    localStorage.removeItem('emp_no');
+    window.location.href = PORTAL_URL;
+  };
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data.valid || !data.user) return null;
+      return data.user;
+    } catch (error) {
+      return null;
+    }
+  };
 
   const checkAuth = async () => {
-    try {
-      // 首先检查localStorage中是否有SSO用户数据
-      const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
 
-      // 如果有token和user数据（由ssoAuth设置），直接使用
-      if (token && userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          setUser(userData);
-          setLoading(false);
-          return;
-        } catch (e) {
-          // JSON解析失败，继续尝试API验证
+    if (urlToken) {
+      const validatedUser = await validateUrlToken(urlToken);
+      if (validatedUser) {
+        localStorage.setItem('token', urlToken);
+        localStorage.setItem('user', JSON.stringify(validatedUser));
+        if (validatedUser.user_id || validatedUser.id) {
+          localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id));
         }
-      }
-
-      // 没有localStorage数据，尝试通过API验证
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const apiBase = import.meta.env.VITE_API_BASE_URL || '/quotation/api';
-      const response = await fetch(`${apiBase}/auth/me`, {
-        credentials: "include",
-        headers: headers,
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        setUser(null);
-        // 清除无效的token
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        // 如果不在登录页，跳转到登录页
-        if (location.pathname !== "/login") {
-          navigate("/login");
+        if (validatedUser.role) {
+          localStorage.setItem('User-Role', validatedUser.role);
         }
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', cleanUrl);
+        setUser(validatedUser);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      setUser(null);
-      if (location.pathname !== "/login") {
-        navigate("/login");
-      }
-    } finally {
-      setLoading(false);
+      redirectToPortal();
+      return;
     }
+
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    if (storedToken && storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+        setLoading(false);
+        return;
+      } catch (e) {}
+    }
+
+    redirectToPortal();
   };
 
-  const logout = async () => {
-    try {
-      await fetch("/quotation/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      // 清除localStorage中的认证数据
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setUser(null);
-      navigate("/login");
-    }
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('User-ID');
+    localStorage.removeItem('User-Role');
+    localStorage.removeItem('emp_no');
+    setUser(null);
+    window.location.href = PORTAL_URL;
   };
 
+  // 认证初始化 - 只执行一次
   useEffect(() => {
-    // 只在非登录页检查认证
-    if (location.pathname !== "/login") {
-      checkAuth();
-    } else {
-      setLoading(false);
-    }
-  }, [location.pathname]);
+    checkAuth();
+  }, []);
+
+  // 订阅 401 事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      alert('登录已过期，请重新登录');
+      redirectToPortal();
+    };
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized);
+    return () => unsubscribe();
+  }, []);
 
   const value = {
     user,

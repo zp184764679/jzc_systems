@@ -35,7 +35,7 @@ export default function TransactionHistory() {
         params.occurred_to = filters.dateRange[1].format('YYYY-MM-DD')
       }
 
-      const res = await axios.get(`${API_BASE}/api/inventory/tx`, { params })
+      const res = await axios.get(`${API_BASE}/inventory/tx`, { params })
       setData(res.data.items || [])
       setPagination({
         current: res.data.page || 1,

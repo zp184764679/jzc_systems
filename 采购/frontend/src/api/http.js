@@ -1,7 +1,10 @@
 // src/api/http.js
+import axios from 'axios';
+import { authEvents, AUTH_EVENTS } from './authEvents';
 
 // 从环境变量获取后端 API 地址
 const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || "/";
 
 // —— 工具：安全取整
 function toIntId(v) {
@@ -48,7 +51,6 @@ function resolveSupplierId() {
 
   // 5) 全局（极端兜底）
   try {
-    // eslint-disable-next-line no-underscore-dangle
     const viaGlobal = toIntId(window.SUPPLIER_ID || window.__SUPPLIER_ID__);
     if (viaGlobal) return viaGlobal;
   } catch {}
@@ -56,7 +58,7 @@ function resolveSupplierId() {
   return null;
 }
 
-// —— 如果是“供应商登录响应”，自动把 ID 与会话落库
+// —— 如果是"供应商登录响应"，自动把 ID 与会话落库
 function maybePersistSupplierSession(url, payload) {
   try {
     const isSupplierLogin =
@@ -90,107 +92,83 @@ function maybePersistSupplierSession(url, payload) {
       localStorage.setItem("supplierToken", sessionPayload.token);
     }
 
-    // 4) 控制台打印一次，方便确认已写入
-    // eslint-disable-next-line no-console
-    console.debug(
-      "[http] supplier login persisted:",
-      { supplierId, hasToken: !!sessionPayload.token }
-    );
+    console.debug("[http] supplier login persisted:", { supplierId, hasToken: !!sessionPayload.token });
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn("[http] persist supplier session failed:", e);
   }
 }
 
-// 封装的请求函数，支持 GET、POST、PUT、DELETE 请求
-async function req(path, { method = "GET", data, headers = {}, ...rest } = {}) {
-  // 判断是否提供了完整的 URL 路径，否则拼接 BASE
-  const url = path.startsWith("http") ? path : `${BASE}${path}`;
+// 创建 axios 实例
+const axiosInstance = axios.create({
+  baseURL: BASE,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  // ✅ 获取用户信息，添加认证头（权限检查）
-  const userStr = localStorage.getItem("user");
-  const authHeaders = {};
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      if (user.id) authHeaders["User-ID"] = String(user.id);
-      if (user.role) authHeaders["User-Role"] = user.role;
-    } catch {
-      /* ignore */
+// 请求拦截器 - 添加认证头
+axiosInstance.interceptors.request.use(
+  (config) => {
+    // 添加 JWT token
+    const token = localStorage.getItem("token") || localStorage.getItem("supplierToken");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-  }
 
-  // ✅ 自动注入 Supplier-ID（除非显式传入了同名头）
-  const autoHeaders = {};
-  if (!("Supplier-ID" in headers)) {
+    // 添加用户信息头
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.id) config.headers["User-ID"] = String(user.id);
+        if (user.role) config.headers["User-Role"] = user.role;
+      } catch {}
+    }
+
+    // 添加 Supplier-ID 头
     const sid = resolveSupplierId();
-    if (sid) autoHeaders["Supplier-ID"] = String(sid);
+    if (sid) {
+      config.headers["Supplier-ID"] = String(sid);
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// 响应拦截器 - 处理401和供应商会话
+axiosInstance.interceptors.response.use(
+  (response) => {
+    // 如果是供应商登录响应，自动落库
+    maybePersistSupplierSession(response.config.url, response.data);
+    return response.data;
+  },
+  (error) => {
+    if (error.response?.status === 401) {
+      authEvents.emit(AUTH_EVENTS.UNAUTHORIZED, {
+        url: error.config?.url,
+        status: 401,
+      });
+      return Promise.reject(error);
+    }
+    console.error('API Error:', error);
+    return Promise.reject(error);
   }
+);
 
-  // 自动添加 Authorization 头（SSO token）
-  const token = localStorage.getItem("token") || localStorage.getItem("supplierToken");
-  if (token && !("Authorization" in headers)) {
-    autoHeaders["Authorization"] = `Bearer ${token}`;
-  }
-
-  // 设置请求的初始化参数
-  const init = {
-    method,
-    headers: {
-      ...(data ? { "Content-Type": "application/json" } : {}), // 如果有数据，则设置 Content-Type 为 application/json
-      ...authHeaders, // ✅ 添加用户认证头
-      ...autoHeaders, // ✅ 自动注入 Supplier-ID（若存在）
-      ...headers, // 可扩展的自定义 headers（显式传入优先级最高）
-    },
-    ...(data ? { body: JSON.stringify(data) } : {}), // 如果有数据，则设置请求体
-    ...rest, // 其他传入的参数
-  };
-
-  // 发起请求
-  const res = await fetch(url, init);
-
-  // 获取返回的 Content-Type，并判断是否是 JSON 格式
-  const ct = res.headers.get("content-type") || "";
-  const isJSON = ct.includes("application/json");
-
-  // 根据返回的格式，解析响应内容
-  const payload = isJSON ? await res.json() : await res.text();
-
-  // ✅ 如果是供应商登录响应，自动落库（无论调用方是谁）
-  if (res.ok) {
-    maybePersistSupplierSession(url, payload);
-  }
-
-  // 如果响应不正常，抛出错误（把更多上下文带出来）
-  if (!res.ok) {
-    const errorMessage =
-      (isJSON && (payload?.error || payload?.message)) ||
-      `HTTP ${res.status}`;
-    const err = new Error(errorMessage);
-    // 便于上层定位问题
-    err.status = res.status;
-    err.payload = payload;
-    err.url = url;
-    // eslint-disable-next-line no-console
-    console.error("Request failed:", { url, status: res.status, payload });
-    throw err;
-  }
-
-  return payload; // 返回解析后的响应数据
-}
-
-// 提供封装后的 API 请求方法
+// 提供封装后的 API 请求方法（保持与原有接口一致）
 export const api = {
-  get: (p, opt) => req(p, { ...opt, method: "GET" }),  // GET 请求
-  post: (p, data, opt) => req(p, { ...opt, method: "POST", data }),  // POST 请求
-  put: (p, data, opt) => req(p, { ...opt, method: "PUT", data }),  // PUT 请求
-  delete: (p, opt) => req(p, { ...opt, method: "DELETE" }),  // DELETE 请求 ✅ 新增
-  del: (p, opt) => req(p, { ...opt, method: "DELETE" }),  // DELETE 请求（别名）
-  patch: (p, data, opt) => req(p, { ...opt, method: "PATCH", data }),  // PATCH 请求
+  get: (p, opt) => axiosInstance.get(p, opt),
+  post: (p, data, opt) => axiosInstance.post(p, data, opt),
+  put: (p, data, opt) => axiosInstance.put(p, data, opt),
+  delete: (p, opt) => axiosInstance.delete(p, opt),
+  del: (p, opt) => axiosInstance.delete(p, opt),
+  patch: (p, data, opt) => axiosInstance.patch(p, data, opt),
 };
 
 // 导出 BASE URL，供其他模块使用
 export const BASE_URL = BASE;
 
-// 可选：默认导出，用于导入时写成 `import http from "../api/http.js"`
+// 默认导出
 export default api;

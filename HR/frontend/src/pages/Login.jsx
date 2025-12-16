@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 export default function Login({ onLoginSuccess, onShowRegister }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -13,7 +15,7 @@ export default function Login({ onLoginSuccess, onShowRegister }) {
     setLoading(true);
 
     try {
-      const response = await fetch("/hr/api/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

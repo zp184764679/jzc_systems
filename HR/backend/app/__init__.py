@@ -96,13 +96,18 @@ def create_app():
     #         db.session.rollback()
 
     # Register blueprints
-    from app.routes import employees_bp, base_data_bp
+    from app.routes import employees_bp, base_data_bp, attendance_bp, leave_bp, payroll_bp, performance_bp, recruitment_bp
     from app.routes.auth import auth_bp
     from app.routes.register import register_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(register_bp)
     app.register_blueprint(employees_bp)
     app.register_blueprint(base_data_bp)
+    app.register_blueprint(attendance_bp)
+    app.register_blueprint(leave_bp)
+    app.register_blueprint(payroll_bp)
+    app.register_blueprint(performance_bp)
+    app.register_blueprint(recruitment_bp)
 
     # Create tables
     with app.app_context():

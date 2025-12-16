@@ -4,19 +4,12 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import './index.css'
-import { checkSSOToken } from './utils/ssoAuth.js'
 
-// Check for SSO token from Portal before rendering
-// Must wait for completion to avoid race condition
-const initApp = async () => {
-  await checkSSOToken();
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <ConfigProvider locale={zhCN}>
-        <App />
-      </ConfigProvider>
-    </React.StrictMode>
-  );
-};
-
-initApp();
+// 认证逻辑已移至 App.jsx 统一处理
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <ConfigProvider locale={zhCN}>
+      <App />
+    </ConfigProvider>
+  </React.StrictMode>
+);

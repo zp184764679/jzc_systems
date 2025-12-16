@@ -199,8 +199,30 @@ class QuoteResponse(QuoteBase):
     status: str
     details: Optional[Dict[str, Any]] = None
     valid_until: Optional[datetime] = None
+    # 版本管理字段
+    version: int = 1
+    parent_quote_id: Optional[int] = None
+    root_quote_id: Optional[int] = None
+    is_current_version: bool = True
+    version_note: Optional[str] = None
+    # 审批相关字段
+    submitted_at: Optional[datetime] = None
+    submitted_by: Optional[int] = None
+    submitted_by_name: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[int] = None
+    approved_by_name: Optional[str] = None
+    rejected_at: Optional[datetime] = None
+    rejected_by: Optional[int] = None
+    rejected_by_name: Optional[str] = None
+    reject_reason: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    sent_by: Optional[int] = None
+    sent_by_name: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -210,6 +232,112 @@ class QuoteList(BaseModel):
     """报价列表响应"""
     total: int
     items: List[QuoteResponse]
+
+
+# ============ 版本管理相关 ============
+
+class CreateVersionRequest(BaseModel):
+    """创建新版本请求"""
+    version_note: Optional[str] = Field(None, description="版本说明")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+
+
+class QuoteVersionSummary(BaseModel):
+    """报价版本摘要（用于版本列表）"""
+    id: int
+    quote_number: str
+    version: int
+    is_current_version: bool
+    version_note: Optional[str] = None
+    status: str
+    unit_price: Optional[float] = None
+    total_amount: Optional[float] = None
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class QuoteVersionList(BaseModel):
+    """报价版本列表响应"""
+    total: int
+    root_quote_id: int
+    current_version_id: Optional[int] = None
+    items: List[QuoteVersionSummary]
+
+
+class VersionComparisonItem(BaseModel):
+    """版本比较项"""
+    field: str
+    field_label: str
+    version1_value: Optional[Any] = None
+    version2_value: Optional[Any] = None
+    changed: bool = False
+
+
+class QuoteCompareResponse(BaseModel):
+    """报价版本对比响应"""
+    quote1: QuoteVersionSummary
+    quote2: QuoteVersionSummary
+    differences: List[VersionComparisonItem]
+    summary: Dict[str, Any]
+
+
+# ============ 审批相关 ============
+
+class ApprovalRequest(BaseModel):
+    """审批请求"""
+    comment: Optional[str] = Field(None, description="审批意见")
+    approver_id: Optional[int] = Field(None, description="审批人ID")
+    approver_name: Optional[str] = Field(None, description="审批人姓名")
+    approver_role: Optional[str] = Field(None, description="审批人角色")
+
+
+class RejectRequest(BaseModel):
+    """拒绝请求"""
+    reason: str = Field(..., description="拒绝原因")
+    approver_id: Optional[int] = Field(None, description="审批人ID")
+    approver_name: Optional[str] = Field(None, description="审批人姓名")
+    approver_role: Optional[str] = Field(None, description="审批人角色")
+
+
+class SendRequest(BaseModel):
+    """发送请求"""
+    comment: Optional[str] = Field(None, description="备注")
+    sender_id: Optional[int] = Field(None, description="发送人ID")
+    sender_name: Optional[str] = Field(None, description="发送人姓名")
+
+
+class QuoteApprovalResponse(BaseModel):
+    """审批记录响应"""
+    id: int
+    quote_id: int
+    action: str
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    approver_id: Optional[int] = None
+    approver_name: Optional[str] = None
+    approver_role: Optional[str] = None
+    comment: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class QuoteApprovalList(BaseModel):
+    """审批记录列表响应"""
+    total: int
+    items: List[QuoteApprovalResponse]
+
+
+class StatusInfo(BaseModel):
+    """状态信息"""
+    value: str
+    label: str
+    color: Optional[str] = None
 
 
 # ============ 通用响应 ============

@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react'
+/**
+ * SHM App - v3.0 统一认证架构
+ */
+import React, { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { Layout, Menu, Button, Spin, Drawer } from 'antd'
 import {
@@ -10,6 +13,8 @@ import {
   DatabaseOutlined,
   LogoutOutlined,
   MenuOutlined,
+  RollbackOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons'
 
 import Dashboard from './pages/Dashboard'
@@ -18,7 +23,9 @@ import ShipmentCreate from './pages/ShipmentCreate'
 import ShipmentDetail from './pages/ShipmentDetail'
 import AddressList from './pages/AddressList'
 import RequirementList from './pages/RequirementList'
-import { getCurrentUser, isLoggedIn, checkSSOToken } from './utils/ssoAuth'
+import RMAList from './pages/RMAList'
+import Reports from './pages/Reports'
+import { authEvents, AUTH_EVENTS } from './utils/authEvents'
 
 const { Header, Content, Sider } = Layout
 
@@ -48,6 +55,16 @@ const menuItems = [
     ],
   },
   {
+    key: '/rma',
+    icon: <RollbackOutlined />,
+    label: <Link to="/rma">退货管理</Link>,
+  },
+  {
+    key: '/reports',
+    icon: <BarChartOutlined />,
+    label: <Link to="/reports">出货报表</Link>,
+  },
+  {
     key: 'master',
     icon: <DatabaseOutlined />,
     label: '基础数据',
@@ -73,6 +90,54 @@ function AppContent() {
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isRedirecting = useRef(false)
+
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) {
+      console.log('[Auth] Already redirecting, skip')
+      return
+    }
+    isRedirecting.current = true
+    console.log('[Auth] Redirecting to Portal...')
+
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
+
+    window.location.href = PORTAL_URL
+  }
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      console.log('[Auth] Validating URL token...')
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+
+      if (!response.ok) {
+        console.error('[Auth] Token validation failed - HTTP', response.status)
+        return null
+      }
+
+      const data = await response.json()
+      if (!data.valid || !data.user) {
+        console.error('[Auth] Token invalid or no user data')
+        return null
+      }
+
+      console.log('[Auth] Token validated successfully')
+      return data.user
+    } catch (error) {
+      console.error('[Auth] Token validation error:', error)
+      return null
+    }
+  }
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -80,18 +145,80 @@ function AppContent() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // 初始化认证 - 只执行一次
   useEffect(() => {
     const initAuth = async () => {
-      await checkSSOToken()
+      console.log('[Auth] Initializing...')
 
-      if (isLoggedIn()) {
-        setUser(getCurrentUser())
-        setLoading(false)
-      } else {
-        window.location.href = PORTAL_URL
+      // 1. 检查 URL 中是否有新 token
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlToken = urlParams.get('token')
+
+      if (urlToken) {
+        console.log('[Auth] Found URL token, validating...')
+        const validatedUser = await validateUrlToken(urlToken)
+
+        if (validatedUser) {
+          // 验证成功，保存并清除 URL 参数
+          localStorage.setItem('token', urlToken)
+          localStorage.setItem('user', JSON.stringify(validatedUser))
+
+          if (validatedUser.user_id || validatedUser.id) {
+            localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id))
+          }
+          if (validatedUser.role) {
+            localStorage.setItem('User-Role', validatedUser.role)
+          }
+
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, '', cleanUrl)
+
+          setUser(validatedUser)
+          setLoading(false)
+          console.log('[Auth] Authenticated via URL token')
+          return
+        }
+
+        // URL token 无效，跳转 Portal
+        console.error('[Auth] URL token invalid, redirecting to Portal')
+        redirectToPortal()
+        return
       }
+
+      // 2. 没有 URL token，检查 localStorage
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+
+      if (storedToken && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser)
+          setUser(parsedUser)
+          setLoading(false)
+          console.log('[Auth] Authenticated via localStorage')
+          return
+        } catch (e) {
+          console.error('[Auth] Failed to parse stored user')
+        }
+      }
+
+      // 3. 没有任何认证信息，跳转 Portal
+      console.log('[Auth] No auth info, redirecting to Portal')
+      redirectToPortal()
     }
+
     initAuth()
+  }, []) // 空依赖数组，只执行一次
+
+  // 订阅 401 事件 - API 层发出，这里统一处理
+  useEffect(() => {
+    const handleUnauthorized = (data) => {
+      console.log('[Auth] Received 401 event:', data)
+      alert('登录已过期，请重新登录')
+      redirectToPortal()
+    }
+
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized)
+    return () => unsubscribe()
   }, [])
 
   const getSelectedKeys = () => {
@@ -110,6 +237,7 @@ function AppContent() {
     if (path.includes('/addresses') || path.includes('/requirements')) {
       return ['master']
     }
+    // RMA is a top-level menu item, no need to open submenus
     return []
   }
 
@@ -240,6 +368,8 @@ function AppContent() {
               <Route path="/shipments" element={<ShipmentList />} />
               <Route path="/shipments/create" element={<ShipmentCreate />} />
               <Route path="/shipments/:id" element={<ShipmentDetail />} />
+              <Route path="/rma" element={<RMAList />} />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/addresses" element={<AddressList />} />
               <Route path="/requirements" element={<RequirementList />} />
             </Routes>

@@ -79,7 +79,10 @@ def require_admin(f):
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({'error': '未授权访问'}), 401
 
-        token = auth_header.split(' ')[1]
+        parts = auth_header.split(' ')
+        if len(parts) != 2:
+            return jsonify({'error': '无效的认证头格式'}), 401
+        token = parts[1]
         try:
             payload = verify_token(token)
             if not payload:
@@ -179,7 +182,8 @@ def preview_sync():
             for user in users:
                 if user.emp_no and user.emp_no in hr_by_empno:
                     emp = hr_by_empno[user.emp_no]
-                    unmatched_employees.remove(user.emp_no)
+                    if user.emp_no in unmatched_employees:
+                        unmatched_employees.remove(user.emp_no)
 
                     # 检查需要更新的字段
                     changes = []

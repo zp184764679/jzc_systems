@@ -18,6 +18,10 @@ const RequestDetail = lazy(() => import("./pages/RequestDetail.jsx"));
 const FillPricePage = lazy(() => import("./pages/FillPricePage.jsx"));
 const AdminApprovalCenter = lazy(() => import("./pages/AdminApprovalCenter.jsx"));
 const InvoiceManagement = lazy(() => import("./pages/InvoiceManagement.jsx"));
+const SupplierEvaluation = lazy(() => import("./pages/SupplierEvaluation.jsx"));
+const ContractManagement = lazy(() => import("./pages/ContractManagement.jsx"));
+const BudgetManagement = lazy(() => import("./pages/BudgetManagement.jsx"));
+const PaymentManagement = lazy(() => import("./pages/PaymentManagement.jsx"));
 
 const Layout = ({ children }) => (
   <div className="min-h-screen bg-gray-50">
@@ -46,6 +50,18 @@ const router = createBrowserRouter([
 
   // 发票管理
   { path: "/invoices", element: <Layout><ProtectedRoute><InvoiceManagement /></ProtectedRoute></Layout> },
+
+  // 供应商评估
+  { path: "/supplier-evaluation", element: <Layout><ProtectedRoute><SupplierEvaluation /></ProtectedRoute></Layout> },
+
+  // 采购合同
+  { path: "/contracts", element: <Layout><ProtectedRoute><ContractManagement /></ProtectedRoute></Layout> },
+
+  // 采购预算
+  { path: "/budgets", element: <Layout><ProtectedRoute><BudgetManagement /></ProtectedRoute></Layout> },
+
+  // 采购付款
+  { path: "/payments", element: <Layout><ProtectedRoute><PaymentManagement /></ProtectedRoute></Layout> },
 
   // 404
   {

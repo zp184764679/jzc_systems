@@ -1,7 +1,7 @@
 """
 Shared user model for authentication
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Index, BigInteger, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -9,6 +9,13 @@ import os
 import json
 
 Base = declarative_base()
+
+# Export Base as AuthBase for RBAC models
+AuthBase = Base
+
+# Global engine reference for RBAC models
+AuthEngine = None
+
 
 class User(Base):
     """User model for authentication"""
@@ -48,12 +55,23 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Password policy fields
+    password_expires_at = Column(DateTime, nullable=True)  # 密码过期时间
+    last_password_change = Column(DateTime, nullable=True)  # 上次修改密码时间
+    password_change_required = Column(Boolean, default=False)  # 是否需要修改密码
+
+    # Login security fields
+    failed_login_attempts = Column(Integer, default=0)  # 登录失败次数
+    locked_until = Column(DateTime, nullable=True)  # 账户锁定截止时间
+    last_login_at = Column(DateTime, nullable=True)  # 上次登录时间
+    last_login_ip = Column(String(45), nullable=True)  # 上次登录 IP
+
     def to_dict(self):
         """Convert user to dictionary (excluding password)"""
         # Parse permissions JSON
         try:
             perms = json.loads(self.permissions) if self.permissions else []
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             perms = []
 
         return {
@@ -75,7 +93,14 @@ class User(Base):
             'is_active': self.is_active,
             'is_admin': self.is_admin,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            # Password policy fields
+            'password_expires_at': self.password_expires_at.isoformat() if self.password_expires_at else None,
+            'last_password_change': self.last_password_change.isoformat() if self.last_password_change else None,
+            'password_change_required': self.password_change_required,
+            # Login security fields
+            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'is_locked': self.is_account_locked()
         }
 
     def is_supplier(self):
@@ -91,7 +116,7 @@ class User(Base):
         try:
             perms = json.loads(self.permissions) if self.permissions else []
             return system_name in perms
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             return False
 
     def get_role_level(self):
@@ -103,6 +128,38 @@ class User(Base):
             'super_admin': 2
         }
         return ROLE_LEVELS.get(self.role, 0)
+
+    def is_account_locked(self):
+        """Check if account is currently locked"""
+        if self.locked_until is None:
+            return False
+        return datetime.utcnow() < self.locked_until
+
+    def is_password_expired(self):
+        """Check if password has expired"""
+        if self.password_expires_at is None:
+            return False
+        return datetime.utcnow() > self.password_expires_at
+
+    def increment_failed_login(self, lockout_threshold=5, lockout_minutes=30):
+        """Increment failed login attempts and lock if threshold reached"""
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
+        if self.failed_login_attempts >= lockout_threshold:
+            from datetime import timedelta
+            self.locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
+        return self.failed_login_attempts
+
+    def reset_failed_login(self):
+        """Reset failed login attempts after successful login"""
+        self.failed_login_attempts = 0
+        self.locked_until = None
+
+    def update_last_login(self, ip_address=None):
+        """Update last login timestamp and IP"""
+        self.last_login_at = datetime.utcnow()
+        if ip_address:
+            self.last_login_ip = ip_address
+        self.reset_failed_login()
 
 
 # Database setup - MySQL configuration
@@ -129,7 +186,7 @@ AuthSessionLocal = None
 
 def init_auth_db():
     """Initialize authentication database (MySQL)"""
-    global auth_engine, AuthSessionLocal
+    global auth_engine, AuthSessionLocal, AuthEngine
 
     # Create MySQL engine
     db_url = f'mysql+pymysql://{AUTH_DB_USER}:{AUTH_DB_PASSWORD}@{AUTH_DB_HOST}/{AUTH_DB_NAME}?charset=utf8mb4'
@@ -140,11 +197,23 @@ def init_auth_db():
         echo=False
     )
 
+    # Set global engine reference for RBAC models
+    AuthEngine = auth_engine
+
     # Create session
     AuthSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=auth_engine)
 
     # Create tables if they don't exist
     Base.metadata.create_all(bind=auth_engine)
+
+    # Initialize RBAC tables
+    try:
+        from .rbac_models import init_rbac_tables, init_default_roles_and_permissions
+        init_rbac_tables()
+        init_default_roles_and_permissions()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"RBAC tables init: {e}")
 
     # 安全修复：仅在开发环境创建默认管理员，生产环境需手动创建
     from .password_utils import hash_password
@@ -154,7 +223,11 @@ def init_auth_db():
 
     session = AuthSessionLocal()
     try:
-        user_count = session.query(User).count()
+        # 使用原始 SQL 查询避免 ORM 映射问题
+        from sqlalchemy import text
+        result = session.execute(text("SELECT COUNT(*) FROM users"))
+        user_count = result.scalar()
+
         if user_count == 0:
             is_dev = os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true"
 
@@ -238,4 +311,198 @@ class RegistrationRequest(Base):
             'reviewed_by': self.reviewed_by,
             'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
             'rejection_reason': self.rejection_reason
+        }
+
+
+class AuditLog(Base):
+    """Audit log for tracking user operations"""
+    __tablename__ = 'audit_logs'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=True, index=True)  # 操作用户 ID
+    username = Column(String(50), nullable=True)  # 操作用户名（冗余存储）
+
+    # Action details
+    action_type = Column(String(50), nullable=False, index=True)  # login, logout, login_failed, password_change, data_access, data_modify, etc.
+    resource_type = Column(String(50), nullable=True)  # 资源类型: user, employee, customer, order, etc.
+    resource_id = Column(String(50), nullable=True)  # 资源 ID
+    description = Column(Text, nullable=True)  # 操作描述
+
+    # Request details
+    ip_address = Column(String(45), nullable=True)  # IPv4/IPv6 地址
+    user_agent = Column(Text, nullable=True)  # 浏览器/设备信息
+    request_method = Column(String(10), nullable=True)  # GET, POST, PUT, DELETE
+    request_path = Column(String(500), nullable=True)  # API 路径
+    request_body = Column(Text, nullable=True)  # 请求体 (脱敏后)
+
+    # Result
+    status = Column(String(20), nullable=False, default='success')  # success, failed, error
+    error_message = Column(Text, nullable=True)  # 错误信息
+    response_code = Column(Integer, nullable=True)  # HTTP 响应码
+
+    # Metadata
+    module = Column(String(50), nullable=True)  # 所属模块: portal, hr, crm, etc.
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_audit_user_action', 'user_id', 'action_type'),
+        Index('idx_audit_created_at', 'created_at'),
+        Index('idx_audit_module_action', 'module', 'action_type'),
+    )
+
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'action_type': self.action_type,
+            'resource_type': self.resource_type,
+            'resource_id': self.resource_id,
+            'description': self.description,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'request_method': self.request_method,
+            'request_path': self.request_path,
+            'status': self.status,
+            'error_message': self.error_message,
+            'response_code': self.response_code,
+            'module': self.module,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class LoginHistory(Base):
+    """Login history for tracking user login sessions"""
+    __tablename__ = 'login_history'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    username = Column(String(50), nullable=True)
+
+    # Login details
+    login_time = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    logout_time = Column(DateTime, nullable=True)
+    session_duration_minutes = Column(Integer, nullable=True)  # 会话时长(分钟)
+
+    # Device information
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    device_type = Column(String(50), nullable=True)  # desktop, mobile, tablet
+    browser = Column(String(100), nullable=True)
+    os = Column(String(100), nullable=True)
+    location = Column(String(200), nullable=True)  # 地理位置（可选）
+
+    # Status
+    is_success = Column(Boolean, default=True)  # 登录是否成功
+    failure_reason = Column(String(255), nullable=True)  # 失败原因
+    login_type = Column(String(20), default='password')  # password, sso, 2fa, etc.
+
+    # Session tracking
+    session_token = Column(String(255), nullable=True)  # Token 标识（哈希后）
+    is_current = Column(Boolean, default=False)  # 是否当前活跃会话
+
+    __table_args__ = (
+        Index('idx_login_user_time', 'user_id', 'login_time'),
+        Index('idx_login_ip', 'ip_address'),
+    )
+
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'login_time': self.login_time.isoformat() if self.login_time else None,
+            'logout_time': self.logout_time.isoformat() if self.logout_time else None,
+            'session_duration_minutes': self.session_duration_minutes,
+            'ip_address': self.ip_address,
+            'device_type': self.device_type,
+            'browser': self.browser,
+            'os': self.os,
+            'location': self.location,
+            'is_success': self.is_success,
+            'failure_reason': self.failure_reason,
+            'login_type': self.login_type,
+            'is_current': self.is_current
+        }
+
+
+class PasswordHistory(Base):
+    """Password history for preventing password reuse"""
+    __tablename__ = 'password_history'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_pwd_history_user', 'user_id', 'created_at'),
+    )
+
+
+class TwoFactorAuth(Base):
+    """Two-factor authentication settings for users"""
+    __tablename__ = 'two_factor_auth'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, unique=True, index=True)
+
+    # TOTP settings
+    secret_key = Column(String(64), nullable=False)  # Base32 encoded secret
+    is_enabled = Column(Boolean, default=False)  # 是否已启用 2FA
+    is_verified = Column(Boolean, default=False)  # 是否已验证（首次设置时验证）
+
+    # Recovery options
+    recovery_email = Column(String(100), nullable=True)  # 备用邮箱
+    recovery_phone = Column(String(50), nullable=True)  # 备用手机
+
+    # Metadata
+    enabled_at = Column(DateTime, nullable=True)  # 启用时间
+    last_used_at = Column(DateTime, nullable=True)  # 上次使用时间
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self, include_secret=False):
+        """Convert to dictionary"""
+        result = {
+            'id': self.id,
+            'user_id': self.user_id,
+            'is_enabled': self.is_enabled,
+            'is_verified': self.is_verified,
+            'recovery_email': self.recovery_email,
+            'recovery_phone': self.recovery_phone,
+            'enabled_at': self.enabled_at.isoformat() if self.enabled_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+        if include_secret:
+            result['secret_key'] = self.secret_key
+        return result
+
+
+class TwoFactorBackupCode(Base):
+    """Backup codes for two-factor authentication"""
+    __tablename__ = 'two_factor_backup_codes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    code_hash = Column(String(255), nullable=False)  # 哈希后的备用码
+    is_used = Column(Boolean, default=False)  # 是否已使用
+    used_at = Column(DateTime, nullable=True)  # 使用时间
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_backup_code_user', 'user_id'),
+    )
+
+    def to_dict(self):
+        """Convert to dictionary (never expose code_hash)"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'is_used': self.is_used,
+            'used_at': self.used_at.isoformat() if self.used_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }

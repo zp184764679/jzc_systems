@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useAuth } from './contexts/AuthContext'
+import TwoFactorVerify from './TwoFactorVerify'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
 const ACCOUNT_URL = import.meta.env.VITE_ACCOUNT_URL || '/account'
 
-function Login({ onLoginSuccess }) {
+function Login() {
+  const { login, complete2FALogin } = useAuth()
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -11,38 +13,56 @@ function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 2FA 状态
+  const [show2FA, setShow2FA] = useState(false)
+  const [tfaUserId, setTfaUserId] = useState(null)
+  const [tfaUsername, setTfaUsername] = useState('')
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      })
+      const result = await login(formData.username, formData.password)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || '登录失败')
+      // 检查是否需要 2FA 验证
+      if (result?.requires_2fa) {
+        setTfaUserId(result.user_id)
+        setTfaUsername(result.username)
+        setShow2FA(true)
       }
-
-      // Store token and user data
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-
-      // Call success callback
-      onLoginSuccess(data.user)
-
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  // 2FA 验证成功回调
+  const handle2FASuccess = (data) => {
+    complete2FALogin(data)
+    setShow2FA(false)
+  }
+
+  // 取消 2FA 验证
+  const handle2FACancel = () => {
+    setShow2FA(false)
+    setTfaUserId(null)
+    setTfaUsername('')
+    setFormData({ ...formData, password: '' })
+  }
+
+  // 显示 2FA 验证页面
+  if (show2FA) {
+    return (
+      <TwoFactorVerify
+        userId={tfaUserId}
+        username={tfaUsername}
+        onSuccess={handle2FASuccess}
+        onCancel={handle2FACancel}
+      />
+    )
   }
 
   // 检测是否为移动端

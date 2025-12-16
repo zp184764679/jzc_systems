@@ -48,5 +48,5 @@ def check_scm_health():
     try:
         response = requests.get(f"{get_scm_base_url()}/api/health", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False

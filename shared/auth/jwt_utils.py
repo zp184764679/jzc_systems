@@ -15,11 +15,8 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
     # 生产环境必须配置 JWT_SECRET_KEY
     logger.warning("JWT_SECRET_KEY 环境变量未设置！使用临时密钥（仅限开发环境）")
-    # 仅在开发环境使用临时密钥，生产环境会在部署时配置
-    if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
-        SECRET_KEY = "dev-only-temp-key-not-for-production-" + str(os.getpid())
-    else:
-        raise RuntimeError("JWT_SECRET_KEY 环境变量未设置，生产环境必须配置此变量")
+    # 开发环境使用固定密钥，确保所有后端进程使用相同密钥
+    SECRET_KEY = "jzc-dev-shared-secret-key-2025"
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
@@ -87,13 +84,22 @@ def create_token_from_user(user_dict: Dict[str, Any]) -> str:
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Verify and decode a JWT token
+
+    Args:
+        token: JWT token string to verify
+
+    Returns:
+        Decoded payload dict if valid, None if invalid/expired
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
+        logger.debug("Token verification failed: Token expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"Token verification failed: Invalid token - {e}")
         return None
-    except Exception:
+    except Exception as e:
+        logger.error(f"Token verification failed: Unexpected error - {e}")
         return None

@@ -23,6 +23,7 @@ import {
   DeleteOutlined,
   SendOutlined,
   ReloadOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { shipmentApi } from '../api'
 import dayjs from 'dayjs'
@@ -42,6 +43,11 @@ function ShipmentList() {
   const [shipModal, setShipModal] = useState({ visible: false, shipment: null })
   const [trackingNo, setTrackingNo] = useState('')
   const [carrier, setCarrier] = useState('')
+  // 批量操作状态
+  const [selectedRowKeys, setSelectedRowKeys] = useState([])
+  const [selectedRows, setSelectedRows] = useState([])
+  const [batchShipModal, setBatchShipModal] = useState(false)
+  const [batchShipLoading, setBatchShipLoading] = useState(false)
 
   useEffect(() => {
     fetchShipments()
@@ -142,6 +148,142 @@ function ShipmentList() {
     } catch (error) {
       message.error('状态更新失败')
     }
+  }
+
+  // 批量发货
+  const handleBatchShip = async () => {
+    const pendingShipments = selectedRows.filter(r => r.status === '待出货')
+    if (pendingShipments.length === 0) {
+      message.warning('请选择待出货状态的出货单')
+      return
+    }
+    setBatchShipModal(true)
+  }
+
+  const confirmBatchShip = async () => {
+    const pendingIds = selectedRows.filter(r => r.status === '待出货').map(r => r.id)
+    setBatchShipLoading(true)
+    try {
+      const response = await shipmentApi.batchShip({
+        ids: pendingIds,
+        carrier: carrier,
+        tracking_no: trackingNo,
+      })
+      if (response.data.success) {
+        const { success, failed } = response.data.data
+        if (failed.length === 0) {
+          message.success(`批量发货成功，共处理 ${success.length} 条`)
+        } else {
+          Modal.info({
+            title: '批量发货结果',
+            content: (
+              <div>
+                <p style={{ color: 'green' }}>成功：{success.length} 条</p>
+                <p style={{ color: 'red' }}>失败：{failed.length} 条</p>
+                {failed.map((f, i) => (
+                  <p key={i} style={{ color: 'red', fontSize: 12 }}>
+                    {f.shipment_no}: {f.error}
+                  </p>
+                ))}
+              </div>
+            ),
+          })
+        }
+        setBatchShipModal(false)
+        setTrackingNo('')
+        setCarrier('')
+        setSelectedRowKeys([])
+        setSelectedRows([])
+        fetchShipments()
+      } else {
+        message.error(response.data.message)
+      }
+    } catch (error) {
+      message.error('批量发货失败')
+    } finally {
+      setBatchShipLoading(false)
+    }
+  }
+
+  // 批量签收
+  const handleBatchSign = async () => {
+    const shippedShipments = selectedRows.filter(r => r.status === '已发货')
+    if (shippedShipments.length === 0) {
+      message.warning('请选择已发货状态的出货单')
+      return
+    }
+    Modal.confirm({
+      title: '批量签收确认',
+      content: `确定将 ${shippedShipments.length} 条出货单标记为已签收吗？`,
+      onOk: async () => {
+        try {
+          const response = await shipmentApi.batchUpdateStatus({
+            ids: shippedShipments.map(r => r.id),
+            status: '已签收',
+          })
+          if (response.data.success) {
+            const { success, failed } = response.data.data
+            if (failed.length === 0) {
+              message.success(`批量签收成功，共处理 ${success.length} 条`)
+            } else {
+              message.warning(`成功 ${success.length} 条，失败 ${failed.length} 条`)
+            }
+            setSelectedRowKeys([])
+            setSelectedRows([])
+            fetchShipments()
+          } else {
+            message.error(response.data.message)
+          }
+        } catch (error) {
+          message.error('批量签收失败')
+        }
+      },
+    })
+  }
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    const pendingShipments = selectedRows.filter(r => r.status === '待出货')
+    if (pendingShipments.length === 0) {
+      message.warning('只能删除待出货状态的出货单')
+      return
+    }
+    Modal.confirm({
+      title: '批量删除确认',
+      content: `确定删除 ${pendingShipments.length} 条待出货的出货单吗？此操作不可恢复！`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          const response = await shipmentApi.batchDelete({
+            ids: pendingShipments.map(r => r.id),
+          })
+          if (response.data.success) {
+            const { success, failed } = response.data.data
+            if (failed.length === 0) {
+              message.success(`批量删除成功，共删除 ${success.length} 条`)
+            } else {
+              message.warning(`成功 ${success.length} 条，失败 ${failed.length} 条`)
+            }
+            setSelectedRowKeys([])
+            setSelectedRows([])
+            fetchShipments()
+          } else {
+            message.error(response.data.message)
+          }
+        } catch (error) {
+          message.error('批量删除失败')
+        }
+      },
+    })
+  }
+
+  // 行选择配置
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys, rows) => {
+      setSelectedRowKeys(keys)
+      setSelectedRows(rows)
+    },
   }
 
   const getStatusColor = (status) => {
@@ -324,14 +466,51 @@ function ShipmentList() {
         </Form>
       </div>
 
-      <div className="table-operations">
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/shipments/create')}
-        >
-          创建出货单
-        </Button>
+      <div className="table-operations" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/shipments/create')}
+          >
+            创建出货单
+          </Button>
+          {selectedRowKeys.length > 0 && (
+            <>
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleBatchShip}
+              >
+                批量发货 ({selectedRows.filter(r => r.status === '待出货').length})
+              </Button>
+              <Button
+                icon={<CheckCircleOutlined />}
+                onClick={handleBatchSign}
+              >
+                批量签收 ({selectedRows.filter(r => r.status === '已发货').length})
+              </Button>
+              <Popconfirm
+                title="确定删除选中的待出货单吗？"
+                onConfirm={handleBatchDelete}
+                disabled={selectedRows.filter(r => r.status === '待出货').length === 0}
+              >
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={selectedRows.filter(r => r.status === '待出货').length === 0}
+                >
+                  批量删除 ({selectedRows.filter(r => r.status === '待出货').length})
+                </Button>
+              </Popconfirm>
+            </>
+          )}
+        </Space>
+        {selectedRowKeys.length > 0 && (
+          <span style={{ color: '#1890ff' }}>
+            已选择 {selectedRowKeys.length} 项
+          </span>
+        )}
       </div>
 
       <Table
@@ -339,6 +518,7 @@ function ShipmentList() {
         dataSource={shipments}
         rowKey="id"
         loading={loading}
+        rowSelection={rowSelection}
         pagination={{
           ...pagination,
           showSizeChanger: true,
@@ -380,6 +560,51 @@ function ShipmentList() {
             />
           </Form.Item>
           <Form.Item label="物流单号">
+            <Input
+              value={trackingNo}
+              onChange={(e) => setTrackingNo(e.target.value)}
+              placeholder="请输入物流单号"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 批量发货确认弹窗 */}
+      <Modal
+        title="批量发货确认"
+        open={batchShipModal}
+        onOk={confirmBatchShip}
+        onCancel={() => {
+          setBatchShipModal(false)
+          setTrackingNo('')
+          setCarrier('')
+        }}
+        okText="确认批量发货"
+        cancelText="取消"
+        confirmLoading={batchShipLoading}
+      >
+        <p>
+          即将对 <strong>{selectedRows.filter(r => r.status === '待出货').length}</strong> 条待出货单进行发货操作
+        </p>
+        <p style={{ color: '#ff4d4f', marginBottom: 16 }}>
+          注意：发货后将自动扣减SCM系统库存！
+        </p>
+        <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: 16, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
+          {selectedRows.filter(r => r.status === '待出货').map(r => (
+            <div key={r.id} style={{ fontSize: 12 }}>
+              {r.shipment_no} - {r.customer_name}
+            </div>
+          ))}
+        </div>
+        <Form layout="vertical">
+          <Form.Item label="统一承运商（可选）">
+            <Input
+              value={carrier}
+              onChange={(e) => setCarrier(e.target.value)}
+              placeholder="请输入承运商"
+            />
+          </Form.Item>
+          <Form.Item label="统一物流单号（可选）">
             <Input
               value={trackingNo}
               onChange={(e) => setTrackingNo(e.target.value)}

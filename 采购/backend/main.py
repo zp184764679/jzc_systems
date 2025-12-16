@@ -447,7 +447,9 @@ if __name__ == '__main__':
             logger.error(f"启动时初始化错误: {e}")
 
     logger.info("✅ DB pool initialized with: pool_pre_ping=True, pool_recycle=1200, pool_size=10, max_overflow=20")
-    app.run(debug=True, port=5001, host='0.0.0.0')
+    port = int(os.getenv('PORT', 5001))
+    debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(debug=debug, port=port, host='0.0.0.0')
 
 
 

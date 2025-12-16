@@ -1,69 +1,94 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { api } from "../api/http";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import { authEvents, AUTH_EVENTS } from "../api/authEvents";
 
-// Portal后端地址 - 本地开发默认 localhost:3002
-const PORTAL_API = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002';
+// SSO验证地址 - 通过Vite代理访问Portal后端，避免CORS
+// 开发环境：/portal-api → http://localhost:3002/api
+// 生产环境：nginx代理
 
 const AuthContext = createContext(null);
+
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isRedirecting = useRef(false);
+
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) return;
+    isRedirecting.current = true;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('User-ID');
+    localStorage.removeItem('User-Role');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('emp_no');
+    window.location.href = PORTAL_URL;
+  };
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data.valid || !data.user) return null;
+      return data.user;
+    } catch (error) {
+      return null;
+    }
+  };
 
   useEffect(() => {
-    // SSO Token 检查
-    const checkSSOToken = async () => {
+    // 初始化认证 - 只执行一次
+    const initAuth = async () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get('token');
+      const urlToken = urlParams.get('token');
 
-      if (token) {
+      if (urlToken) {
         console.log('[SSO] Token found in URL, validating with Portal...');
-        try {
-          const response = await fetch(`${PORTAL_API}/api/auth/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token }),
-          });
+        const validatedUser = await validateUrlToken(urlToken);
+        if (validatedUser) {
+          console.log('[SSO] Login successful:', validatedUser);
 
-          const data = await response.json();
+          // 存储token和用户信息
+          localStorage.setItem('token', urlToken);
+          localStorage.setItem('user', JSON.stringify(validatedUser));
 
-          if (response.ok && data.valid && data.user) {
-            console.log('[SSO] Login successful:', data.user);
-
-            // 存储token和用户信息
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(data.user));
-
-            if (data.user.user_id || data.user.id) {
-              localStorage.setItem('User-ID', String(data.user.user_id || data.user.id));
-              localStorage.setItem('user_id', String(data.user.user_id || data.user.id));
-            }
-            if (data.user.role) {
-              localStorage.setItem('User-Role', data.user.role);
-            }
-
-            // 设置用户状态
-            const userData = {
-              ...data.user,
-              id: data.user.id || data.user.user_id,
-            };
-            setUser(userData);
-
-            // 清除URL中的token参数
-            window.history.replaceState({}, '', window.location.pathname);
-            setLoading(false);
-            return;
-          } else {
-            console.error('[SSO] Token validation failed:', data.error);
+          if (validatedUser.user_id || validatedUser.id) {
+            localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id));
+            localStorage.setItem('user_id', String(validatedUser.user_id || validatedUser.id));
           }
-        } catch (e) {
-          console.error('[SSO] Error validating token:', e);
+          if (validatedUser.role) {
+            localStorage.setItem('User-Role', validatedUser.role);
+          }
+
+          // 设置用户状态
+          const userData = {
+            ...validatedUser,
+            id: validatedUser.id || validatedUser.user_id,
+          };
+          setUser(userData);
+
+          // 清除URL中的token参数
+          window.history.replaceState({}, '', window.location.pathname);
+          setLoading(false);
+          return;
         }
+        console.error('[SSO] Token validation failed');
+        redirectToPortal();
+        return;
       }
 
       // 从 localStorage 恢复用户信息
+      const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem("user");
-      if (storedUser) {
+      if (storedToken && storedUser) {
         try {
           const userData = JSON.parse(storedUser);
           // 确保 id 字段存在（兼容 user_id）
@@ -71,47 +96,20 @@ export function AuthProvider({ children }) {
             userData.id = userData.user_id;
           }
           setUser(userData);
+          setLoading(false);
+          return;
         } catch (e) {
           console.error("Failed to parse stored user:", e);
-          localStorage.removeItem("user");
         }
       }
-      setLoading(false);
+
+      // 无有效认证，跳转到 Portal
+      redirectToPortal();
     };
 
-    checkSSOToken();
+    initAuth();
   }, []);
 
-  // ✅ 新增：登录时自动从 API 获取完整信息（仅执行一次）
-  useEffect(() => {
-    if (user?.id && !user?.fetched) {
-      const fetchFullUserInfo = async () => {
-        try {
-          const fullUserInfo = await api.get("/api/v1/auth/me");
-          console.log("✅ 获取完整用户信息:", fullUserInfo);
-
-          // 合并信息：用 API 返回的数据覆盖本地数据
-          const updatedUser = {
-            ...user,
-            ...fullUserInfo,
-            id: user.id,  // 保持原始 id
-            fetched: true,  // 标记已获取，避免重复请求
-          };
-
-          setUser(updatedUser);
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        } catch (e) {
-          console.error("获取完整用户信息失败:", e);
-          // 标记为已尝试获取，避免重复失败
-          const updatedUser = { ...user, fetched: true };
-          setUser(updatedUser);
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
-      };
-
-      fetchFullUserInfo();
-    }
-  }, [user?.id]);
 
   const login = (userData) => {
     // 确保 id 字段存在（兼容 user_id）
@@ -130,10 +128,14 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('User-ID');
+    localStorage.removeItem('User-Role');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('emp_no');
     setUser(null);
-    localStorage.removeItem("user");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("token");
+    window.location.href = PORTAL_URL;
   };
 
   // 角色检查函数
@@ -200,6 +202,16 @@ export function AuthProvider({ children }) {
 
     return userLevel >= requiredLevel;
   };
+
+  // 订阅 401 事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      alert('登录已过期，请重新登录');
+      redirectToPortal();
+    };
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized);
+    return () => unsubscribe();
+  }, []);
 
   return (
     <AuthContext.Provider

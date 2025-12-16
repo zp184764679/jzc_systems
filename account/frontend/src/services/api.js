@@ -1,225 +1,148 @@
-import axios from 'axios';
+/**
+ * API Client for Account
+ * Based on standard template v3.0 - Event-driven authentication
+ */
 
-// Create axios instance with default config
-// 生产环境使用相对路径，开发环境使用完整 URL
-const getBaseURL = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) return envUrl;
-  // 生产环境：使用空字符串让请求相对于当前域名
-  if (import.meta.env.PROD) return '';
-  // 开发环境：使用本地后端地址
-  return 'http://localhost:8001';
-};
+import axios from 'axios';
+import { authEvents, AUTH_EVENTS } from '../utils/authEvents';
 
 const api = axios.create({
-  baseURL: getBaseURL(),
-  withCredentials: true,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add JWT token to all requests if available
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Request interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response) {
-      // Server responded with error status
-      const message = error.response.data?.message || error.response.data?.error || '服务器错误';
-      throw new Error(message);
-    } else if (error.request) {
-      // Request was made but no response received
-      throw new Error('网络连接失败，请检查您的网络设置');
-    } else {
-      // Something else happened
-      throw new Error('请求失败，请稍后重试');
+// Request interceptor - add auth headers
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor - handle 401 with events
+api.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    if (error.response?.status === 401) {
+      authEvents.emit(AUTH_EVENTS.UNAUTHORIZED, {
+        url: error.config?.url,
+        status: 401,
+      });
+    }
+    console.error('[API Error]', error);
+    return Promise.reject(error);
   }
 );
 
-/**
- * User login
- * @param {string} username - Username
- * @param {string} password - Password
- * @returns {Promise} Response data with token
- */
-export const login = async (username, password) => {
-  try {
-    const response = await api.post('/auth/login', {
-      username,
-      password,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+// Login
+export const login = (username, password) => {
+  return api.post('/auth/login', { username, password });
 };
 
-/**
- * Submit a new registration request
- * @param {Object} data - Registration data
- * @returns {Promise} Response data
- */
-export const submitRegistration = async (data) => {
-  try {
-    const response = await api.post('/register/submit', {
-      emp_no: data.empNo,
-      full_name: data.fullName,
-      username: data.username,
-      password: data.password,
-      email: data.email,
-      factory_name: data.factory,
-      factory_id: data.factoryId,
-      department: data.department,
-      department_id: data.departmentId,
-      title: data.position,
-      position_id: data.positionId,
-      team: data.team,
-      team_id: data.teamId,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+// Registration
+export const submitRegistration = (data) => {
+  return api.post('/register/submit', {
+    emp_no: data.empNo,
+    full_name: data.fullName,
+    username: data.username,
+    password: data.password,
+    email: data.email,
+    factory_name: data.factory,
+    factory_id: data.factoryId,
+    department: data.department,
+    department_id: data.departmentId,
+    title: data.position,
+    position_id: data.positionId,
+    team: data.team,
+    team_id: data.teamId,
+  });
 };
 
-/**
- * Get registration requests filtered by status
- * @param {string} status - Request status (pending, approved, rejected, all)
- * @returns {Promise} Array of registration requests
- */
-export const getRegistrationRequests = async (status = 'pending') => {
-  try {
-    const response = await api.get('/register/requests', {
-      params: { status },
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+export const getRegistrationRequests = (status = 'pending') => {
+  return api.get('/register/requests', { params: { status } });
 };
 
-/**
- * Approve a registration request
- * @param {string} requestId - Request ID
- * @param {Array} permissions - Array of permission strings
- * @returns {Promise} Response data
- */
-export const approveRequest = async (requestId, permissions) => {
-  try {
-    const response = await api.post(`/register/approve/${requestId}`, {
-      permissions,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+export const approveRequest = (requestId, permissions) => {
+  return api.post(`/register/approve/${requestId}`, { permissions });
 };
 
-/**
- * Reject a registration request
- * @param {string} requestId - Request ID
- * @param {string} reason - Rejection reason
- * @returns {Promise} Response data
- */
-export const rejectRequest = async (requestId, reason) => {
-  try {
-    const response = await api.post(`/register/reject/${requestId}`, {
-      reason,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+export const rejectRequest = (requestId, reason) => {
+  return api.post(`/register/reject/${requestId}`, { reason });
 };
 
-/**
- * User Management API
- */
+// User Management API
 export const userAPI = {
-  getUsers: async () => {
-    const response = await api.get('/users');
-    return response.data;
-  },
+  getUsers: () => api.get('/users'),
+  getUser: (userId) => api.get(`/users/${userId}`),
+  updateUser: (userId, data) => api.put(`/users/${userId}`, data),
+  deleteUser: (userId) => api.delete(`/users/${userId}`),
+  toggleUserActive: (userId) => api.post(`/users/${userId}/toggle-active`),
+  resetPassword: (userId, newPassword) => api.post(`/users/${userId}/reset-password`, { new_password: newPassword }),
 
-  getUser: async (userId) => {
-    const response = await api.get(`/users/${userId}`);
-    return response.data;
-  },
-
-  updateUser: async (userId, data) => {
-    const response = await api.put(`/users/${userId}`, data);
-    return response.data;
-  },
-
-  deleteUser: async (userId) => {
-    const response = await api.delete(`/users/${userId}`);
-    return response.data;
-  },
-
-  toggleUserActive: async (userId) => {
-    const response = await api.post(`/users/${userId}/toggle-active`);
-    return response.data;
-  },
-
-  resetPassword: async (userId, newPassword) => {
-    const response = await api.post(`/users/${userId}/reset-password`, { new_password: newPassword });
-    return response.data;
-  }
+  // Batch operations
+  batchToggleActive: (userIds, isActive) => api.post('/users/batch/toggle-active', { user_ids: userIds, is_active: isActive }),
+  batchAssignRole: (userIds, role) => api.post('/users/batch/assign-role', { user_ids: userIds, role }),
+  batchAssignPermissions: (userIds, permissions, mode = 'replace') => api.post('/users/batch/assign-permissions', { user_ids: userIds, permissions, mode }),
+  batchDelete: (userIds) => api.post('/users/batch/delete', { user_ids: userIds }),
+  batchResetPassword: (userIds, newPassword) => api.post('/users/batch/reset-password', { user_ids: userIds, new_password: newPassword }),
+  batchUpdateOrg: (userIds, orgData) => api.post('/users/batch/update-org', { user_ids: userIds, ...orgData }),
 };
 
-/**
- * Get organization options (departments, positions, teams) for registration
- */
-export const getOrgOptions = async () => {
-  try {
-    const response = await api.get('/hr-sync/org-options');
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+// Get organization options
+export const getOrgOptions = () => {
+  return api.get('/hr-sync/org-options');
 };
 
-/**
- * HR Sync API - 从HR系统同步员工数据
- */
+// HR Sync API
 export const hrSyncAPI = {
-  // 获取HR系统在职员工
-  getHREmployees: async () => {
-    const response = await api.get('/hr-sync/employees');
-    return response.data;
-  },
-
-  // 预览同步结果
-  previewSync: async () => {
-    const response = await api.get('/hr-sync/preview');
-    return response.data;
-  },
-
-  // 执行同步
-  executeSync: async (options = {}) => {
-    const response = await api.post('/hr-sync/execute', options);
-    return response.data;
-  },
-
-  // 批量创建用户
-  batchCreateUsers: async (empNos, defaultPassword = 'jzc123456', permissions = []) => {
-    const response = await api.post('/hr-sync/batch-create', {
+  getHREmployees: () => api.get('/hr-sync/employees'),
+  previewSync: () => api.get('/hr-sync/preview'),
+  executeSync: (options = {}) => api.post('/hr-sync/execute', options),
+  batchCreateUsers: (empNos, defaultPassword = 'jzc123456', permissions = []) => {
+    return api.post('/hr-sync/batch-create', {
       emp_nos: empNos,
       default_password: defaultPassword,
-      default_permissions: permissions
+      default_permissions: permissions,
     });
-    return response.data;
-  }
+  },
+};
+
+// Permission Management API (RBAC)
+export const permissionAPI = {
+  // Roles
+  getRoles: (params = {}) => api.get('/permissions/roles', { params }),
+  getRole: (roleId) => api.get(`/permissions/roles/${roleId}`),
+  createRole: (data) => api.post('/permissions/roles', data),
+  updateRole: (roleId, data) => api.put(`/permissions/roles/${roleId}`, data),
+  deleteRole: (roleId) => api.delete(`/permissions/roles/${roleId}`),
+
+  // Permissions
+  getPermissions: (params = {}) => api.get('/permissions', { params }),
+  getPermissionTree: () => api.get('/permissions/tree'),
+  getModules: () => api.get('/permissions/modules'),
+
+  // Role-Permission Assignment
+  getRolePermissions: (roleId) => api.get(`/permissions/roles/${roleId}/permissions`),
+  setRolePermissions: (roleId, permissionIds) => api.put(`/permissions/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
+
+  // User-Role Assignment
+  getUserRoles: (userId) => api.get(`/permissions/users/${userId}/roles`),
+  setUserRoles: (userId, roleIds) => api.put(`/permissions/users/${userId}/roles`, { role_ids: roleIds }),
+
+  // User Effective Permissions
+  getUserEffectivePermissions: (userId) => api.get(`/permissions/users/${userId}/effective-permissions`),
+  checkPermission: (userId, permissionCode) => api.post('/permissions/check', { user_id: userId, permission_code: permissionCode }),
+
+  // Initialize & Stats
+  initDefaults: () => api.post('/permissions/init-defaults'),
+  getStats: () => api.get('/permissions/stats'),
 };
 
 export default api;

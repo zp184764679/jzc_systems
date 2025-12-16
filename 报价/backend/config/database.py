@@ -44,6 +44,6 @@ def get_db():
 
 def init_db():
     """初始化数据库"""
-    from models import material, process, drawing, product, quote, bom, process_route  # noqa
+    from models import material, process, drawing, product, quote, quote_approval, bom, process_route  # noqa
     Base.metadata.create_all(bind=engine)
     print("✅ 数据库初始化完成")

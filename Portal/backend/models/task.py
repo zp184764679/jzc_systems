@@ -1,0 +1,125 @@
+"""
+Task Model - 任务管理模型
+"""
+from sqlalchemy import Column, Integer, String, Text, Date, DateTime, Boolean, ForeignKey, Enum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from models import Base
+import enum
+
+
+class TaskStatus(str, enum.Enum):
+    """任务状态枚举"""
+    PENDING = 'pending'             # 待开始
+    IN_PROGRESS = 'in_progress'     # 进行中
+    COMPLETED = 'completed'         # 已完成
+    CANCELLED = 'cancelled'         # 已取消
+    BLOCKED = 'blocked'             # 受阻
+
+
+class TaskPriority(str, enum.Enum):
+    """任务优先级枚举"""
+    LOW = 'low'           # 低
+    NORMAL = 'normal'     # 普通
+    HIGH = 'high'         # 高
+    URGENT = 'urgent'     # 紧急
+
+
+class TaskType(str, enum.Enum):
+    """任务类型枚举"""
+    DESIGN = 'design'               # 设计
+    DEVELOPMENT = 'development'     # 开发
+    TESTING = 'testing'             # 测试
+    REVIEW = 'review'               # 审查
+    DOCUMENTATION = 'documentation' # 文档
+    OTHER = 'other'                 # 其他
+
+
+class Task(Base):
+    """任务表"""
+    __tablename__ = 'tasks'
+
+    # 主键
+    id = Column(Integer, primary_key=True, index=True)
+
+    # 关联项目
+    project_id = Column(Integer, ForeignKey('projects.id'), nullable=False, index=True, comment='所属项目ID')
+
+    # 任务信息
+    task_no = Column(String(50), unique=True, nullable=False, index=True, comment='任务编号')
+    title = Column(String(200), nullable=False, comment='任务标题')
+    description = Column(Text, comment='任务描述')
+    task_type = Column(
+        Enum(TaskType),
+        default=TaskType.OTHER,
+        nullable=False,
+        comment='任务类型'
+    )
+
+    # 时间字段
+    start_date = Column(Date, comment='开始日期')
+    due_date = Column(Date, comment='截止日期')
+    completed_at = Column(DateTime, comment='完成时间')
+
+    # 状态和优先级
+    status = Column(
+        Enum(TaskStatus),
+        default=TaskStatus.PENDING,
+        nullable=False,
+        comment='任务状态'
+    )
+    priority = Column(
+        Enum(TaskPriority),
+        default=TaskPriority.NORMAL,
+        nullable=False,
+        comment='优先级'
+    )
+
+    # 分配和创建
+    assigned_to_id = Column(Integer, comment='分配给(用户ID)')
+    created_by_id = Column(Integer, nullable=False, comment='创建者ID')
+
+    # 依赖关系
+    depends_on_task_id = Column(Integer, ForeignKey('tasks.id'), comment='依赖的任务ID')
+
+    # 提醒设置
+    reminder_enabled = Column(Boolean, default=False, comment='是否启用提醒')
+    reminder_days_before = Column(Integer, default=1, comment='提前提醒天数')
+
+    # 里程碑标记
+    is_milestone = Column(Boolean, default=False, comment='是否为里程碑')
+
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    # 关系
+    # project = relationship('Project', back_populates='tasks')
+    # depends_on = relationship('Task', remote_side=[id], foreign_keys=[depends_on_task_id])
+
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'task_no': self.task_no,
+            'title': self.title,
+            'description': self.description,
+            'task_type': self.task_type.value if isinstance(self.task_type, TaskType) else self.task_type,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'status': self.status.value if isinstance(self.status, TaskStatus) else self.status,
+            'priority': self.priority.value if isinstance(self.priority, TaskPriority) else self.priority,
+            'assigned_to_id': self.assigned_to_id,
+            'created_by_id': self.created_by_id,
+            'depends_on_task_id': self.depends_on_task_id,
+            'reminder_enabled': self.reminder_enabled,
+            'reminder_days_before': self.reminder_days_before,
+            'is_milestone': self.is_milestone,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    def __repr__(self):
+        return f"<Task {self.task_no}: {self.title}>"

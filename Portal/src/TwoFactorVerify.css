@@ -1,0 +1,151 @@
+/* Two-Factor Verification Styles */
+
+.tfa-verify-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.tfa-verify-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.tfa-verify-icon {
+  color: #1890ff;
+  margin-bottom: 20px;
+}
+
+.tfa-verify-card h2 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.tfa-verify-desc {
+  color: #666;
+  margin: 0 0 15px 0;
+  line-height: 1.5;
+}
+
+.tfa-verify-user {
+  color: #333;
+  margin: 0 0 20px 0;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.tfa-verify-error {
+  background: #fff2f0;
+  color: #ff4d4f;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.tfa-verify-input {
+  width: 100%;
+  padding: 15px;
+  font-size: 28px;
+  text-align: center;
+  letter-spacing: 10px;
+  border: 2px solid #d9d9d9;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: border-color 0.3s;
+  box-sizing: border-box;
+}
+
+.tfa-verify-input.backup {
+  font-size: 22px;
+  letter-spacing: 4px;
+  font-family: monospace;
+}
+
+.tfa-verify-input:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.tfa-verify-btn {
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.tfa-verify-btn.primary {
+  background: #1890ff;
+  color: #fff;
+}
+
+.tfa-verify-btn.primary:hover:not(:disabled) {
+  background: #40a9ff;
+}
+
+.tfa-verify-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tfa-verify-link {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tfa-verify-link:hover {
+  text-decoration: underline;
+}
+
+.tfa-verify-cancel {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tfa-verify-cancel:hover {
+  color: #666;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .tfa-verify-card {
+    padding: 30px 20px;
+  }
+
+  .tfa-verify-input {
+    font-size: 24px;
+    letter-spacing: 8px;
+  }
+
+  .tfa-verify-input.backup {
+    font-size: 18px;
+    letter-spacing: 2px;
+  }
+}

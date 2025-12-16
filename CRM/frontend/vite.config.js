@@ -13,6 +13,11 @@ export default defineConfig({
         target: 'http://localhost:8002',
         changeOrigin: true,
       },
+      '/portal-api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/portal-api/, '/api')
+      },
     },
   },
   preview: {

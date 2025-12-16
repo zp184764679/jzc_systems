@@ -5,15 +5,24 @@ import pandas as pd
 import pymysql
 from datetime import datetime
 import re
+import os
+from dotenv import load_dotenv
 
-# 数据库配置
+# 加载环境变量
+load_dotenv()
+
+# 数据库配置 - 从环境变量读取
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'app',
-    'password': 'app',
-    'database': 'hr_system',
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'user': os.getenv('MYSQL_USER'),
+    'password': os.getenv('MYSQL_PASSWORD'),
+    'database': os.getenv('MYSQL_DATABASE', 'hr_system'),
     'charset': 'utf8mb4'
 }
+
+# 检查必要的环境变量
+if not DB_CONFIG['user'] or not DB_CONFIG['password']:
+    raise ValueError("数据库凭证未配置。请设置 MYSQL_USER 和 MYSQL_PASSWORD 环境变量。")
 
 # 读取Excel - 离职人员sheet, 第3行是表头(index=2)
 excel_file = r'C:\Users\Admin\Desktop\HR\东莞厂人事资料-新2025.10.24xls.xls'

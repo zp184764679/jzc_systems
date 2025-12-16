@@ -28,7 +28,7 @@ def add_column():
             db.session.execute(text("CREATE INDEX idx_customers_seq_no ON customers(seq_no)"))
             db.session.commit()
             print("已创建索引")
-        except:
+        except Exception:
             print("索引已存在或创建失败")
 
 if __name__ == '__main__':

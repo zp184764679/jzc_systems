@@ -160,6 +160,27 @@ def get_positions(user):
     })
 
 
+# ========== 职位类别选项 ==========
+# 注意：此路由必须在 /positions/<int:pos_id> 之前定义，否则 Flask 会将 "categories" 尝试匹配为 int 导致 404
+
+@bp.route('/positions/categories', methods=['GET'])
+@require_auth
+def get_position_categories(user):
+    """获取职位类别列表"""
+    categories = [
+        {'value': 'management', 'label': '管理'},
+        {'value': 'technical', 'label': '技术'},
+        {'value': 'sales', 'label': '销售'},
+        {'value': 'admin', 'label': '行政'},
+        {'value': 'finance', 'label': '财务'},
+        {'value': 'production', 'label': '生产'},
+        {'value': 'logistics', 'label': '物流'},
+        {'value': 'quality', 'label': '质量'},
+        {'value': 'other', 'label': '其他'}
+    ]
+    return jsonify({'success': True, 'data': categories})
+
+
 @bp.route('/positions/<int:pos_id>', methods=['GET'])
 @require_auth
 def get_position(pos_id, user):
@@ -377,26 +398,6 @@ def delete_team(team_id, user):
     team.is_active = False
     db.session.commit()
     return jsonify({'success': True, 'message': '团队已禁用'})
-
-
-# ========== 职位类别选项 ==========
-
-@bp.route('/positions/categories', methods=['GET'])
-@require_auth
-def get_position_categories(user):
-    """获取职位类别列表"""
-    categories = [
-        {'value': 'management', 'label': '管理'},
-        {'value': 'technical', 'label': '技术'},
-        {'value': 'sales', 'label': '销售'},
-        {'value': 'admin', 'label': '行政'},
-        {'value': 'finance', 'label': '财务'},
-        {'value': 'production', 'label': '生产'},
-        {'value': 'logistics', 'label': '物流'},
-        {'value': 'quality', 'label': '质量'},
-        {'value': 'other', 'label': '其他'}
-    ]
-    return jsonify({'success': True, 'data': categories})
 
 
 # ========== 工厂管理 ==========

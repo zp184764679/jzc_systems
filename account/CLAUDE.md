@@ -4,6 +4,8 @@
 
 Account 系统是 JZC 企业管理系统的账户管理模块，负责用户账户的统一管理，包括用户注册审批、权限分配、密码管理，以及与 HR 系统的数据同步。
 
+**部署状态**: 已部署
+
 ### 核心功能
 - 用户管理（CRUD + 激活/停用）
 - 用户注册审批流程
@@ -19,6 +21,7 @@ Account 系统是 JZC 企业管理系统的账户管理模块，负责用户账�
 | 配置项 | 值 |
 |--------|-----|
 | 后端端口 | 8004 |
+| 前端端口(dev) | 6003 |
 | 前端路径 | `/account/` |
 | API路径 | `/account/api/` |
 | PM2服务名 | account-backend |
@@ -97,6 +100,17 @@ account/
 | DELETE | `/users/<id>` | 删除用户 | 管理员 |
 | POST | `/users/<id>/toggle-active` | 切换用户激活状态 | 管理员 |
 | POST | `/users/<id>/reset-password` | 重置用户密码 | 管理员 |
+
+### 批量操作 API (/users/batch)
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| POST | `/users/batch/toggle-active` | 批量启用/停用用户 | 管理员 |
+| POST | `/users/batch/assign-role` | 批量分配角色 | 管理员 |
+| POST | `/users/batch/assign-permissions` | 批量分配权限 | 管理员 |
+| POST | `/users/batch/delete` | 批量删除用户 | 管理员 |
+| POST | `/users/batch/reset-password` | 批量重置密码 | 管理员 |
+| POST | `/users/batch/update-org` | 批量更新组织信息 | 管理员 |
 
 ### HR 同步 API (/hr-sync)
 
@@ -177,8 +191,18 @@ Account 系统主要使用 `shared/auth` 共享模块的 User 模型，并有自
 - 删除用户
 
 ### AdminPanel.jsx - 管理面板
-- 用户统计概览
-- 快捷操作入口
+- 注册审批 Tab
+- 用户管理 Tab
+- 权限管理 Tab
+- 批量操作 Tab
+
+### BatchOperations.jsx - 批量操作
+- 批量启用/停用用户
+- 批量分配角色
+- 批量分配权限
+- 批量重置密码
+- 批量更新组织信息
+- 批量删除用户
 
 ### Register.jsx - 注册页
 - 注册表单
@@ -257,6 +281,8 @@ npm run build
 - [x] 批量创建用户
 - [x] 组织选项获取（从 HR 数据库）
 - [x] SSO Token 验证
+- [x] 细粒度权限管理 (RBAC)
+- [x] 批量操作（启用/停用、分配角色、分配权限、重置密码、更新组织、删除）
 
 ---
 

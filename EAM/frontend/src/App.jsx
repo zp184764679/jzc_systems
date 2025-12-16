@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { ConfigProvider, Layout, Menu, Button, Spin } from 'antd'
-import { HomeOutlined, ToolOutlined, BarChartOutlined, FileTextOutlined, LogoutOutlined } from '@ant-design/icons'
+import { HomeOutlined, ToolOutlined, BarChartOutlined, FileTextOutlined, LogoutOutlined, SettingOutlined, AlertOutlined, AppstoreOutlined } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import MachineList from './pages/machines/MachineList'
-import { getCurrentUser, isLoggedIn, logout } from './utils/ssoAuth'
+import MaintenanceManagement from './pages/maintenance/MaintenanceManagement'
+import SparePartManagement from './pages/spare-parts/SparePartManagement'
+import CapacityManagement from './pages/capacity/CapacityManagement'
+import { authEvents, AUTH_EVENTS } from './utils/authEvents'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -25,15 +28,91 @@ function AppContent() {
   const location = useLocation()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const isRedirecting = useRef(false)
 
-  useEffect(() => {
-    if (isLoggedIn()) {
-      setUser(getCurrentUser())
-      setLoading(false)
-    } else {
-      // 未登录，跳转到门户
-      window.location.href = PORTAL_URL
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) return
+    isRedirecting.current = true
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
+    window.location.href = PORTAL_URL
+  }
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      if (!response.ok) return null
+      const data = await response.json()
+      if (!data.valid || !data.user) return null
+      return data.user
+    } catch (error) {
+      return null
     }
+  }
+
+  // 初始化认证 - 只执行一次
+  useEffect(() => {
+    const initAuth = async () => {
+      // 1. 检查 URL 中是否有新 token
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlToken = urlParams.get('token')
+
+      if (urlToken) {
+        const validatedUser = await validateUrlToken(urlToken)
+        if (validatedUser) {
+          localStorage.setItem('token', urlToken)
+          localStorage.setItem('user', JSON.stringify(validatedUser))
+          if (validatedUser.user_id || validatedUser.id) {
+            localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id))
+          }
+          if (validatedUser.role) {
+            localStorage.setItem('User-Role', validatedUser.role)
+          }
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, '', cleanUrl)
+          setUser(validatedUser)
+          setLoading(false)
+          return
+        }
+        redirectToPortal()
+        return
+      }
+
+      // 2. 没有 URL token，检查 localStorage
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      if (storedToken && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser)
+          setUser(parsedUser)
+          setLoading(false)
+          return
+        } catch (e) {}
+      }
+
+      // 3. 没有任何认证信息，跳转 Portal
+      redirectToPortal()
+    }
+    initAuth()
+  }, [])
+
+  // 订阅 401 事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      alert('登录已过期，请重新登录')
+      redirectToPortal()
+    }
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized)
+    return () => unsubscribe()
   }, [])
 
   if (loading) {
@@ -46,6 +125,8 @@ function AppContent() {
   const selectedKey = location.pathname === '/machines' ? 'machines'
     : location.pathname === '/capacity' ? 'capacity'
     : location.pathname === '/maintenance' ? 'maintenance'
+    : location.pathname === '/spare-parts' ? 'spare-parts'
+    : location.pathname === '/faults' ? 'faults'
     : 'home'
 
   const menuItems = [
@@ -60,18 +141,32 @@ function AppContent() {
       label: <Link to="/machines">设备台账</Link>,
     },
     {
+      key: 'maintenance',
+      icon: <SettingOutlined />,
+      label: <Link to="/maintenance">维护保养</Link>,
+    },
+    {
+      key: 'spare-parts',
+      icon: <AppstoreOutlined />,
+      label: <Link to="/spare-parts">备件管理</Link>,
+    },
+    {
       key: 'capacity',
       icon: <BarChartOutlined />,
       label: <Link to="/capacity">设备产能配置</Link>,
     },
-    {
-      key: 'maintenance',
-      icon: <FileTextOutlined />,
-      label: <Link to="/maintenance">维护记录</Link>,
-    },
   ]
 
   const handleBackToPortal = () => {
+    window.location.href = PORTAL_URL
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
     window.location.href = PORTAL_URL
   }
 
@@ -93,7 +188,7 @@ function AppContent() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span>欢迎, {user?.full_name || user?.username}</span>
             <Button icon={<HomeOutlined />} onClick={handleBackToPortal}>回到门户</Button>
-            <Button icon={<LogoutOutlined />} onClick={logout}>退出</Button>
+            <Button icon={<LogoutOutlined />} onClick={handleLogout}>退出</Button>
           </div>
         </div>
       </Header>
@@ -106,18 +201,9 @@ function AppContent() {
             </div>
           } />
           <Route path="/machines" element={<MachineList />} />
-          <Route path="/capacity" element={
-            <div style={{ background: '#fff', padding: 24, borderRadius: 8, textAlign: 'center' }}>
-              <h2>设备产能配置</h2>
-              <p style={{ color: '#666', marginTop: 16 }}>功能开发中...</p>
-            </div>
-          } />
-          <Route path="/maintenance" element={
-            <div style={{ background: '#fff', padding: 24, borderRadius: 8, textAlign: 'center' }}>
-              <h2>维护记录</h2>
-              <p style={{ color: '#666', marginTop: 16 }}>功能开发中...</p>
-            </div>
-          } />
+          <Route path="/maintenance" element={<MaintenanceManagement />} />
+          <Route path="/spare-parts" element={<SparePartManagement />} />
+          <Route path="/capacity" element={<CapacityManagement />} />
         </Routes>
       </Content>
     </Layout>

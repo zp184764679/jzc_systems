@@ -25,8 +25,21 @@ import {
   SaveOutlined,
   PlusOutlined,
   DeleteOutlined,
+  PrinterOutlined,
+  FileTextOutlined,
+  ContainerOutlined,
+  EnvironmentOutlined,
+  CheckCircleOutlined,
+  CarOutlined,
 } from '@ant-design/icons'
 import { shipmentApi, requirementApi } from '../api'
+import PrintPreview from '../components/PrintPreview'
+import {
+  LogisticsTrackingModal,
+  DeliveryReceiptModal,
+  ShipOutModal,
+  QuickSignModal,
+} from '../components/LogisticsTracking'
 import dayjs from 'dayjs'
 
 function ShipmentDetail() {
@@ -44,6 +57,13 @@ function ShipmentDetail() {
   const [shipModal, setShipModal] = useState(false)
   const [trackingNo, setTrackingNo] = useState('')
   const [carrier, setCarrier] = useState('')
+  const [printPreviewVisible, setPrintPreviewVisible] = useState(false)
+  const [printType, setPrintType] = useState('delivery_note')
+  // 物流追踪相关状态
+  const [trackingModalVisible, setTrackingModalVisible] = useState(false)
+  const [receiptModalVisible, setReceiptModalVisible] = useState(false)
+  const [shipOutModalVisible, setShipOutModalVisible] = useState(false)
+  const [quickSignModalVisible, setQuickSignModalVisible] = useState(false)
 
   useEffect(() => {
     fetchShipment()
@@ -405,7 +425,41 @@ function ShipmentDetail() {
             title="基本信息"
             style={{ marginBottom: 24 }}
             extra={
-              <Space>
+              <Space wrap>
+                {/* 打印按钮 */}
+                <Button
+                  icon={<FileTextOutlined />}
+                  onClick={() => {
+                    setPrintType('delivery_note')
+                    setPrintPreviewVisible(true)
+                  }}
+                >
+                  打印送货单
+                </Button>
+                <Button
+                  icon={<ContainerOutlined />}
+                  onClick={() => {
+                    setPrintType('packing_list')
+                    setPrintPreviewVisible(true)
+                  }}
+                >
+                  打印装箱单
+                </Button>
+                {/* 物流追踪按钮 */}
+                <Button
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => setTrackingModalVisible(true)}
+                >
+                  物流追踪
+                </Button>
+                {/* 签收回执按钮 */}
+                <Button
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => setReceiptModalVisible(true)}
+                >
+                  签收回执
+                </Button>
+                {/* 待出货状态下的操作按钮 */}
                 {shipment.status === '待出货' && (
                   <>
                     <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
@@ -413,12 +467,22 @@ function ShipmentDetail() {
                     </Button>
                     <Button
                       type="primary"
-                      icon={<SendOutlined />}
-                      onClick={() => setShipModal(true)}
+                      icon={<CarOutlined />}
+                      onClick={() => setShipOutModalVisible(true)}
                     >
                       发货
                     </Button>
                   </>
+                )}
+                {/* 已发货状态下可快速签收 */}
+                {shipment.status === '已发货' && (
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => setQuickSignModalVisible(true)}
+                  >
+                    确认签收
+                  </Button>
                 )}
               </Space>
             }
@@ -508,6 +572,50 @@ function ShipmentDetail() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 打印预览 */}
+      <PrintPreview
+        visible={printPreviewVisible}
+        onClose={() => setPrintPreviewVisible(false)}
+        shipmentId={id}
+        printType={printType}
+      />
+
+      {/* 物流追踪弹窗 */}
+      <LogisticsTrackingModal
+        visible={trackingModalVisible}
+        shipmentId={id}
+        shipment={shipment}
+        onClose={() => setTrackingModalVisible(false)}
+        onRefresh={fetchShipment}
+      />
+
+      {/* 签收回执弹窗 */}
+      <DeliveryReceiptModal
+        visible={receiptModalVisible}
+        shipmentId={id}
+        shipment={shipment}
+        onClose={() => setReceiptModalVisible(false)}
+        onRefresh={fetchShipment}
+      />
+
+      {/* 发货弹窗 */}
+      <ShipOutModal
+        visible={shipOutModalVisible}
+        shipmentId={id}
+        shipment={shipment}
+        onClose={() => setShipOutModalVisible(false)}
+        onRefresh={fetchShipment}
+      />
+
+      {/* 快速签收弹窗 */}
+      <QuickSignModal
+        visible={quickSignModalVisible}
+        shipmentId={id}
+        shipment={shipment}
+        onClose={() => setQuickSignModalVisible(false)}
+        onRefresh={fetchShipment}
+      />
     </div>
   )
 }

@@ -1,0 +1,298 @@
+/* Two-Factor Authentication Setup Styles */
+
+.tfa-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.tfa-modal {
+  background: #fff;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.tfa-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.tfa-close:hover {
+  background: #f0f0f0;
+}
+
+.tfa-content {
+  padding: 30px;
+}
+
+.tfa-content h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.tfa-icon {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #1890ff;
+}
+
+.tfa-icon.success {
+  color: #52c41a;
+}
+
+.tfa-icon.enabled {
+  color: #52c41a;
+}
+
+.tfa-desc {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.tfa-desc.warning {
+  color: #fa8c16;
+  background: #fff7e6;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #fa8c16;
+}
+
+.tfa-benefits {
+  margin-bottom: 25px;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  color: #333;
+}
+
+.benefit-icon {
+  color: #52c41a;
+  font-weight: bold;
+}
+
+.qr-container {
+  text-align: center;
+  margin: 20px 0;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.qr-code {
+  border: 4px solid #fff;
+  border-radius: 8px;
+}
+
+.manual-entry {
+  text-align: center;
+  margin: 15px 0;
+  padding: 15px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.manual-entry p {
+  margin: 0 0 10px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.secret-key {
+  display: inline-block;
+  background: #fff;
+  padding: 10px 15px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 2px;
+  border: 1px solid #d9d9d9;
+  word-break: break-all;
+}
+
+.backup-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 15px 0 25px 0;
+  padding: 15px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.backup-code {
+  font-family: monospace;
+  font-size: 14px;
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  text-align: center;
+  border: 1px solid #e8e8e8;
+}
+
+.verify-form {
+  margin-top: 20px;
+}
+
+.verify-form label {
+  display: block;
+  margin-bottom: 10px;
+  color: #333;
+  font-weight: 500;
+}
+
+.verify-input {
+  width: 100%;
+  padding: 15px;
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 8px;
+  border: 2px solid #d9d9d9;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: border-color 0.3s;
+}
+
+.verify-input:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.tfa-btn {
+  width: 100%;
+  padding: 12px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.tfa-btn.primary {
+  background: #1890ff;
+  color: #fff;
+}
+
+.tfa-btn.primary:hover:not(:disabled) {
+  background: #40a9ff;
+}
+
+.tfa-btn.secondary {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.tfa-btn.secondary:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.tfa-btn.danger {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.tfa-btn.danger:hover:not(:disabled) {
+  background: #ff7875;
+}
+
+.tfa-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tfa-error {
+  background: #fff2f0;
+  color: #ff4d4f;
+  padding: 12px 20px;
+  border-radius: 0;
+  border-left: 4px solid #ff4d4f;
+  margin: 0;
+}
+
+.tfa-reminder {
+  background: #e6f7ff;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.tfa-reminder ul {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+}
+
+.tfa-reminder li {
+  margin: 5px 0;
+  color: #333;
+}
+
+.tfa-status-info {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.tfa-status-info p {
+  margin: 5px 0;
+  color: #333;
+}
+
+.tfa-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .tfa-modal {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .tfa-content {
+    padding: 20px;
+  }
+
+  .backup-codes {
+    grid-template-columns: 1fr;
+  }
+
+  .verify-input {
+    font-size: 20px;
+    letter-spacing: 6px;
+  }
+}

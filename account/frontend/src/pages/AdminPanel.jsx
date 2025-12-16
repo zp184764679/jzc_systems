@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Card, Typography, Tabs } from 'antd';
-import { TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { TeamOutlined, UserOutlined, SafetyCertificateOutlined, AppstoreOutlined } from '@ant-design/icons';
 import RegistrationApproval from './RegistrationApproval';
 import UserManagement from './UserManagement';
+import PermissionManagement from './PermissionManagement';
+import BatchOperations from './BatchOperations';
 
 const { Title, Text } = Typography;
 
@@ -29,6 +31,26 @@ const AdminPanel = () => {
         </span>
       ),
       children: <UserManagement />,
+    },
+    {
+      key: 'permissions',
+      label: (
+        <span>
+          <SafetyCertificateOutlined />
+          权限管理
+        </span>
+      ),
+      children: <PermissionManagement />,
+    },
+    {
+      key: 'batch',
+      label: (
+        <span>
+          <AppstoreOutlined />
+          批量操作
+        </span>
+      ),
+      children: <BatchOperations />,
     },
   ];
 

@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { ConfigProvider, Layout, Menu, Space, Button, Spin, Drawer } from 'antd'
-import { UserOutlined, ShoppingOutlined, HomeOutlined, AppstoreOutlined, LogoutOutlined, MenuOutlined } from '@ant-design/icons'
+import { UserOutlined, ShoppingOutlined, HomeOutlined, AppstoreOutlined, LogoutOutlined, MenuOutlined, FunnelPlotOutlined, RocketOutlined, FileTextOutlined, BarChartOutlined } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import CustomerList from './pages/CustomerList'
 import CustomerDetail from './pages/CustomerDetail'
 import Dashboard from './pages/Dashboard'
 import OrderList from './pages/orders/OrderList'
 import OrderNew from './pages/orders/OrderNew'
-import { getCurrentUser, isLoggedIn, checkSSOToken } from './utils/ssoAuth'
+import OrderReports from './pages/orders/OrderReports'
+import OpportunityList from './pages/OpportunityList'
+import SalesPipeline from './pages/SalesPipeline'
+import ContractList from './pages/ContractList'
+import CustomerReports from './pages/CustomerReports'
+import { authEvents, AUTH_EVENTS } from './utils/authEvents'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -31,6 +36,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isRedirecting = useRef(false)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -38,21 +44,96 @@ function AppContent() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // 统一的跳转函数 - 防止重复跳转
+  const redirectToPortal = () => {
+    if (isRedirecting.current) return
+    isRedirecting.current = true
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('User-ID')
+    localStorage.removeItem('User-Role')
+    localStorage.removeItem('emp_no')
+    window.location.href = PORTAL_URL
+  }
+
+  // 验证 URL 中的 SSO token
+  const validateUrlToken = async (token) => {
+    try {
+      const response = await fetch('/portal-api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      if (!response.ok) return null
+      const data = await response.json()
+      if (!data.valid || !data.user) return null
+      return data.user
+    } catch (error) {
+      return null
+    }
+  }
+
+  // 初始化认证 - 只执行一次
   useEffect(() => {
     const initAuth = async () => {
-      await checkSSOToken()
+      // 1. 检查 URL 中是否有新 token
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlToken = urlParams.get('token')
 
-      if (isLoggedIn()) {
-        setUser(getCurrentUser())
-        setLoading(false)
-      } else {
-        window.location.href = PORTAL_URL
+      if (urlToken) {
+        const validatedUser = await validateUrlToken(urlToken)
+        if (validatedUser) {
+          localStorage.setItem('token', urlToken)
+          localStorage.setItem('user', JSON.stringify(validatedUser))
+          if (validatedUser.user_id || validatedUser.id) {
+            localStorage.setItem('User-ID', String(validatedUser.user_id || validatedUser.id))
+          }
+          if (validatedUser.role) {
+            localStorage.setItem('User-Role', validatedUser.role)
+          }
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, '', cleanUrl)
+          setUser(validatedUser)
+          setLoading(false)
+          return
+        }
+        redirectToPortal()
+        return
       }
+
+      // 2. 没有 URL token，检查 localStorage
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      if (storedToken && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser)
+          setUser(parsedUser)
+          setLoading(false)
+          return
+        } catch (e) {}
+      }
+
+      // 3. 没有任何认证信息，跳转 Portal
+      redirectToPortal()
     }
     initAuth()
   }, [])
 
-  const selectedKey = location.pathname.startsWith('/orders') ? 'orders'
+  // 订阅 401 事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      alert('登录已过期，请重新登录')
+      redirectToPortal()
+    }
+    const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized)
+    return () => unsubscribe()
+  }, [])
+
+  const selectedKey = location.pathname.startsWith('/pipeline') ? 'pipeline'
+    : location.pathname.startsWith('/opportunities') ? 'opportunities'
+    : location.pathname.startsWith('/contracts') ? 'contracts'
+    : location.pathname.startsWith('/customer-reports') ? 'customer-reports'
+    : location.pathname.startsWith('/orders') ? 'orders'
     : location.pathname.startsWith('/customers') ? 'customers'
     : 'home'
 
@@ -68,9 +149,29 @@ function AppContent() {
       label: <Link to="/customers" style={{ fontSize: 16, fontWeight: 500 }}>客户管理</Link>,
     },
     {
+      key: 'opportunities',
+      icon: <RocketOutlined style={{ fontSize: 18 }} />,
+      label: <Link to="/opportunities" style={{ fontSize: 16, fontWeight: 500 }}>销售机会</Link>,
+    },
+    {
+      key: 'pipeline',
+      icon: <FunnelPlotOutlined style={{ fontSize: 18 }} />,
+      label: <Link to="/pipeline" style={{ fontSize: 16, fontWeight: 500 }}>销售漏斗</Link>,
+    },
+    {
+      key: 'contracts',
+      icon: <FileTextOutlined style={{ fontSize: 18 }} />,
+      label: <Link to="/contracts" style={{ fontSize: 16, fontWeight: 500 }}>合同管理</Link>,
+    },
+    {
       key: 'orders',
       icon: <ShoppingOutlined style={{ fontSize: 18 }} />,
       label: <Link to="/orders" style={{ fontSize: 16, fontWeight: 500 }}>订单管理</Link>,
+    },
+    {
+      key: 'customer-reports',
+      icon: <BarChartOutlined style={{ fontSize: 18 }} />,
+      label: <Link to="/customer-reports" style={{ fontSize: 16, fontWeight: 500 }}>客户报表</Link>,
     },
   ]
 
@@ -202,8 +303,13 @@ function AppContent() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/customers" element={<CustomerList />} />
           <Route path="/customers/:id" element={<CustomerDetail />} />
+          <Route path="/opportunities" element={<OpportunityList />} />
+          <Route path="/pipeline" element={<SalesPipeline />} />
+          <Route path="/contracts" element={<ContractList />} />
           <Route path="/orders" element={<OrderList />} />
           <Route path="/orders/new" element={<OrderNew />} />
+          <Route path="/orders/reports" element={<OrderReports />} />
+          <Route path="/customer-reports" element={<CustomerReports />} />
         </Routes>
       </Content>
     </Layout>

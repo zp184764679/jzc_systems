@@ -16,7 +16,7 @@ def safe_int(val, default=None):
         return default
     try:
         return int(float(val))
-    except:
+    except (ValueError, TypeError):
         return default
 
 def safe_str(val):

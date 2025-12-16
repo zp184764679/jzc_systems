@@ -5,6 +5,9 @@ from flask import Blueprint, request, jsonify, make_response
 from functools import wraps
 import sys
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add shared module to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..', '../..', '..'))
@@ -153,7 +156,10 @@ def get_current_user():
     # Verify token
     try:
         payload = verify_token(access_token)
-    except:
+        if not payload:
+            return jsonify({'error': '登录已过期，请重新登录'}), 401
+    except Exception as e:
+        logger.warning(f"Token verification failed in get_current_user: {e}")
         return jsonify({'error': '登录已过期，请重新登录'}), 401
 
     # Get user from database
@@ -193,7 +199,10 @@ def require_auth(f):
         # Verify token
         try:
             payload = verify_token(access_token)
-        except:
+            if not payload:
+                return jsonify({'error': '登录已过期，请重新登录'}), 401
+        except Exception as e:
+            logger.warning(f"Token verification failed in require_auth: {e}")
             return jsonify({'error': '登录已过期，请重新登录'}), 401
 
         # Get user from database
@@ -235,7 +244,10 @@ def require_admin(f):
 
         try:
             payload = verify_token(access_token)
-        except:
+            if not payload:
+                return jsonify({'error': '未授权'}), 401
+        except Exception as e:
+            logger.warning(f"Token verification failed in require_admin: {e}")
             return jsonify({'error': '未授权'}), 401
 
         auth_session = auth_models.AuthSessionLocal()

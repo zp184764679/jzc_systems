@@ -136,8 +136,8 @@ def create_translated_pdf(images, translations, output_path):
     try:
         pdfmetrics.registerFont(TTFont('SimHei', 'C:/Windows/Fonts/simhei.ttf'))
         pdfmetrics.registerFont(TTFont('SimSun', 'C:/Windows/Fonts/simsun.ttc'))
-    except:
-        pass
+    except Exception:
+        pass  # 字体注册失败时使用默认字体
 
     # 创建PDF
     doc = SimpleDocTemplate(

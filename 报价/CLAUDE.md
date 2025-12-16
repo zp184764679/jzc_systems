@@ -4,6 +4,8 @@
 
 报价系统是 JZC 企业管理系统的核心业务模块，用于机加工精密零件的智能报价。支持图纸上传、OCR 识别、BOM 管理、工艺路线配置、自动成本计算和报价单生成。
 
+**部署状态**: 已部署
+
 ### 核心功能
 - 图纸上传与 OCR 识别
 - BOM 物料清单管理
@@ -12,7 +14,19 @@
 - 产品库管理
 - 工艺路线配置
 - 自动报价计算（基于创怡兴公式）
-- 报价单 Excel 导出
+- 报价单 Excel/PDF 导出
+- **报价审批流程**（草稿→待审核→已批准→已发送）
+- **报价版本管理**
+  - 创建新版本
+  - 版本历史查看
+  - 版本对比
+  - 设置当前版本
+- **报价有效期管理**（新）
+  - 有效期状态显示（已过期/即将过期/正常）
+  - 延长有效期（按天数或指定日期）
+  - 即将过期报价查询
+  - 自动过期检查
+  - 有效期统计
 - 跨系统集成（CRM客户、HR业务员）
 
 ---
@@ -22,6 +36,7 @@
 | 配置项 | 值 |
 |--------|-----|
 | 后端端口 | 8001 |
+| 前端端口(dev) | 6001 |
 | 前端路径 | `/quotation/` |
 | API路径 | `/quotation/api/` |
 | PM2服务名 | quotation-backend |
@@ -91,6 +106,7 @@
 │   │   ├── process_route.py             # 工艺路线模型
 │   │   ├── product.py                   # 产品模型
 │   │   ├── quote.py                     # 报价模型
+│   │   ├── quote_approval.py            # 报价审批模型
 │   │   ├── bom.py                       # BOM 模型
 │   │   └── ocr_correction.py            # OCR 修正模型
 │   ├── services/
@@ -207,8 +223,20 @@
 | POST | `/api/quotes/calculate` | 计算报价 |
 | PUT | `/api/quotes/{id}` | 更新报价 |
 | DELETE | `/api/quotes/{id}` | 删除报价 |
-| GET | `/api/quotes/{id}/export` | 导出 Excel |
-| GET | `/api/quotes/{id}/pdf` | 导出 PDF |
+| GET | `/api/quotes/{id}/export/excel` | 导出 Excel |
+| GET | `/api/quotes/{id}/export/pdf` | 导出 PDF |
+| GET | `/api/quotes/statuses` | 获取状态列表 |
+| POST | `/api/quotes/{id}/submit` | 提交审核 |
+| POST | `/api/quotes/{id}/approve` | 审批通过 |
+| POST | `/api/quotes/{id}/reject` | 审批拒绝 |
+| POST | `/api/quotes/{id}/revise` | 退回修改 |
+| POST | `/api/quotes/{id}/send` | 发送给客户 |
+| POST | `/api/quotes/{id}/withdraw` | 撤回 |
+| GET | `/api/quotes/{id}/approvals` | 获取审批历史 |
+| GET | `/api/quotes/expiring` | 获取即将过期报价 |
+| POST | `/api/quotes/check-expired` | 检查并标记过期报价 |
+| PUT | `/api/quotes/{id}/extend-validity` | 延长有效期 |
+| GET | `/api/quotes/validity-statistics` | 有效期统计 |
 
 ### BOM 管理 API (/api)
 
@@ -260,8 +288,35 @@
 | profit_amount | Decimal | M.利润 |
 | unit_price | Decimal | N.零件单价 |
 | total_amount | Decimal | 总价 |
-| status | String | 状态（draft/sent/approved/rejected） |
+| status | String | 状态（draft/pending_review/approved/rejected/sent/expired） |
+| valid_until | Date | 有效期截止日期 |
 | calculation_details | JSON | 计算详情 |
+| submitted_at | DateTime | 提交审核时间 |
+| submitted_by | Integer | 提交人ID |
+| submitted_by_name | String | 提交人姓名 |
+| approved_at | DateTime | 审批时间 |
+| approved_by | Integer | 审批人ID |
+| approved_by_name | String | 审批人姓名 |
+| rejected_at | DateTime | 拒绝时间 |
+| rejected_by | Integer | 拒绝人ID |
+| reject_reason | Text | 拒绝原因 |
+| sent_at | DateTime | 发送时间 |
+| sent_by | Integer | 发送人ID |
+
+### QuoteApproval 审批记录
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | Integer | 主键 |
+| quote_id | Integer | 报价单ID（外键） |
+| action | String | 审批动作（submit/approve/reject/revise/send/withdraw） |
+| from_status | String | 原状态 |
+| to_status | String | 新状态 |
+| approver_id | Integer | 审批人ID |
+| approver_name | String | 审批人姓名 |
+| approver_role | String | 审批人角色 |
+| comment | Text | 审批意见 |
+| created_at | DateTime | 操作时间 |
 
 ### Drawing 图纸
 
@@ -361,10 +416,63 @@ npm run build
 - [x] BOM 物料清单
 - [x] 工艺路线配置
 - [x] 自动报价计算
-- [x] 报价单 Excel 导出
+- [x] 报价单 Excel/PDF 导出
+- [x] **报价审批流程**（提交/审批/拒绝/退回/发送/撤回）
+- [x] 审批历史记录
+- [x] **报价有效期管理**（有效期显示/延期/过期检查/统计）
 - [x] CRM 客户集成
 - [x] HR 业务员集成
 - [x] SSO Token 认证
+
+---
+
+## 报价审批流程
+
+### 状态流转
+
+```
+┌─────────┐   提交审核   ┌──────────────┐
+│  草稿   │ ──────────► │   待审核     │
+│ (draft) │ ◄────────── │(pending_review)│
+└─────────┘    撤回/退回  └──────┬───────┘
+                                │
+                    ┌───────────┼───────────┐
+                    │ 审批通过  │ 审批拒绝  │
+                    ▼           │           ▼
+              ┌───────────┐     │     ┌───────────┐
+              │  已批准   │     │     │  已拒绝   │
+              │(approved) │     │     │(rejected) │
+              └─────┬─────┘     │     └─────┬─────┘
+                    │           │           │
+                    │ 发送客户  │           │ 退回修改
+                    ▼           │           │
+              ┌───────────┐     │           │
+              │  已发送   │◄────┴───────────┘
+              │  (sent)   │
+              └───────────┘
+```
+
+### 状态说明
+
+| 状态 | 代码 | 说明 |
+|------|------|------|
+| 草稿 | draft | 新创建或被退回的报价单 |
+| 待审核 | pending_review | 已提交等待审批 |
+| 已批准 | approved | 审批通过，可发送给客户 |
+| 已拒绝 | rejected | 审批未通过 |
+| 已发送 | sent | 已发送给客户（终态） |
+| 已过期 | expired | 报价单已过有效期（终态） |
+
+### 审批动作
+
+| 动作 | 代码 | 源状态 | 目标状态 |
+|------|------|--------|----------|
+| 提交审核 | submit | draft | pending_review |
+| 审批通过 | approve | pending_review | approved |
+| 拒绝 | reject | pending_review | rejected |
+| 退回修改 | revise | pending_review/approved/rejected | draft |
+| 发送客户 | send | approved | sent |
+| 撤回 | withdraw | pending_review | draft |
 
 ---
 

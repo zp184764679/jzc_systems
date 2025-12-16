@@ -26,7 +26,7 @@ export default function Dashboard() {
     setLoading(true)
     try {
       // Fetch stock summary
-      const stockRes = await axios.get(`${API_BASE}/api/inventory/stock?page_size=1000`)
+      const stockRes = await axios.get(`${API_BASE}/inventory/stock?page_size=1000`)
       const stockData = stockRes.data.items || []
 
       // Calculate stats
@@ -35,7 +35,7 @@ export default function Dashboard() {
       const lowStockItems = stockData.filter(item => item.qty > 0 && item.qty < 10).slice(0, 5)
 
       // Fetch recent transactions
-      const txRes = await axios.get(`${API_BASE}/api/inventory/tx?page_size=10`)
+      const txRes = await axios.get(`${API_BASE}/inventory/tx?page_size=10`)
       const recentTransactions = txRes.data.items || []
 
       // Calculate today's in/out

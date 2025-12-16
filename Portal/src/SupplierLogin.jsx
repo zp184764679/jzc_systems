@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { useAuth } from './contexts/AuthContext'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
 const PROCUREMENT_URL = import.meta.env.VITE_PROCUREMENT_URL || '/procurement'
 
 function SupplierLogin() {
+  const { supplierLogin, getToken } = useAuth()
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -17,26 +18,9 @@ function SupplierLogin() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/supplier-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || '登录失败')
-      }
-
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-
-      const token = data.token
+      await supplierLogin(formData.username, formData.password)
+      const token = getToken()
       window.location.href = `${PROCUREMENT_URL}?token=` + encodeURIComponent(token)
-
     } catch (err) {
       setError(err.message)
     } finally {
@@ -202,4 +186,3 @@ function SupplierLogin() {
 }
 
 export default SupplierLogin
-SUPPEOF'

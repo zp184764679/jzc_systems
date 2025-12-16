@@ -142,11 +142,14 @@ def get_current_user():
         # Try to get from Authorization header
         auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
+            parts = auth_header.split(' ')
+            if len(parts) != 2:
+                return jsonify({'error': '无效的认证头格式'}), 401
+            token = parts[1]
             try:
                 payload = verify_token(token)
                 user_id = payload.get('user_id')
-            except:
+            except Exception:
                 return jsonify({'error': '未授权'}), 401
         else:
             return jsonify({'error': '未授权'}), 401
@@ -184,11 +187,14 @@ def require_admin(f):
             # Try to get from Authorization header
             auth_header = request.headers.get('Authorization')
             if auth_header and auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
+                parts = auth_header.split(' ')
+                if len(parts) != 2:
+                    return jsonify({'error': '无效的认证头格式'}), 401
+                token = parts[1]
                 try:
                     payload = verify_token(token)
                     user_id = payload.get('user_id')
-                except:
+                except Exception:
                     return jsonify({'error': '未授权'}), 401
             else:
                 return jsonify({'error': '未授权'}), 401

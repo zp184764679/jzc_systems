@@ -1,0 +1,209 @@
+import { useState, useEffect } from 'react'
+import { Modal, Form, Input, Select, DatePicker, Checkbox, InputNumber, message } from 'antd'
+import { taskAPI } from '../../services/api'
+import { EmployeeSelect } from '../Selectors'
+import dayjs from 'dayjs'
+
+const { Option } = Select
+const { TextArea } = Input
+
+export default function TaskFormModal({ open, onClose, onSuccess, projectId, task }) {
+  const [form] = Form.useForm()
+  const [loading, setLoading] = useState(false)
+  const isEdit = !!task
+
+  useEffect(() => {
+    if (open && task) {
+      // Populate form with task data when editing
+      form.setFieldsValue({
+        title: task.title,
+        description: task.description,
+        task_type: task.task_type,
+        status: task.status,
+        priority: task.priority,
+        assigned_to_id: task.assigned_to_id,
+        start_date: task.start_date ? dayjs(task.start_date) : null,
+        due_date: task.due_date ? dayjs(task.due_date) : null,
+        estimated_hours: task.estimated_hours,
+        is_milestone: task.is_milestone,
+      })
+    } else if (open) {
+      // Reset form when creating new task
+      form.resetFields()
+    }
+  }, [open, task, form])
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true)
+      const values = await form.validateFields()
+
+      const data = {
+        project_id: projectId,
+        title: values.title,
+        description: values.description,
+        task_type: values.task_type || 'general',
+        status: values.status || 'pending',
+        priority: values.priority || 'normal',
+        assigned_to_id: values.assigned_to_id,
+        start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : null,
+        due_date: values.due_date ? values.due_date.format('YYYY-MM-DD') : null,
+        estimated_hours: values.estimated_hours,
+        is_milestone: values.is_milestone || false,
+      }
+
+      if (isEdit) {
+        await taskAPI.updateTask(task.id, data)
+        message.success('任务更新成功')
+      } else {
+        await taskAPI.createTask(data)
+        message.success('任务创建成功')
+      }
+
+      form.resetFields()
+      if (onSuccess) onSuccess()
+      onClose()
+    } catch (error) {
+      if (error.response?.data?.error) {
+        message.error(error.response.data.error)
+      } else {
+        message.error(isEdit ? '任务更新失败' : '任务创建失败')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancel = () => {
+    form.resetFields()
+    onClose()
+  }
+
+  return (
+    <Modal
+      title={isEdit ? '编辑任务' : '创建任务'}
+      open={open}
+      onOk={handleSubmit}
+      onCancel={handleCancel}
+      confirmLoading={loading}
+      okText={isEdit ? '更新' : '创建'}
+      cancelText="取消"
+      width={600}
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item
+          name="title"
+          label="任务标题"
+          rules={[{ required: true, message: '请输入任务标题' }]}
+        >
+          <Input placeholder="例如: 完成产品设计稿" />
+        </Form.Item>
+
+        <Form.Item
+          name="description"
+          label="任务描述"
+        >
+          <TextArea rows={3} placeholder="详细描述任务内容和要求" />
+        </Form.Item>
+
+        <Form.Item
+          name="task_type"
+          label="任务类型"
+          initialValue="general"
+        >
+          <Select>
+            <Option value="general">常规任务</Option>
+            <Option value="design">设计</Option>
+            <Option value="development">开发</Option>
+            <Option value="testing">测试</Option>
+            <Option value="review">评审</Option>
+            <Option value="deployment">部署</Option>
+            <Option value="documentation">文档</Option>
+            <Option value="meeting">会议</Option>
+          </Select>
+        </Form.Item>
+
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Form.Item
+            name="status"
+            label="状态"
+            initialValue="pending"
+            style={{ flex: 1 }}
+          >
+            <Select>
+              <Option value="pending">待开始</Option>
+              <Option value="in_progress">进行中</Option>
+              <Option value="completed">已完成</Option>
+              <Option value="cancelled">已取消</Option>
+              <Option value="blocked">受阻</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="priority"
+            label="优先级"
+            initialValue="normal"
+            style={{ flex: 1 }}
+          >
+            <Select>
+              <Option value="low">低</Option>
+              <Option value="normal">普通</Option>
+              <Option value="high">高</Option>
+              <Option value="urgent">紧急</Option>
+            </Select>
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          name="assigned_to_id"
+          label="负责人"
+        >
+          <EmployeeSelect placeholder="搜索并选择负责人" />
+        </Form.Item>
+
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Form.Item
+            name="start_date"
+            label="开始日期"
+            style={{ flex: 1 }}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item
+            name="due_date"
+            label="截止日期"
+            style={{ flex: 1 }}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          name="estimated_hours"
+          label="预计工时（小时）"
+        >
+          <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item
+          name="is_milestone"
+          valuePropName="checked"
+        >
+          <Checkbox>标记为里程碑任务</Checkbox>
+        </Form.Item>
+
+        <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 4, marginTop: 16 }}>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            提示：
+            <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+              <li>里程碑任务通常是项目的关键节点</li>
+              <li>建议为任务设置合理的截止日期，便于进度跟踪</li>
+              <li>优先级高的任务会在列表中优先显示</li>
+            </ul>
+          </div>
+        </div>
+      </Form>
+    </Modal>
+  )
+}

@@ -12,7 +12,7 @@ from .. import db
 
 
 class Customer(db.Model):
-    __tablename__ = "customers"
+    __tablename__ = "crm_customers"
 
     # ========== 主键 ==========
     id = db.Column(db.Integer, primary_key=True)
@@ -24,6 +24,12 @@ class Customer(db.Model):
     code = db.Column(db.String(64), index=True, nullable=True)                  # 客户代码
     short_name = db.Column(db.String(128), index=True, nullable=True)           # 客户简称
     name = db.Column(db.String(255), index=True, nullable=True)                 # 客户全称
+
+    # ========== 客户分级 ==========
+    grade = db.Column(db.String(32), default='regular', index=True)             # 客户等级: vip/gold/silver/regular
+    grade_score = db.Column(db.Integer, default=0)                              # 评分（用于自动分级）
+    grade_updated_at = db.Column(db.DateTime, nullable=True)                    # 等级更新时间
+    is_key_account = db.Column(db.Boolean, default=False)                       # 是否重点客户
 
     currency_default = db.Column(db.String(16), nullable=True)                  # 默认币种
     tax_points = db.Column(db.Integer, nullable=True)                           # 含税点数（>=0）
@@ -49,6 +55,13 @@ class Customer(db.Model):
     sample_dev_desc = db.Column(db.String(512), nullable=True)                  # 样品和开发情况
     has_price_drop_contact = db.Column(db.Boolean, default=False, nullable=False)  # 是否有降价联系
 
+    # ========== 数据权限控制 ==========
+    owner_id = db.Column(db.Integer, index=True, nullable=True)                    # 负责人ID（业务员）
+    owner_name = db.Column(db.String(64), nullable=True)                           # 负责人姓名
+    department_id = db.Column(db.Integer, index=True, nullable=True)               # 所属部门ID
+    department_name = db.Column(db.String(128), nullable=True)                     # 所属部门名称
+    created_by = db.Column(db.Integer, nullable=True)                              # 创建人ID
+
     # ========== 审计 ==========
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True, nullable=False)
     updated_at = db.Column(
@@ -71,6 +84,10 @@ class Customer(db.Model):
             "code": self.code or "",
             "short_name": self.short_name or "",
             "name": self.name or "",
+            "grade": self.grade or "regular",
+            "grade_score": self.grade_score or 0,
+            "grade_updated_at": (self.grade_updated_at.isoformat() if self.grade_updated_at else None),
+            "is_key_account": bool(self.is_key_account),
             "currency_default": self.currency_default or "",
             "tax_points": self.tax_points,
             "settlement_cycle_days": self.settlement_cycle_days,
@@ -88,6 +105,12 @@ class Customer(db.Model):
             "order_status_desc": self.order_status_desc or "",
             "sample_dev_desc": self.sample_dev_desc or "",
             "has_price_drop_contact": bool(self.has_price_drop_contact),
+
+            "owner_id": self.owner_id,
+            "owner_name": self.owner_name or "",
+            "department_id": self.department_id,
+            "department_name": self.department_name or "",
+            "created_by": self.created_by,
 
             "created_at": (self.created_at.isoformat() if self.created_at else None),
             "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
@@ -122,6 +145,9 @@ class Customer(db.Model):
             code=data.get("code"),
             short_name=data.get("short_name"),
             name=data.get("name"),
+            grade=data.get("grade", "regular"),
+            grade_score=data.get("grade_score", 0),
+            is_key_account=bool(data.get("is_key_account", False)),
             currency_default=data.get("currency_default"),
             tax_points=data.get("tax_points"),
             settlement_cycle_days=data.get("settlement_cycle_days"),
@@ -146,7 +172,8 @@ class Customer(db.Model):
         基于 dict 局部更新（未提交）。
         """
         for key in [
-            "code", "short_name", "name", "currency_default", "tax_points",
+            "code", "short_name", "name", "grade", "grade_score",
+            "currency_default", "tax_points",
             "settlement_cycle_days", "settlement_method", "statement_day",
             "address", "remark", "shipping_method", "order_method",
             "delivery_requirements", "delivery_address", "order_status_desc",
@@ -160,6 +187,13 @@ class Customer(db.Model):
 
         if "has_price_drop_contact" in data:
             self.has_price_drop_contact = bool(data.get("has_price_drop_contact"))
+
+        if "is_key_account" in data:
+            self.is_key_account = bool(data.get("is_key_account"))
+
+        # Update grade timestamp if grade changed
+        if "grade" in data and data.get("grade") != self.grade:
+            self.grade_updated_at = datetime.utcnow()
 
         if "contacts" in data:
             self.contacts = self._normalize_contacts(data.get("contacts"))

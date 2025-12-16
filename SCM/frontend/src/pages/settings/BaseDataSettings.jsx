@@ -16,7 +16,7 @@ function BaseDataTable({ title, endpoint, columns, extraFields = [] }) {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API_BASE}/api/base/${endpoint}?active_only=false`)
+      const res = await axios.get(`${API_BASE}/base/${endpoint}?active_only=false`)
       setData(res.data.data || [])
     } catch (err) {
       message.error('获取数据失败')
@@ -43,7 +43,7 @@ function BaseDataTable({ title, endpoint, columns, extraFields = [] }) {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API_BASE}/api/base/${endpoint}/${id}`)
+      await axios.delete(`${API_BASE}/base/${endpoint}/${id}`)
       message.success('已禁用')
       fetchData()
     } catch (err) {
@@ -55,10 +55,10 @@ function BaseDataTable({ title, endpoint, columns, extraFields = [] }) {
     try {
       const values = await form.validateFields()
       if (editingItem) {
-        await axios.put(`${API_BASE}/api/base/${endpoint}/${editingItem.id}`, values)
+        await axios.put(`${API_BASE}/base/${endpoint}/${editingItem.id}`, values)
         message.success('更新成功')
       } else {
-        await axios.post(`${API_BASE}/api/base/${endpoint}`, values)
+        await axios.post(`${API_BASE}/base/${endpoint}`, values)
         message.success('创建成功')
       }
       setModalVisible(false)
@@ -165,7 +165,7 @@ function WarehouseBinsTable() {
   const [locations, setLocations] = useState([])
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/base/locations`)
+    axios.get(`${API_BASE}/base/locations`)
       .then(res => setLocations(res.data.data || []))
       .catch(() => {})
   }, [])

@@ -14,7 +14,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 从环境变量获取配置 - 必须与 shared/auth/jwt_utils.py 保持一致
-JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'jzchardware-sso-secret-key-change-in-production')
+# 开发环境默认密钥必须一致: jzc-dev-shared-secret-key-2025
+JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'jzc-dev-shared-secret-key-2025')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', 24))
 

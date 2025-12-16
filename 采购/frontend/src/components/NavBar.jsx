@@ -25,6 +25,10 @@ export default function NavBar() {
     { label: "填写价格", path: "/fill-price" },
     { label: "管理员审批", path: "/admin-approval" },
     { label: "发票管理", path: "/invoices" },
+    { label: "采购合同", path: "/contracts" },
+    { label: "采购预算", path: "/budgets" },
+    { label: "付款管理", path: "/payments" },
+    { label: "供应商评估", path: "/supplier-evaluation" },
   ];
 
   // 角色显示

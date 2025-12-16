@@ -71,5 +71,5 @@ def check_hr_health():
     try:
         response = requests.get(f"{get_hr_base_url()}/api/employees/stats", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False

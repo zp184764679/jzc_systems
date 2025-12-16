@@ -1,0 +1,220 @@
+# JZC Systems - Nginx 配置模板
+# 复制到 /etc/nginx/conf.d/jzc.conf 并根据需要修改
+
+# 上游服务定义
+upstream portal-backend {
+    server 127.0.0.1:3002;
+}
+
+upstream hr-backend {
+    server 127.0.0.1:8003;
+}
+
+upstream account-backend {
+    server 127.0.0.1:8004;
+}
+
+upstream quotation-backend {
+    server 127.0.0.1:8001;
+}
+
+upstream caigou-backend {
+    server 127.0.0.1:5001;
+}
+
+upstream shm-backend {
+    server 127.0.0.1:8006;
+}
+
+upstream crm-backend {
+    server 127.0.0.1:8002;
+}
+
+upstream scm-backend {
+    server 127.0.0.1:8005;
+}
+
+upstream eam-backend {
+    server 127.0.0.1:8008;
+}
+
+upstream mes-backend {
+    server 127.0.0.1:8007;
+}
+
+server {
+    listen 8888 ssl;
+    server_name jzchardware.cn;
+
+    # SSL 证书配置
+    ssl_certificate /etc/letsencrypt/live/jzchardware.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/jzchardware.cn/privkey.pem;
+
+    # SSL 安全配置
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+
+    # 根目录
+    root /www/jzc_systems;
+
+    # ==================== Portal (根路径) ====================
+    location / {
+        root /www/jzc_systems/Portal/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://portal-backend/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== HR 系统 ====================
+    location /hr/ {
+        alias /www/jzc_systems/HR/frontend/dist/;
+        try_files $uri $uri/ /hr/index.html;
+    }
+
+    location /hr/api/ {
+        rewrite ^/hr/api/(.*)$ /$1 break;
+        proxy_pass http://hr-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== Account 系统 ====================
+    location /account/ {
+        alias /www/jzc_systems/account/frontend/dist/;
+        try_files $uri $uri/ /account/index.html;
+    }
+
+    location /account/api/ {
+        rewrite ^/account/api/(.*)$ /$1 break;
+        proxy_pass http://account-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== 报价系统 ====================
+    location /quotation/ {
+        alias /www/jzc_systems/报价/frontend/dist/;
+        try_files $uri $uri/ /quotation/index.html;
+    }
+
+    location /quotation/api/ {
+        rewrite ^/quotation/api/(.*)$ /$1 break;
+        proxy_pass http://quotation-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== 采购系统 ====================
+    location /caigou/ {
+        alias /www/jzc_systems/采购/frontend/dist/;
+        try_files $uri $uri/ /caigou/index.html;
+    }
+
+    location /caigou/api/ {
+        rewrite ^/caigou/api/(.*)$ /$1 break;
+        proxy_pass http://caigou-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== SHM 出货系统 ====================
+    location /shm/ {
+        alias /www/jzc_systems/SHM/frontend/dist/;
+        try_files $uri $uri/ /shm/index.html;
+    }
+
+    location /shm/api/ {
+        rewrite ^/shm/api/(.*)$ /$1 break;
+        proxy_pass http://shm-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== CRM 客户管理系统 ====================
+    location /crm/ {
+        alias /www/jzc_systems/CRM/frontend/dist/;
+        try_files $uri $uri/ /crm/index.html;
+    }
+
+    location /crm/api/ {
+        rewrite ^/crm/api/(.*)$ /$1 break;
+        proxy_pass http://crm-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== SCM 仓库管理系统 ====================
+    location /scm/ {
+        alias /www/jzc_systems/SCM/frontend/dist/;
+        try_files $uri $uri/ /scm/index.html;
+    }
+
+    location /scm/api/ {
+        rewrite ^/scm/api/(.*)$ /$1 break;
+        proxy_pass http://scm-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== EAM 设备管理系统 ====================
+    location /eam/ {
+        alias /www/jzc_systems/EAM/frontend/dist/;
+        try_files $uri $uri/ /eam/index.html;
+    }
+
+    location /eam/api/ {
+        rewrite ^/eam/api/(.*)$ /$1 break;
+        proxy_pass http://eam-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== MES 制造执行系统 ====================
+    location /mes/ {
+        alias /www/jzc_systems/MES/frontend/dist/;
+        try_files $uri $uri/ /mes/index.html;
+    }
+
+    location /mes/api/ {
+        rewrite ^/mes/api/(.*)$ /$1 break;
+        proxy_pass http://mes-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== 健康检查 ====================
+    location /health {
+        proxy_pass http://portal-backend/health;
+    }
+
+    # 错误页面
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}

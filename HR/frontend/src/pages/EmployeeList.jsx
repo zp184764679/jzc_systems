@@ -206,6 +206,7 @@ const EmployeeList = () => {
       }
     } catch (error) {
       console.error('Validation failed:', error);
+      message.error('表单验证失败，请检查填写的内容');
     }
   };
 

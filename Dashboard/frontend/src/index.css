@@ -1,0 +1,114 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Timeline customization */
+.react-calendar-timeline {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-calendar-timeline .rct-header-root {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.react-calendar-timeline .rct-sidebar {
+  background: #fafafa;
+  border-right: 1px solid #f0f0f0;
+}
+
+.react-calendar-timeline .rct-sidebar-row {
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* Timeline item status colors */
+.timeline-item-pending {
+  background-color: #d9d9d9 !important;
+  border-color: #bfbfbf !important;
+}
+
+.timeline-item-in_progress {
+  background-color: #1890ff !important;
+  border-color: #096dd9 !important;
+}
+
+.timeline-item-completed {
+  background-color: #52c41a !important;
+  border-color: #389e0d !important;
+}
+
+.timeline-item-delayed {
+  background-color: #ff4d4f !important;
+  border-color: #cf1322 !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* KPI Card animations */
+.kpi-card {
+  transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Chart container */
+.chart-container {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Timeline marker - current time */
+.rct-cursor-line {
+  background-color: #ff4d4f !important;
+  width: 2px !important;
+}
+
+/* Milestone marker */
+.timeline-milestone {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  transform: rotate(45deg);
+}

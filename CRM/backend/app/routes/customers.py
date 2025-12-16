@@ -4,12 +4,17 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 import json, traceback
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 from sqlalchemy import or_, case
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError, DataError, ProgrammingError
 
 from .. import db
 from ..models.customer import Customer
+from ..services.data_permission import (
+    crm_auth, crm_optional_auth, crm_admin_required,
+    get_current_user, apply_data_permission_filter,
+    can_access_record, can_edit_record, can_delete_record
+)
 
 bp = Blueprint("customers", __name__, url_prefix="/api/customers")
 
@@ -224,12 +229,26 @@ def _sanitize_for_model(data: Dict[str, Any]) -> Dict[str, Any]:
 
 # ---------- list (GET) ----------
 @bp.get("")
+@crm_optional_auth
 def list_customers():
     page = _i(request.args.get("page"), 1) or 1
     page_size = max(1, min(_i(request.args.get("page_size"), 20) or 20, 200))
     keyword = _s(request.args.get("keyword"))
+    # 数据权限筛选参数
+    owner_only = _b(request.args.get("owner_only"))  # 只看自己负责的客户
+    department_id = _i(request.args.get("department_id"))  # 按部门筛选
 
     q = Customer.query
+
+    # 应用数据权限过滤（如果用户已登录且选择只看自己的）
+    current_user = get_current_user()
+    if owner_only and current_user:
+        q = apply_data_permission_filter(q, Customer, current_user)
+
+    # 按部门筛选
+    if department_id:
+        q = q.filter(Customer.department_id == department_id)
+
     if keyword:
         like = f"%{keyword}%"
         q = q.filter(or_(
@@ -292,6 +311,7 @@ def get_customer(cid: int):
 
 # ---------- create / bulk upsert（安全导入：逐条 savepoint + flush） ----------
 @bp.post("")
+@crm_optional_auth
 def create_or_import_customers():
     payload = request.get_json(silent=True)
     if payload is None:
@@ -408,6 +428,16 @@ def create_or_import_customers():
                 else:
                     obj = Customer()
                     _apply_to_model(obj, d)
+                    # 设置创建者和负责人信息
+                    current_user = get_current_user()
+                    if current_user:
+                        obj.created_by = current_user.get('user_id')
+                        # 如果没有指定负责人，默认设置为创建者
+                        if obj.owner_id is None:
+                            obj.owner_id = current_user.get('user_id')
+                            obj.owner_name = current_user.get('full_name') or current_user.get('username')
+                            obj.department_id = current_user.get('department_id')
+                            obj.department_name = current_user.get('department_name')
                     db.session.add(obj)
                     db.session.flush()
                     created.append(obj)
@@ -465,10 +495,16 @@ def create_or_import_customers():
 # ---------- update ----------
 @bp.put("/<int:cid>")
 @bp.patch("/<int:cid>")
+@crm_optional_auth
 def update_customer(cid: int):
     c = Customer.query.get(cid)
     if not c:
         return jsonify({"success": False, "error": "Not Found"}), 404
+
+    # 检查编辑权限
+    current_user = get_current_user()
+    if current_user and not can_edit_record(c, current_user):
+        return jsonify({"success": False, "error": "没有编辑权限", "code": "PERMISSION_DENIED"}), 403
 
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict):
@@ -476,6 +512,15 @@ def update_customer(cid: int):
 
     try:
         _apply_to_model(c, _clip_to_column_lengths(_sanitize_for_model(_coerce_row(data))))
+
+        # 更新负责人信息（如果提供）
+        if "owner_id" in data:
+            c.owner_id = _i(data.get("owner_id"))
+            c.owner_name = _s(data.get("owner_name")) or None
+        if "department_id" in data:
+            c.department_id = _i(data.get("department_id"))
+            c.department_name = _s(data.get("department_name")) or None
+
         db.session.flush()
         db.session.commit()
         return jsonify({"success": True, "data": c.to_dict()})
@@ -492,10 +537,17 @@ def update_customer(cid: int):
 
 # ---------- delete ----------
 @bp.delete("/<int:cid>")
+@crm_optional_auth
 def delete_customer(cid: int):
     c = Customer.query.get(cid)
     if not c:
         return jsonify({"success": False, "error": "Not Found"}), 404
+
+    # 检查删除权限
+    current_user = get_current_user()
+    if current_user and not can_delete_record(c, current_user):
+        return jsonify({"success": False, "error": "没有删除权限", "code": "PERMISSION_DENIED"}), 403
+
     try:
         db.session.delete(c)
         db.session.commit()
@@ -647,5 +699,161 @@ def match_customers_ocr():
         "data": {
             "matches": results,
             "best_match": best_overall
+        }
+    })
+
+
+# ---------- 客户分配/转移 ----------
+@bp.post("/assign")
+@crm_auth
+@crm_admin_required
+def assign_customers():
+    """
+    批量分配客户给指定负责人
+    仅管理员可操作
+
+    Request body:
+    {
+        "customer_ids": [1, 2, 3],
+        "owner_id": 123,
+        "owner_name": "张三",
+        "department_id": 1,
+        "department_name": "销售部"
+    }
+    """
+    data = request.get_json(silent=True) or {}
+
+    customer_ids = data.get("customer_ids", [])
+    owner_id = _i(data.get("owner_id"))
+    owner_name = _s(data.get("owner_name"))
+    department_id = _i(data.get("department_id"))
+    department_name = _s(data.get("department_name"))
+
+    if not customer_ids:
+        return jsonify({"success": False, "error": "请选择要分配的客户"}), 400
+
+    if owner_id is None:
+        return jsonify({"success": False, "error": "请指定负责人"}), 400
+
+    try:
+        updated_count = 0
+        for cid in customer_ids:
+            c = Customer.query.get(cid)
+            if c:
+                c.owner_id = owner_id
+                c.owner_name = owner_name or None
+                if department_id is not None:
+                    c.department_id = department_id
+                    c.department_name = department_name or None
+                updated_count += 1
+
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "data": {
+                "updated_count": updated_count
+            }
+        })
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------- 获取我的客户 ----------
+@bp.get("/my")
+@crm_auth
+def get_my_customers():
+    """
+    获取当前用户负责的客户列表
+    """
+    page = _i(request.args.get("page"), 1) or 1
+    page_size = max(1, min(_i(request.args.get("page_size"), 20) or 20, 200))
+    keyword = _s(request.args.get("keyword"))
+
+    current_user = get_current_user()
+    user_id = current_user.get('user_id')
+
+    q = Customer.query.filter(Customer.owner_id == user_id)
+
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.filter(or_(
+            Customer.code.like(like),
+            Customer.short_name.like(like),
+            Customer.name.like(like),
+        ))
+
+    total = q.count()
+    items = q.order_by(case((Customer.seq_no.is_(None), 1), else_=0), Customer.seq_no.asc(), Customer.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "items": [c.to_dict() for c in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    })
+
+
+# ---------- 获取部门客户 ----------
+@bp.get("/department/<int:dept_id>")
+@crm_auth
+def get_department_customers(dept_id: int):
+    """
+    获取指定部门的客户列表
+    """
+    page = _i(request.args.get("page"), 1) or 1
+    page_size = max(1, min(_i(request.args.get("page_size"), 20) or 20, 200))
+    keyword = _s(request.args.get("keyword"))
+
+    q = Customer.query.filter(Customer.department_id == dept_id)
+
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.filter(or_(
+            Customer.code.like(like),
+            Customer.short_name.like(like),
+            Customer.name.like(like),
+        ))
+
+    total = q.count()
+    items = q.order_by(case((Customer.seq_no.is_(None), 1), else_=0), Customer.seq_no.asc(), Customer.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "items": [c.to_dict() for c in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    })
+
+
+# ---------- 获取数据权限配置信息 ----------
+@bp.get("/permission-info")
+@crm_auth
+def get_permission_info():
+    """
+    获取当前用户的数据权限信息
+    """
+    from ..services.data_permission import get_data_access_level, DataAccessLevel
+
+    current_user = get_current_user()
+    access_level = get_data_access_level(current_user)
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "user_id": current_user.get('user_id'),
+            "username": current_user.get('username'),
+            "role": current_user.get('role'),
+            "department_id": current_user.get('department_id'),
+            "department_name": current_user.get('department_name'),
+            "access_level": access_level,
+            "can_see_all": access_level == DataAccessLevel.ALL,
+            "can_see_department": access_level in (DataAccessLevel.DEPARTMENT, DataAccessLevel.ALL),
         }
     })

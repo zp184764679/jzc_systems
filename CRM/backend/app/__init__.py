@@ -20,9 +20,10 @@ def create_app():
     app = Flask(__name__)
     app.url_map.strict_slashes = False
 
-    # Configure logging
-    logging.basicConfig(level=logging.DEBUG)
-    app.logger.setLevel(logging.DEBUG)
+    # Configure logging - use INFO level by default
+    log_level = logging.DEBUG if os.getenv('FLASK_DEBUG', 'false').lower() == 'true' else logging.INFO
+    logging.basicConfig(level=log_level)
+    app.logger.setLevel(log_level)
 
     # Database configuration - support both MySQL and SQLite
     database_url = os.getenv("DATABASE_URL", "")
@@ -79,7 +80,7 @@ def create_app():
             db.session.remove()
 
     # Import models
-    from .models import customer, core, base_data
+    from .models import customer, core, base_data, sales, contract
 
     # Create database tables if using SQLite (development mode)
     if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
@@ -89,23 +90,34 @@ def create_app():
 
     # Register blueprints
     from .routes import customers, orders, integration, base_data as base_data_routes, auth
+    from .routes.opportunities import opportunities_bp
+    from .routes.follow_ups import follow_ups_bp
+    from .routes.contracts import contracts_bp
+    from .routes.customer_grades import customer_grades_bp
+    from .routes.customer_reports import bp as customer_reports_bp
+
     app.register_blueprint(customers.bp)
     app.register_blueprint(orders.bp)
     app.register_blueprint(integration.bp)
     app.register_blueprint(base_data_routes.bp)
     app.register_blueprint(auth.bp)
+    app.register_blueprint(opportunities_bp)
+    app.register_blueprint(follow_ups_bp)
+    app.register_blueprint(contracts_bp)
+    app.register_blueprint(customer_grades_bp)
+    app.register_blueprint(customer_reports_bp)
 
     # Health check route
     @app.get("/ping")
     def ping():
         return {"message": "pong", "app": "CRM"}
 
-    @app.get("/api/health")
+    @app.get("/health")
     def health():
         try:
             # Test database connection
             db.session.execute(db.text("SELECT 1"))
-            return jsonify({"status": "healthy", "database": "connected"})
+            return jsonify({"status": "healthy", "service": "CRM", "database": "connected"})
         except Exception as e:
             return jsonify({"status": "unhealthy", "error": str(e)}), 500
 

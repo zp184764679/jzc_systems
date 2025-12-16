@@ -258,3 +258,239 @@ body {
 .footer p {
   margin: 0;
 }
+
+/* ==================== 工序管理样式 ==================== */
+
+.process-management h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.sub-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.sub-tabs button {
+  padding: 10px 24px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.sub-tabs button:hover {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.sub-tabs button.active {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.section-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.btn-danger {
+  background: #ef5350 !important;
+  margin-left: 5px;
+}
+
+.btn-danger:hover {
+  background: #e53935 !important;
+}
+
+.btn-success {
+  background: #66bb6a !important;
+  margin-left: 5px;
+}
+
+.btn-success:hover {
+  background: #4caf50 !important;
+}
+
+.btn-warning {
+  background: #ffa726 !important;
+}
+
+.btn-warning:hover {
+  background: #ff9800 !important;
+}
+
+.btn-secondary {
+  background: #999;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 10px;
+}
+
+.btn-secondary:hover {
+  background: #777;
+}
+
+.badge-default {
+  display: inline-block;
+  background: #2196f3;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Modal 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content.modal-large {
+  max-width: 700px;
+}
+
+.modal-content h3 {
+  margin: 0 0 20px;
+  color: #333;
+  font-size: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #ff6b6b;
+  box-shadow: 0 0 0 2px rgba(255,107,107,0.2);
+}
+
+.form-group label input[type="checkbox"] {
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+/* 工艺路线步骤样式 */
+.route-steps-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.route-steps-section h4 {
+  margin: 0 0 15px;
+  color: #333;
+}
+
+.route-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.route-step .step-no {
+  font-weight: bold;
+  color: #ff6b6b;
+  min-width: 60px;
+}
+
+.route-step select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.route-step input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.route-step input[name="step_name"] {
+  width: 150px;
+}
+
+#route-steps-container {
+  margin-bottom: 10px;
+}
+
+/* 数据表格操作按钮间距 */
+.data-table td button {
+  margin-right: 5px;
+}
+
+.data-table td button:last-child {
+  margin-right: 0;
+}

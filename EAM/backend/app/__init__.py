@@ -20,9 +20,10 @@ def create_app():
     app = Flask(__name__)
     app.url_map.strict_slashes = False
 
-    # Configure logging
-    logging.basicConfig(level=logging.DEBUG)
-    app.logger.setLevel(logging.DEBUG)
+    # Configure logging - use INFO level by default
+    log_level = logging.DEBUG if os.getenv('FLASK_DEBUG', 'false').lower() == 'true' else logging.INFO
+    logging.basicConfig(level=log_level)
+    app.logger.setLevel(log_level)
 
     # Database configuration - support both MySQL and SQLite
     database_url = os.getenv("DATABASE_URL", "")
@@ -56,12 +57,13 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # CORS configuration - allow frontend on port 7200
+    # CORS configuration - use environment variable or defaults
+    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
     CORS(app,
-         resources={r"/api/*": {"origins": ["http://localhost:7200", "http://127.0.0.1:7200"]}},
+         resources={r"/api/*": {"origins": cors_origins}},
          supports_credentials=True,
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-         allow_headers=["Content-Type", "Authorization"])
+         allow_headers=["Content-Type", "Authorization", "User-ID", "User-Role"])
 
     @app.before_request
     def handle_options():
@@ -78,7 +80,7 @@ def create_app():
             db.session.remove()
 
     # Import models
-    from .models import machine, base_data
+    from .models import machine, base_data, maintenance, spare_parts, capacity
 
     # Create database tables if using SQLite (development mode)
     if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
@@ -90,21 +92,27 @@ def create_app():
     from .routes import machines as machines_routes
     from .routes import integration as integration_routes
     from .routes import base_data as base_data_routes
+    from .routes import maintenance as maintenance_routes
+    from .routes import spare_parts as spare_parts_routes
+    from .routes import capacity as capacity_routes
     app.register_blueprint(machines_routes.bp)
     app.register_blueprint(integration_routes.bp)
     app.register_blueprint(base_data_routes.bp)
+    app.register_blueprint(maintenance_routes.bp)
+    app.register_blueprint(spare_parts_routes.bp)
+    app.register_blueprint(capacity_routes.bp)
 
     # Health check route
     @app.get("/ping")
     def ping():
         return {"message": "pong", "app": "EAM"}
 
-    @app.get("/api/health")
+    @app.get("/health")
     def health():
         try:
             # Test database connection
             db.session.execute(db.text("SELECT 1"))
-            return jsonify({"status": "healthy", "database": "connected"})
+            return jsonify({"status": "healthy", "service": "EAM", "database": "connected"})
         except Exception as e:
             return jsonify({"status": "unhealthy", "error": str(e)}), 500
 

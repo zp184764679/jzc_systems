@@ -35,8 +35,11 @@ import {
   ReloadOutlined,
   MoreOutlined,
   ClearOutlined,
+  StarOutlined,
+  StarFilled,
+  CrownOutlined,
 } from '@ant-design/icons';
-import { customerAPI, baseDataAPI } from '../services/api';
+import { customerAPI, baseDataAPI, customerGradeAPI } from '../services/api';
 
 const { Search } = Input;
 const { TextArea } = Input;
@@ -60,6 +63,11 @@ const CustomerList = () => {
     current: 1,
     pageSize: 10,
   });
+
+  // Grade management state
+  const [gradeModalVisible, setGradeModalVisible] = useState(false);
+  const [selectedCustomerForGrade, setSelectedCustomerForGrade] = useState(null);
+  const [batchGradeModalVisible, setBatchGradeModalVisible] = useState(false);
 
   // Count active filters
   const activeFilterCount = Object.values(filters).filter(v => v !== undefined && v !== '' && v !== null).length;
@@ -98,6 +106,18 @@ const CustomerList = () => {
     queryFn: () => baseDataAPI.getCurrencies('', true),
   });
 
+  // Fetch grade config
+  const { data: gradeConfig } = useQuery({
+    queryKey: ['gradeConfig'],
+    queryFn: () => customerGradeAPI.getGradeConfig(),
+  });
+
+  // Fetch grade statistics
+  const { data: gradeStats, refetch: refetchGradeStats } = useQuery({
+    queryKey: ['gradeStatistics'],
+    queryFn: () => customerGradeAPI.getStatistics(),
+  });
+
   // Create customer mutation
   const createMutation = useMutation({
     mutationFn: customerAPI.createCustomer,
@@ -134,6 +154,36 @@ const CustomerList = () => {
     },
     onError: (error) => {
       message.error(error.message || '删除客户失败');
+    },
+  });
+
+  // Update customer grade mutation
+  const updateGradeMutation = useMutation({
+    mutationFn: ({ customerId, data }) => customerGradeAPI.updateCustomerGrade(customerId, data),
+    onSuccess: () => {
+      message.success('客户等级更新成功');
+      queryClient.invalidateQueries(['customers']);
+      refetchGradeStats();
+      setGradeModalVisible(false);
+      setSelectedCustomerForGrade(null);
+    },
+    onError: (error) => {
+      message.error(error.message || '更新等级失败');
+    },
+  });
+
+  // Batch update grade mutation
+  const batchUpdateGradeMutation = useMutation({
+    mutationFn: (data) => customerGradeAPI.batchUpdate(data),
+    onSuccess: (result) => {
+      message.success(result?.message || '批量更新成功');
+      queryClient.invalidateQueries(['customers']);
+      refetchGradeStats();
+      setBatchGradeModalVisible(false);
+      setSelectedRowKeys([]);
+    },
+    onError: (error) => {
+      message.error(error.message || '批量更新失败');
     },
   });
 
@@ -302,6 +352,58 @@ const CustomerList = () => {
     message.success('导出成功');
   };
 
+  // Grade config helper
+  const grades = gradeConfig?.grades || {
+    vip: { label: 'VIP客户', color: '#f5222d' },
+    gold: { label: '金牌客户', color: '#faad14' },
+    silver: { label: '银牌客户', color: '#1890ff' },
+    regular: { label: '普通客户', color: '#8c8c8c' },
+  };
+  const gradeOptions = gradeConfig?.grade_options || [
+    { value: 'vip', label: 'VIP客户', color: '#f5222d' },
+    { value: 'gold', label: '金牌客户', color: '#faad14' },
+    { value: 'silver', label: '银牌客户', color: '#1890ff' },
+    { value: 'regular', label: '普通客户', color: '#8c8c8c' },
+  ];
+
+  // Render grade tag
+  const renderGradeTag = (grade, isKeyAccount) => {
+    const gradeInfo = grades[grade] || grades.regular;
+    return (
+      <Space size={4}>
+        <Tag color={gradeInfo.color}>{gradeInfo.label}</Tag>
+        {isKeyAccount && (
+          <Tooltip title="重点客户">
+            <StarFilled style={{ color: '#faad14' }} />
+          </Tooltip>
+        )}
+      </Space>
+    );
+  };
+
+  // Show grade edit modal
+  const showGradeModal = (record) => {
+    setSelectedCustomerForGrade(record);
+    setGradeModalVisible(true);
+  };
+
+  // Handle grade update
+  const handleGradeUpdate = (values) => {
+    if (!selectedCustomerForGrade) return;
+    updateGradeMutation.mutate({
+      customerId: selectedCustomerForGrade.id,
+      data: values,
+    });
+  };
+
+  // Handle batch grade update
+  const handleBatchGradeUpdate = (values) => {
+    batchUpdateGradeMutation.mutate({
+      customer_ids: selectedRowKeys,
+      ...values,
+    });
+  };
+
   // Format contacts for display
   const formatContacts = (contacts) => {
     if (!contacts || contacts.length === 0) return '-';
@@ -360,6 +462,15 @@ const CustomerList = () => {
       key: 'name',
       width: 200,
       ellipsis: true,
+    },
+    {
+      title: '等级',
+      dataIndex: 'grade',
+      key: 'grade',
+      width: 130,
+      render: (grade, record) => renderGradeTag(grade, record.is_key_account),
+      filters: gradeOptions.map(g => ({ text: g.label, value: g.value })),
+      onFilter: (value, record) => record.grade === value,
     },
     {
       title: '币种',
@@ -439,7 +550,7 @@ const CustomerList = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 120,
+      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
@@ -457,6 +568,15 @@ const CustomerList = () => {
               icon={<EditOutlined />}
               onClick={() => showEditModal(record)}
               size="small"
+            />
+          </Tooltip>
+          <Tooltip title="设置等级">
+            <Button
+              type="link"
+              icon={<CrownOutlined />}
+              onClick={() => showGradeModal(record)}
+              size="small"
+              style={{ color: '#faad14' }}
             />
           </Tooltip>
           <Popconfirm
@@ -589,6 +709,25 @@ const CustomerList = () => {
                 </Row>
                 <Row gutter={16}>
                   <Col xs={24} sm={12} md={6}>
+                    <Form.Item name="grade" label="客户等级">
+                      <Select allowClear placeholder="选择等级">
+                        {gradeOptions.map(g => (
+                          <Option key={g.value} value={g.value}>
+                            <Tag color={g.color}>{g.label}</Tag>
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Form.Item name="is_key_account" label="重点客户">
+                      <Select allowClear placeholder="选择">
+                        <Option value={true}>是</Option>
+                        <Option value={false}>否</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
                     <Form.Item name="need_customs" label="是否报关">
                       <Select allowClear placeholder="选择">
                         <Option value={true}>是</Option>
@@ -644,6 +783,12 @@ const CustomerList = () => {
               {selectedRowKeys.length > 0 && (
                 <Space>
                   <span style={{ color: '#666' }}>已选 {selectedRowKeys.length} 项</span>
+                  <Button
+                    icon={<CrownOutlined />}
+                    onClick={() => setBatchGradeModalVisible(true)}
+                  >
+                    批量设置等级
+                  </Button>
                   <Button danger onClick={handleBatchDelete}>
                     批量删除
                   </Button>
@@ -668,12 +813,26 @@ const CustomerList = () => {
           </div>
 
           {/* Statistics Summary */}
-          <div style={{ display: 'flex', gap: 24, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ display: 'flex', gap: 24, padding: '12px 0', borderBottom: '1px solid #f0f0f0', flexWrap: 'wrap', alignItems: 'center' }}>
             <div>
               <span style={{ color: '#666' }}>共 </span>
               <span style={{ fontSize: 18, fontWeight: 600, color: '#1890ff' }}>{total}</span>
               <span style={{ color: '#666' }}> 个客户</span>
             </div>
+            {gradeStats && (
+              <Space size="middle" wrap>
+                {gradeStats.distribution?.map(item => (
+                  <Tag key={item.grade} color={item.color}>
+                    {item.label}: {item.count} ({item.percentage}%)
+                  </Tag>
+                ))}
+                {gradeStats.key_account_count > 0 && (
+                  <Tag color="gold" icon={<StarFilled />}>
+                    重点客户: {gradeStats.key_account_count}
+                  </Tag>
+                )}
+              </Space>
+            )}
             {activeFilterCount > 0 && (
               <div style={{ color: '#ff4d4f' }}>
                 <FilterOutlined /> 已启用 {activeFilterCount} 个筛选条件
@@ -997,6 +1156,107 @@ const CustomerList = () => {
               </Form.Item>
             </Col>
           </Row>
+        </Form>
+      </Modal>
+
+      {/* Grade Edit Modal */}
+      <Modal
+        title={
+          <Space>
+            <CrownOutlined style={{ color: '#faad14' }} />
+            设置客户等级 - {selectedCustomerForGrade?.short_name}
+          </Space>
+        }
+        open={gradeModalVisible}
+        onCancel={() => {
+          setGradeModalVisible(false);
+          setSelectedCustomerForGrade(null);
+        }}
+        footer={null}
+        width={500}
+      >
+        <Form
+          layout="vertical"
+          initialValues={{
+            grade: selectedCustomerForGrade?.grade || 'regular',
+            grade_score: selectedCustomerForGrade?.grade_score || 0,
+            is_key_account: selectedCustomerForGrade?.is_key_account || false,
+          }}
+          onFinish={handleGradeUpdate}
+          key={selectedCustomerForGrade?.id}
+        >
+          <Form.Item name="grade" label="客户等级">
+            <Select>
+              {gradeOptions.map(g => (
+                <Option key={g.value} value={g.value}>
+                  <Tag color={g.color}>{g.label}</Tag>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="grade_score" label="客户评分 (0-100)">
+            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item name="is_key_account" label="重点客户" valuePropName="checked">
+            <Switch checkedChildren={<StarFilled />} unCheckedChildren={<StarOutlined />} />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setGradeModalVisible(false)}>取消</Button>
+              <Button type="primary" htmlType="submit" loading={updateGradeMutation.isLoading}>
+                保存
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Batch Grade Update Modal */}
+      <Modal
+        title={
+          <Space>
+            <CrownOutlined style={{ color: '#faad14' }} />
+            批量设置等级 ({selectedRowKeys.length} 个客户)
+          </Space>
+        }
+        open={batchGradeModalVisible}
+        onCancel={() => setBatchGradeModalVisible(false)}
+        footer={null}
+        width={500}
+      >
+        <Form layout="vertical" onFinish={handleBatchGradeUpdate}>
+          <Form.Item name="grade" label="设置等级">
+            <Select allowClear placeholder="选择等级（不选则不修改）">
+              {gradeOptions.map(g => (
+                <Option key={g.value} value={g.value}>
+                  <Tag color={g.color}>{g.label}</Tag>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="is_key_account" label="设为重点客户">
+            <Select allowClear placeholder="选择（不选则不修改）">
+              <Option value={true}>
+                <Space><StarFilled style={{ color: '#faad14' }} /> 是</Space>
+              </Option>
+              <Option value={false}>
+                <Space><StarOutlined /> 否</Space>
+              </Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setBatchGradeModalVisible(false)}>取消</Button>
+              <Button type="primary" htmlType="submit" loading={batchUpdateGradeMutation.isLoading}>
+                批量更新
+              </Button>
+            </Space>
+          </Form.Item>
         </Form>
       </Modal>
     </div>

@@ -20,9 +20,10 @@ def create_app():
     app = Flask(__name__)
     app.url_map.strict_slashes = False
 
-    # Configure logging
-    logging.basicConfig(level=logging.DEBUG)
-    app.logger.setLevel(logging.DEBUG)
+    # Configure logging - use INFO level by default
+    log_level = logging.DEBUG if os.getenv('FLASK_DEBUG', 'false').lower() == 'true' else logging.INFO
+    logging.basicConfig(level=log_level)
+    app.logger.setLevel(log_level)
 
     # Database configuration - support both MySQL and SQLite
     database_url = os.getenv("DATABASE_URL", "")
@@ -82,7 +83,7 @@ def create_app():
             db.session.remove()
 
     # Import models
-    from .models import inventory, base_data, pending_shipment
+    from .models import inventory, base_data, pending_shipment, material, inbound, stocktake, transfer, batch_serial
 
     # Create database tables
     with app.app_context():
@@ -95,23 +96,37 @@ def create_app():
     from .routes import integration as integration_routes
     from .routes import base_data as base_data_routes
     from .routes import pending_shipment as pending_shipment_routes
+    from .routes.materials import materials_bp, categories_bp, warehouses_bp
+    from .routes.inbound import inbound_bp
+    from .routes.stocktake import stocktake_bp
+    from .routes.inventory_reports import inventory_reports_bp
+    from .routes.transfer import transfer_bp
+    from .routes.batch_serial import bp as batch_serial_bp
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(inventory_routes.bp)
     app.register_blueprint(integration_routes.bp)
     app.register_blueprint(base_data_routes.bp)
     app.register_blueprint(pending_shipment_routes.bp)
+    app.register_blueprint(materials_bp)
+    app.register_blueprint(categories_bp)
+    app.register_blueprint(warehouses_bp)
+    app.register_blueprint(inbound_bp)
+    app.register_blueprint(stocktake_bp)
+    app.register_blueprint(inventory_reports_bp)
+    app.register_blueprint(transfer_bp)
+    app.register_blueprint(batch_serial_bp)
 
     # Health check route
     @app.get("/ping")
     def ping():
         return {"message": "pong", "app": "SCM"}
 
-    @app.get("/api/health")
+    @app.get("/health")
     def health():
         try:
             # Test database connection
             db.session.execute(db.text("SELECT 1"))
-            return jsonify({"status": "healthy", "database": "connected"})
+            return jsonify({"status": "healthy", "service": "SCM", "database": "connected"})
         except Exception as e:
             return jsonify({"status": "unhealthy", "error": str(e)}), 500
 

@@ -2,7 +2,7 @@
 """
 报价模型 - 基于创怡兴报价公式
 """
-from sqlalchemy import Column, Integer, String, DECIMAL, Float, Text, DateTime, JSON, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, DECIMAL, Float, Text, DateTime, JSON, ForeignKey, Date, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from config.database import Base
@@ -16,6 +16,13 @@ class Quote(Base):
 
     # 报价单信息
     quote_number = Column(String(100), unique=True, index=True, nullable=False, comment="报价单号")
+
+    # ===== 版本管理字段 =====
+    version = Column(Integer, default=1, comment="版本号")
+    parent_quote_id = Column(Integer, ForeignKey("quotes.id"), nullable=True, comment="父版本报价ID")
+    root_quote_id = Column(Integer, nullable=True, index=True, comment="根版本报价ID（版本链起点）")
+    is_current_version = Column(Boolean, default=True, comment="是否当前版本")
+    version_note = Column(Text, comment="版本说明")
     drawing_id = Column(Integer, ForeignKey("drawings.id"), comment="关联图纸ID")
     product_id = Column(Integer, ForeignKey("products.id"), comment="关联产品ID")
     customer_name = Column(String(200), index=True, comment="客户名称")
@@ -69,8 +76,23 @@ class Quote(Base):
     details = Column(JSON, comment="报价明细（兼容旧版）")
 
     # 状态管理
-    status = Column(String(20), default="draft", comment="状态：draft, sent, approved, rejected")
+    status = Column(String(20), default="draft", comment="状态：draft/pending_review/approved/rejected/sent/expired")
     valid_until = Column(Date, comment="有效期至")
+
+    # 审批相关字段
+    submitted_at = Column(DateTime(timezone=True), comment="提交审核时间")
+    submitted_by = Column(Integer, comment="提交人ID")
+    submitted_by_name = Column(String(50), comment="提交人姓名")
+    approved_at = Column(DateTime(timezone=True), comment="审批时间")
+    approved_by = Column(Integer, comment="审批人ID")
+    approved_by_name = Column(String(50), comment="审批人姓名")
+    rejected_at = Column(DateTime(timezone=True), comment="拒绝时间")
+    rejected_by = Column(Integer, comment="拒绝人ID")
+    rejected_by_name = Column(String(50), comment="拒绝人姓名")
+    reject_reason = Column(Text, comment="拒绝原因")
+    sent_at = Column(DateTime(timezone=True), comment="发送给客户时间")
+    sent_by = Column(Integer, comment="发送人ID")
+    sent_by_name = Column(String(50), comment="发送人姓名")
 
     # 备注
     notes = Column(Text, comment="备注")
@@ -79,13 +101,17 @@ class Quote(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_by = Column(Integer, comment="创建人ID")
+    created_by_name = Column(String(50), comment="创建人姓名")
 
     # 关系
     product = relationship("Product", back_populates="quotes")
     processes = relationship("QuoteProcess", back_populates="quote", cascade="all, delete-orphan")
 
+    # 版本关系
+    parent_quote = relationship("Quote", remote_side=[id], backref="child_versions", foreign_keys=[parent_quote_id])
+
     def __repr__(self):
-        return f"<Quote(number={self.quote_number}, unit_price={self.unit_price})>"
+        return f"<Quote(number={self.quote_number}, version={self.version}, unit_price={self.unit_price})>"
 
 
 class QuoteItem(Base):

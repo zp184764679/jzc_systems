@@ -31,7 +31,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.types import String
 
 from .. import db
-from ..models.core import Order, OrderLine
+from ..models.core import Order, OrderLine, OrderApproval, OrderStatus, ApprovalAction, ORDER_STATUS_TRANSITIONS
 
 bp = Blueprint("orders", __name__, url_prefix="/api/orders")
 ORDER_BP_VERSION = "orders_bp v1.3"
@@ -436,7 +436,8 @@ def _paginate(q, page: int, page_size: int):
 
 # 供子模块复用的导出符号
 __all__ = [
-    "bp", "db", "Order", "OrderLine",
+    "bp", "db", "Order", "OrderLine", "OrderApproval", "OrderStatus", "ApprovalAction",
+    "ORDER_STATUS_TRANSITIONS",
     "_debug_on", "_err", "_g", "_num", "_pick", "_set_if_has", "_get_if_has",
     "_to_jsonable", "_json_ready", "_parse_date_like",
     "_order_to_dict", "_build_list_query", "_paginate",
@@ -448,6 +449,9 @@ __all__ = [
 # -------------------------------
 # 统一在此处挂载子模块路由（保持只注册一次 bp）
 # -------------------------------
-# 注意：这两行导入必须放在文件末尾，避免导入时的循环引用
-from . import order     # noqa: E402, F401
-from . import ordernew  # noqa: E402, F401
+# 注意：这些导入必须放在文件末尾，避免导入时的循环引用
+from . import order          # noqa: E402, F401
+from . import ordernew       # noqa: E402, F401
+from . import order_workflow # noqa: E402, F401  # 订单工作流 API
+from . import order_reports  # noqa: E402, F401  # 订单报表统计 API
+from . import order_import   # noqa: E402, F401  # 订单导入导出 API

@@ -1,4 +1,10 @@
+# CRITICAL: Load .env BEFORE any other imports that may use shared.auth
+# This ensures JWT_SECRET_KEY is available when jwt_utils.py is imported
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
+
 from flask import Flask
 from flask_cors import CORS
 from config import Config
@@ -43,11 +49,17 @@ def create_app():
     from routes.integration import integration_bp
     from routes.base_data import bp as base_data_bp
     from routes.auth import bp as auth_bp
+    from routes.logistics import logistics_bp
+    from routes.rma import rma_bp
+    from routes.reports import reports_bp
 
     app.register_blueprint(shipments_bp, url_prefix='/api')
     app.register_blueprint(addresses_bp, url_prefix='/api')
     app.register_blueprint(requirements_bp, url_prefix='/api')
     app.register_blueprint(integration_bp, url_prefix='/api')
+    app.register_blueprint(logistics_bp, url_prefix='/api')
+    app.register_blueprint(rma_bp, url_prefix='/api')
+    app.register_blueprint(reports_bp, url_prefix='/api')
     app.register_blueprint(base_data_bp)
     app.register_blueprint(auth_bp)
 
@@ -56,7 +68,7 @@ def create_app():
         db.create_all()
         app.logger.info("Database tables created successfully")
 
-    @app.route('/api/health')
+    @app.route('/health')
     def health_check():
         return {'status': 'ok', 'service': 'SHM - 出货管理系统'}
 

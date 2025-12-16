@@ -1,9 +1,11 @@
-from app import create_app
+# CRITICAL: Load .env BEFORE any other imports that may use shared.auth
+# This ensures JWT_SECRET_KEY is available when jwt_utils.py is imported
 import os
+from pathlib import Path
 from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
-# Load environment variables
-load_dotenv()
+from app import create_app
 
 # Create Flask application
 app = create_app()

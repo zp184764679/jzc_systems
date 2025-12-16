@@ -173,10 +173,158 @@ export const ENDPOINTS = {
     COMPLETE_ITEMS: "/api/ai/pr/complete",
     OCR: "/api/ai/pr/ocr",
     GET_HISTORY: (title = "") =>
-      title 
+      title
         ? `/api/ai/pr/history?title=${encodeURIComponent(title)}`
         : "/api/ai/pr/history",
     CLASSIFY_BATCH: "/api/v1/ai/classify-batch",
+  },
+
+  // ========== 供应商评估模块 ==========
+  EVALUATION: {
+    // 评估模板
+    TEMPLATE_LIST: "/api/v1/evaluation-templates",
+    TEMPLATE_DETAIL: (id) => `/api/v1/evaluation-templates/${id}`,
+    TEMPLATE_CREATE: "/api/v1/evaluation-templates",
+    TEMPLATE_UPDATE: (id) => `/api/v1/evaluation-templates/${id}`,
+    TEMPLATE_DELETE: (id) => `/api/v1/evaluation-templates/${id}`,
+    TEMPLATE_OPTIONS: "/api/v1/evaluation-templates/options",
+    TEMPLATE_INIT_DEFAULT: "/api/v1/evaluation-templates/init-default",
+
+    // 供应商评估
+    LIST: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/supplier-evaluations${query ? '?' + query : ''}`;
+    },
+    DETAIL: (id) => `/api/v1/supplier-evaluations/${id}`,
+    CREATE: "/api/v1/supplier-evaluations",
+    UPDATE: (id) => `/api/v1/supplier-evaluations/${id}`,
+    DELETE: (id) => `/api/v1/supplier-evaluations/${id}`,
+    START: (id) => `/api/v1/supplier-evaluations/${id}/start`,
+    COMPLETE: (id) => `/api/v1/supplier-evaluations/${id}/complete`,
+    CANCEL: (id) => `/api/v1/supplier-evaluations/${id}/cancel`,
+
+    // 统计
+    STATISTICS: "/api/v1/supplier-evaluations/statistics/summary",
+    RANKING: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/supplier-evaluations/statistics/supplier-ranking${query ? '?' + query : ''}`;
+    },
+
+    // 枚举
+    ENUMS: "/api/v1/supplier-evaluations/enums",
+  },
+
+  // ========== 采购合同模块 ==========
+  CONTRACT: {
+    // 合同列表和详情
+    LIST: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/contracts${query ? '?' + query : ''}`;
+    },
+    DETAIL: (id) => `/api/v1/contracts/${id}`,
+    CREATE: "/api/v1/contracts",
+    UPDATE: (id) => `/api/v1/contracts/${id}`,
+    DELETE: (id) => `/api/v1/contracts/${id}`,
+
+    // 合同审批
+    SUBMIT: (id) => `/api/v1/contracts/${id}/submit`,
+    APPROVE: (id) => `/api/v1/contracts/${id}/approve`,
+    REJECT: (id) => `/api/v1/contracts/${id}/reject`,
+    ACTIVATE: (id) => `/api/v1/contracts/${id}/activate`,
+    COMPLETE: (id) => `/api/v1/contracts/${id}/complete`,
+    CANCEL: (id) => `/api/v1/contracts/${id}/cancel`,
+
+    // 合同执行
+    EXECUTE: (id) => `/api/v1/contracts/${id}/execute`,
+    UPLOAD_ATTACHMENT: (id) => `/api/v1/contracts/${id}/attachment`,
+
+    // 统计和查询
+    STATISTICS: "/api/v1/contracts/statistics",
+    EXPIRING: (days = 30) => `/api/v1/contracts/expiring?days=${days}`,
+    BY_SUPPLIER: (supplierId) => `/api/v1/contracts/by-supplier/${supplierId}`,
+    ENUMS: "/api/v1/contracts/enums",
+  },
+
+  // ========== 采购预算模块 ==========
+  BUDGET: {
+    // 预算列表和详情
+    LIST: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/budgets${query ? '?' + query : ''}`;
+    },
+    DETAIL: (id) => `/api/v1/budgets/${id}`,
+    CREATE: "/api/v1/budgets",
+    UPDATE: (id) => `/api/v1/budgets/${id}`,
+    DELETE: (id) => `/api/v1/budgets/${id}`,
+
+    // 预算审批
+    SUBMIT: (id) => `/api/v1/budgets/${id}/submit`,
+    APPROVE: (id) => `/api/v1/budgets/${id}/approve`,
+    REJECT: (id) => `/api/v1/budgets/${id}/reject`,
+    ACTIVATE: (id) => `/api/v1/budgets/${id}/activate`,
+    CLOSE: (id) => `/api/v1/budgets/${id}/close`,
+
+    // 预算使用
+    RESERVE: (id) => `/api/v1/budgets/${id}/reserve`,
+    CONSUME: (id) => `/api/v1/budgets/${id}/consume`,
+    RELEASE: (id) => `/api/v1/budgets/${id}/release`,
+    ADJUST: (id) => `/api/v1/budgets/${id}/adjust`,
+    USAGE: (id, params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/budgets/${id}/usage${query ? '?' + query : ''}`;
+    },
+
+    // 统计和查询
+    STATISTICS: (year) => `/api/v1/budgets/statistics${year ? '?year=' + year : ''}`,
+    WARNINGS: (year) => `/api/v1/budgets/warnings${year ? '?year=' + year : ''}`,
+    BY_DEPARTMENT: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/budgets/by-department${query ? '?' + query : ''}`;
+    },
+    CHECK_AVAILABILITY: "/api/v1/budgets/check-availability",
+    YEARS: "/api/v1/budgets/years",
+    DEPARTMENTS: (year) => `/api/v1/budgets/departments${year ? '?year=' + year : ''}`,
+    ENUMS: "/api/v1/budgets/enums",
+  },
+
+  // ========== 采购付款模块 ==========
+  PAYMENT: {
+    // 付款列表和详情
+    LIST: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/payments${query ? '?' + query : ''}`;
+    },
+    DETAIL: (id) => `/api/v1/payments/${id}`,
+    CREATE: "/api/v1/payments",
+    UPDATE: (id) => `/api/v1/payments/${id}`,
+    DELETE: (id) => `/api/v1/payments/${id}`,
+
+    // 付款审批
+    SUBMIT: (id) => `/api/v1/payments/${id}/submit`,
+    APPROVE: (id) => `/api/v1/payments/${id}/approve`,
+    REJECT: (id) => `/api/v1/payments/${id}/reject`,
+    PROCESS: (id) => `/api/v1/payments/${id}/process`,
+    CONFIRM: (id) => `/api/v1/payments/${id}/confirm`,
+    CANCEL: (id) => `/api/v1/payments/${id}/cancel`,
+
+    // 付款计划
+    PLAN_LIST: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/payment-plans${query ? '?' + query : ''}`;
+    },
+    PLAN_CREATE: "/api/v1/payment-plans",
+    PLAN_UPDATE: (id) => `/api/v1/payment-plans/${id}`,
+    PLAN_DELETE: (id) => `/api/v1/payment-plans/${id}`,
+
+    // 统计和查询
+    STATISTICS: "/api/v1/payments/statistics",
+    OVERDUE: "/api/v1/payments/overdue",
+    DUE_SOON: (days = 7) => `/api/v1/payments/due-soon?days=${days}`,
+    BY_SUPPLIER: (supplierId, params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return `/api/v1/payments/by-supplier/${supplierId}${query ? '?' + query : ''}`;
+    },
+    ENUMS: "/api/v1/payments/enums",
   },
 };
 

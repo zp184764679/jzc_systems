@@ -26,7 +26,7 @@ export default function PendingShipments() {
 
   const fetchStats = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/pending-shipments/stats`)
+      const res = await axios.get(`${API_BASE}/pending-shipments/stats`)
       if (res.data.ok) {
         setStats(res.data.data)
       }
@@ -51,7 +51,7 @@ export default function PendingShipments() {
         params.delivery_to = filters.dateRange[1].format('YYYY-MM-DD')
       }
 
-      const res = await axios.get(`${API_BASE}/api/pending-shipments`, { params })
+      const res = await axios.get(`${API_BASE}/pending-shipments`, { params })
       setData(res.data.items || [])
       setPagination({
         current: res.data.page || 1,
@@ -97,7 +97,7 @@ export default function PendingShipments() {
       return
     }
     try {
-      const res = await axios.post(`${API_BASE}/api/pending-shipments/ship/${record.id}`, { qty })
+      const res = await axios.post(`${API_BASE}/pending-shipments/ship/${record.id}`, { qty })
       if (res.data.ok) {
         message.success('出货成功，库存已扣减')
         setShipModal({ visible: false, record: null, qty: 0 })

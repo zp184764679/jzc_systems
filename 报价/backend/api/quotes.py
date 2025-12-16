@@ -9,10 +9,17 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from config.database import get_db
 from models.quote import Quote, QuoteItem
+from models.quote_approval import QuoteApproval, QuoteStatus, ApprovalAction, can_transition
 from models.drawing import Drawing
 from models.material import Material
 from models.process import Process
-from api.schemas import QuoteResponse, QuoteList, QuoteCreate, MessageResponse
+from api.schemas import (
+    QuoteResponse, QuoteList, QuoteCreate, MessageResponse,
+    ApprovalRequest, RejectRequest, SendRequest,
+    QuoteApprovalResponse, QuoteApprovalList, StatusInfo,
+    CreateVersionRequest, QuoteVersionSummary, QuoteVersionList,
+    VersionComparisonItem, QuoteCompareResponse
+)
 from services.quote_calculator import get_calculator
 from services.quote_document_generator import get_document_generator
 import logging
@@ -53,11 +60,11 @@ def clean_numeric_value(value: any, default: str = "0") -> str:
         # 移除常见的非数字字符（保留数字、小数点、负号）
         cleaned = re.sub(r'[^\d.\-]', '', value)
 
-        # 处理多个小数点的情况：只保留第一个小数点
+        # 处理多个小数点的情况：只保留第一个小数点及其后的第一部分
         parts = cleaned.split('.')
         if len(parts) > 2:
-            # 重新组装：第一部分 + '.' + 其余部分拼接（去掉小数点）
-            cleaned = parts[0] + '.' + ''.join(parts[1:])
+            # 只保留整数部分和第一个小数部分，忽略后续错误的小数点
+            cleaned = parts[0] + '.' + parts[1]
 
         # 验证是否是有效数字
         try:
@@ -566,3 +573,934 @@ async def export_chenlong_template(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+
+
+# ============ 审批相关 API ============
+
+@router.get("/statuses", response_model=List[StatusInfo])
+def get_quote_statuses():
+    """
+    获取报价单状态列表
+    """
+    statuses = [
+        {"value": QuoteStatus.DRAFT, "label": "草稿", "color": "default"},
+        {"value": QuoteStatus.PENDING_REVIEW, "label": "待审核", "color": "processing"},
+        {"value": QuoteStatus.APPROVED, "label": "已批准", "color": "success"},
+        {"value": QuoteStatus.REJECTED, "label": "已拒绝", "color": "error"},
+        {"value": QuoteStatus.SENT, "label": "已发送", "color": "cyan"},
+        {"value": QuoteStatus.EXPIRED, "label": "已过期", "color": "warning"},
+    ]
+    return statuses
+
+
+@router.post("/{quote_id}/submit", response_model=QuoteResponse)
+def submit_quote(
+    quote_id: int,
+    request: ApprovalRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    提交报价单审核
+
+    状态流转: draft → pending_review
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 检查状态流转
+    if not can_transition(quote.status, QuoteStatus.PENDING_REVIEW):
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能提交审核"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.PENDING_REVIEW
+    quote.submitted_at = datetime.now()
+    quote.submitted_by = request.approver_id
+    quote.submitted_by_name = request.approver_name
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.SUBMIT.value,
+        from_status=old_status,
+        to_status=QuoteStatus.PENDING_REVIEW,
+        approver_id=request.approver_id,
+        approver_name=request.approver_name,
+        approver_role=request.approver_role,
+        comment=request.comment
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单已提交审核: {quote.quote_number}")
+
+    return quote
+
+
+@router.post("/{quote_id}/approve", response_model=QuoteResponse)
+def approve_quote(
+    quote_id: int,
+    request: ApprovalRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    审批通过报价单
+
+    状态流转: pending_review → approved
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 检查状态流转
+    if not can_transition(quote.status, QuoteStatus.APPROVED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能审批通过"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.APPROVED
+    quote.approved_at = datetime.now()
+    quote.approved_by = request.approver_id
+    quote.approved_by_name = request.approver_name
+    # 清除拒绝信息
+    quote.rejected_at = None
+    quote.rejected_by = None
+    quote.rejected_by_name = None
+    quote.reject_reason = None
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.APPROVE.value,
+        from_status=old_status,
+        to_status=QuoteStatus.APPROVED,
+        approver_id=request.approver_id,
+        approver_name=request.approver_name,
+        approver_role=request.approver_role,
+        comment=request.comment
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单审批通过: {quote.quote_number}")
+
+    return quote
+
+
+@router.post("/{quote_id}/reject", response_model=QuoteResponse)
+def reject_quote(
+    quote_id: int,
+    request: RejectRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    拒绝报价单
+
+    状态流转: pending_review → rejected
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 检查状态流转
+    if not can_transition(quote.status, QuoteStatus.REJECTED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能拒绝"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.REJECTED
+    quote.rejected_at = datetime.now()
+    quote.rejected_by = request.approver_id
+    quote.rejected_by_name = request.approver_name
+    quote.reject_reason = request.reason
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.REJECT.value,
+        from_status=old_status,
+        to_status=QuoteStatus.REJECTED,
+        approver_id=request.approver_id,
+        approver_name=request.approver_name,
+        approver_role=request.approver_role,
+        comment=request.reason
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单已拒绝: {quote.quote_number}, 原因: {request.reason}")
+
+    return quote
+
+
+@router.post("/{quote_id}/revise", response_model=QuoteResponse)
+def revise_quote(
+    quote_id: int,
+    request: ApprovalRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    退回修改报价单
+
+    状态流转: pending_review/approved → draft
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 检查状态流转
+    if not can_transition(quote.status, QuoteStatus.DRAFT):
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能退回修改"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.DRAFT
+    # 清除审批信息
+    quote.submitted_at = None
+    quote.submitted_by = None
+    quote.submitted_by_name = None
+    quote.approved_at = None
+    quote.approved_by = None
+    quote.approved_by_name = None
+    quote.rejected_at = None
+    quote.rejected_by = None
+    quote.rejected_by_name = None
+    quote.reject_reason = None
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.REVISE.value,
+        from_status=old_status,
+        to_status=QuoteStatus.DRAFT,
+        approver_id=request.approver_id,
+        approver_name=request.approver_name,
+        approver_role=request.approver_role,
+        comment=request.comment
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单已退回修改: {quote.quote_number}")
+
+    return quote
+
+
+@router.post("/{quote_id}/send", response_model=QuoteResponse)
+def send_quote(
+    quote_id: int,
+    request: SendRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    发送报价单给客户
+
+    状态流转: approved → sent
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 检查状态流转
+    if not can_transition(quote.status, QuoteStatus.SENT):
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能发送给客户"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.SENT
+    quote.sent_at = datetime.now()
+    quote.sent_by = request.sender_id
+    quote.sent_by_name = request.sender_name
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.SEND.value,
+        from_status=old_status,
+        to_status=QuoteStatus.SENT,
+        approver_id=request.sender_id,
+        approver_name=request.sender_name,
+        comment=request.comment
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单已发送给客户: {quote.quote_number}")
+
+    return quote
+
+
+@router.post("/{quote_id}/withdraw", response_model=QuoteResponse)
+def withdraw_quote(
+    quote_id: int,
+    request: ApprovalRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    撤回报价单
+
+    状态流转: pending_review → draft
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 只允许在待审核状态下撤回
+    if quote.status != QuoteStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态 [{QuoteStatus.get_display_name(quote.status)}] 不能撤回"
+        )
+
+    # 更新状态
+    old_status = quote.status
+    quote.status = QuoteStatus.DRAFT
+    quote.submitted_at = None
+    quote.submitted_by = None
+    quote.submitted_by_name = None
+
+    # 记录审批历史
+    approval = QuoteApproval(
+        quote_id=quote_id,
+        action=ApprovalAction.WITHDRAW.value,
+        from_status=old_status,
+        to_status=QuoteStatus.DRAFT,
+        approver_id=request.approver_id,
+        approver_name=request.approver_name,
+        approver_role=request.approver_role,
+        comment=request.comment
+    )
+    db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单已撤回: {quote.quote_number}")
+
+    return quote
+
+
+@router.get("/{quote_id}/approvals", response_model=QuoteApprovalList)
+def get_quote_approvals(
+    quote_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取报价单审批历史
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    approvals = db.query(QuoteApproval).filter(
+        QuoteApproval.quote_id == quote_id
+    ).order_by(QuoteApproval.created_at.desc()).all()
+
+    return QuoteApprovalList(total=len(approvals), items=approvals)
+
+
+# ============ 版本管理 API ============
+
+@router.post("/{quote_id}/create-version", response_model=QuoteResponse)
+def create_quote_version(
+    quote_id: int,
+    request: CreateVersionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    创建报价单新版本
+
+    从现有报价单复制并创建新版本，原版本的 is_current_version 设为 False
+
+    Args:
+        quote_id: 原报价单ID
+        request: 版本创建请求（包含版本说明）
+
+    Returns:
+        新版本的报价单
+    """
+    # 查询原报价单
+    original_quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not original_quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 确定根版本ID
+    root_id = original_quote.root_quote_id or original_quote.id
+
+    # 获取当前版本链中的最新版本号
+    max_version = db.query(Quote).filter(
+        (Quote.root_quote_id == root_id) | (Quote.id == root_id)
+    ).with_entities(func.max(Quote.version)).scalar() or 1
+
+    new_version = max_version + 1
+
+    # 生成新的报价单号（保留原单号前缀，添加版本后缀）
+    base_number = original_quote.quote_number.split('-V')[0]  # 移除旧版本号后缀
+    new_quote_number = f"{base_number}-V{new_version}"
+
+    # 创建新版本（复制所有关键字段）
+    new_quote = Quote(
+        quote_number=new_quote_number,
+        drawing_id=original_quote.drawing_id,
+        product_id=original_quote.product_id,
+        customer_name=original_quote.customer_name,
+        product_name=original_quote.product_name,
+        lot_size=original_quote.lot_size,
+        # 材料信息
+        material_name=original_quote.material_name,
+        material_spec=original_quote.material_spec,
+        material_density=original_quote.material_density,
+        outer_diameter=original_quote.outer_diameter,
+        material_length=original_quote.material_length,
+        product_length=original_quote.product_length,
+        cut_width=original_quote.cut_width,
+        remaining_material=original_quote.remaining_material,
+        pieces_per_bar=original_quote.pieces_per_bar,
+        part_weight=original_quote.part_weight,
+        material_price_per_kg=original_quote.material_price_per_kg,
+        total_defect_rate=original_quote.total_defect_rate,
+        material_management_rate=original_quote.material_management_rate,
+        material_cost=original_quote.material_cost,
+        # 加工费
+        process_cost=original_quote.process_cost,
+        # 管理费
+        general_management_rate=original_quote.general_management_rate,
+        transportation_cost=original_quote.transportation_cost,
+        management_cost=original_quote.management_cost,
+        # 其他费用
+        packaging_material_cost=original_quote.packaging_material_cost,
+        consumables_cost=original_quote.consumables_cost,
+        other_cost=original_quote.other_cost,
+        # 成本汇总
+        subtotal_cost=original_quote.subtotal_cost,
+        profit_rate=original_quote.profit_rate,
+        profit_amount=original_quote.profit_amount,
+        unit_price=original_quote.unit_price,
+        total_amount=original_quote.total_amount,
+        # 其他信息
+        currency=original_quote.currency,
+        exchange_rate=original_quote.exchange_rate,
+        quantity=original_quote.quantity,
+        lead_time=original_quote.lead_time,
+        calculation_details=original_quote.calculation_details,
+        details=original_quote.details,
+        # 版本管理
+        version=new_version,
+        parent_quote_id=original_quote.id,
+        root_quote_id=root_id,
+        is_current_version=True,
+        version_note=request.version_note,
+        # 状态重置为草稿
+        status=QuoteStatus.DRAFT,
+        valid_until=datetime.now().date() + timedelta(days=30),
+        # 创建人
+        created_by=request.created_by,
+        created_by_name=request.created_by_name,
+        notes=original_quote.notes
+    )
+
+    # 将原版本设为非当前版本
+    original_quote.is_current_version = False
+
+    # 同时将同一版本链的其他版本都设为非当前版本
+    db.query(Quote).filter(
+        (Quote.root_quote_id == root_id) | (Quote.id == root_id),
+        Quote.id != original_quote.id
+    ).update({'is_current_version': False})
+
+    db.add(new_quote)
+    db.commit()
+    db.refresh(new_quote)
+
+    logger.info(f"已创建报价单新版本: {new_quote_number} (V{new_version}), 基于: {original_quote.quote_number}")
+
+    return new_quote
+
+
+@router.get("/{quote_id}/versions", response_model=QuoteVersionList)
+def get_quote_versions(
+    quote_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取报价单所有版本
+
+    返回该报价单的所有版本列表（按版本号排序）
+
+    Args:
+        quote_id: 报价单ID（可以是任意版本的ID）
+
+    Returns:
+        版本列表
+    """
+    # 查询报价单
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 确定根版本ID
+    root_id = quote.root_quote_id or quote.id
+
+    # 查询所有版本
+    versions = db.query(Quote).filter(
+        (Quote.root_quote_id == root_id) | (Quote.id == root_id)
+    ).order_by(Quote.version.desc()).all()
+
+    # 找到当前版本
+    current_version_id = None
+    items = []
+    for v in versions:
+        if v.is_current_version:
+            current_version_id = v.id
+        items.append(QuoteVersionSummary(
+            id=v.id,
+            quote_number=v.quote_number,
+            version=v.version,
+            is_current_version=v.is_current_version,
+            version_note=v.version_note,
+            status=v.status,
+            unit_price=float(v.unit_price) if v.unit_price else None,
+            total_amount=float(v.total_amount) if v.total_amount else None,
+            created_at=v.created_at,
+            created_by_name=v.created_by_name
+        ))
+
+    return QuoteVersionList(
+        total=len(versions),
+        root_quote_id=root_id,
+        current_version_id=current_version_id,
+        items=items
+    )
+
+
+@router.post("/{quote_id}/set-current", response_model=QuoteResponse)
+def set_current_version(
+    quote_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    设置为当前版本
+
+    将指定版本设置为当前版本，其他版本设为非当前
+
+    Args:
+        quote_id: 报价单ID
+
+    Returns:
+        更新后的报价单
+    """
+    # 查询报价单
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 确定根版本ID
+    root_id = quote.root_quote_id or quote.id
+
+    # 将同一版本链的所有版本设为非当前
+    db.query(Quote).filter(
+        (Quote.root_quote_id == root_id) | (Quote.id == root_id)
+    ).update({'is_current_version': False})
+
+    # 设置当前版本
+    quote.is_current_version = True
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"已设置报价单当前版本: {quote.quote_number} (V{quote.version})")
+
+    return quote
+
+
+# ============ 有效期校验 API ============
+
+@router.get("/expiring")
+def get_expiring_quotes(
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """
+    获取即将过期的报价单
+
+    Args:
+        days: 查询未来多少天内过期的报价单，默认7天
+
+    Returns:
+        即将过期的报价单列表
+    """
+    from datetime import date
+    today = date.today()
+    future_date = today + timedelta(days=days)
+
+    # 查询即将过期的报价单（排除草稿和已过期状态）
+    quotes = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= future_date,
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED])
+    ).order_by(Quote.valid_until.asc()).all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": q.id,
+                "quote_number": q.quote_number,
+                "customer_name": q.customer_name,
+                "product_name": q.product_name,
+                "total_amount": float(q.total_amount) if q.total_amount else 0,
+                "status": q.status,
+                "valid_until": q.valid_until.isoformat() if q.valid_until else None,
+                "days_remaining": (q.valid_until - today).days if q.valid_until else None
+            }
+            for q in quotes
+        ],
+        "total": len(quotes)
+    }
+
+
+@router.post("/check-expired")
+def check_and_expire_quotes(
+    db: Session = Depends(get_db)
+):
+    """
+    检查并标记已过期的报价单
+
+    将过期的报价单状态更新为 expired
+    仅影响 pending_review 和 approved 状态的报价单
+
+    Returns:
+        处理结果统计
+    """
+    from datetime import date
+    today = date.today()
+
+    # 查询已过期的报价单
+    expired_quotes = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until < today,
+        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
+    ).all()
+
+    expired_count = 0
+    expired_list = []
+
+    for quote in expired_quotes:
+        old_status = quote.status
+        quote.status = QuoteStatus.EXPIRED
+        expired_count += 1
+        expired_list.append({
+            "id": quote.id,
+            "quote_number": quote.quote_number,
+            "customer_name": quote.customer_name,
+            "old_status": old_status,
+            "valid_until": quote.valid_until.isoformat()
+        })
+
+        # 记录审批历史
+        approval = QuoteApproval(
+            quote_id=quote.id,
+            action="expire",
+            from_status=old_status,
+            to_status=QuoteStatus.EXPIRED,
+            approver_name="系统",
+            comment="报价单已超过有效期，系统自动标记为过期"
+        )
+        db.add(approval)
+
+    db.commit()
+
+    logger.info(f"已标记 {expired_count} 条报价单为过期状态")
+
+    return {
+        "success": True,
+        "message": f"已检查并标记 {expired_count} 条报价单为过期状态",
+        "data": {
+            "expired_count": expired_count,
+            "expired_quotes": expired_list
+        }
+    }
+
+
+@router.put("/{quote_id}/extend-validity", response_model=QuoteResponse)
+def extend_quote_validity(
+    quote_id: int,
+    days: int = 30,
+    new_valid_until: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    延长报价单有效期
+
+    Args:
+        quote_id: 报价单ID
+        days: 延长天数（从今天算起），默认30天
+        new_valid_until: 新的有效期日期（YYYY-MM-DD），如果提供则忽略days参数
+
+    Returns:
+        更新后的报价单
+    """
+    from datetime import date
+
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="报价单不存在")
+
+    # 已发送的报价单不能延长有效期
+    if quote.status == QuoteStatus.SENT:
+        raise HTTPException(status_code=400, detail="已发送的报价单不能延长有效期")
+
+    # 计算新的有效期
+    if new_valid_until:
+        try:
+            new_date = datetime.strptime(new_valid_until, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式")
+
+        if new_date <= date.today():
+            raise HTTPException(status_code=400, detail="新有效期必须大于今天")
+    else:
+        new_date = date.today() + timedelta(days=days)
+
+    old_valid_until = quote.valid_until
+    quote.valid_until = new_date
+
+    # 如果是过期状态，恢复为草稿状态
+    if quote.status == QuoteStatus.EXPIRED:
+        old_status = quote.status
+        quote.status = QuoteStatus.DRAFT
+
+        # 记录审批历史
+        approval = QuoteApproval(
+            quote_id=quote_id,
+            action="reactivate",
+            from_status=old_status,
+            to_status=QuoteStatus.DRAFT,
+            approver_name="系统",
+            comment=f"延长有效期至 {new_date}，报价单已恢复为草稿状态"
+        )
+        db.add(approval)
+
+    db.commit()
+    db.refresh(quote)
+
+    logger.info(f"报价单有效期已延长: {quote.quote_number}, {old_valid_until} -> {new_date}")
+
+    return quote
+
+
+@router.get("/validity-statistics")
+def get_validity_statistics(
+    db: Session = Depends(get_db)
+):
+    """
+    获取报价单有效期统计
+
+    Returns:
+        有效期统计数据
+    """
+    from datetime import date
+    from sqlalchemy import func
+
+    today = date.today()
+
+    # 统计各种状态
+    total = db.query(Quote).count()
+
+    # 已过期（valid_until < today 且 状态不是 expired/sent）
+    overdue = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until < today,
+        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
+    ).count()
+
+    # 已标记过期
+    marked_expired = db.query(Quote).filter(
+        Quote.status == QuoteStatus.EXPIRED
+    ).count()
+
+    # 7天内过期
+    expiring_7_days = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= today + timedelta(days=7),
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    # 30天内过期
+    expiring_30_days = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= today + timedelta(days=30),
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    # 有效期内
+    valid = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until > today,
+        Quote.status.notin_([QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    return {
+        "success": True,
+        "data": {
+            "total": total,
+            "overdue": overdue,
+            "marked_expired": marked_expired,
+            "expiring_7_days": expiring_7_days,
+            "expiring_30_days": expiring_30_days,
+            "valid": valid,
+            "today": today.isoformat()
+        }
+    }
+
+
+@router.get("/{quote_id}/compare/{other_id}", response_model=QuoteCompareResponse)
+def compare_quote_versions(
+    quote_id: int,
+    other_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    对比两个报价单版本
+
+    对比两个报价单的主要字段差异
+
+    Args:
+        quote_id: 第一个报价单ID（通常是较旧版本）
+        other_id: 第二个报价单ID（通常是较新版本）
+
+    Returns:
+        对比结果
+    """
+    # 查询两个报价单
+    quote1 = db.query(Quote).filter(Quote.id == quote_id).first()
+    quote2 = db.query(Quote).filter(Quote.id == other_id).first()
+
+    if not quote1:
+        raise HTTPException(status_code=404, detail=f"报价单 {quote_id} 不存在")
+    if not quote2:
+        raise HTTPException(status_code=404, detail=f"报价单 {other_id} 不存在")
+
+    # 定义需要比较的字段
+    compare_fields = [
+        ("lot_size", "批量"),
+        ("material_name", "材料名称"),
+        ("material_cost", "材料费"),
+        ("process_cost", "加工费"),
+        ("management_cost", "管理费"),
+        ("other_cost", "其他费用"),
+        ("subtotal_cost", "小计"),
+        ("profit_rate", "利润率"),
+        ("profit_amount", "利润"),
+        ("unit_price", "单价"),
+        ("total_amount", "总价"),
+        ("general_management_rate", "管理费率"),
+        ("material_price_per_kg", "材料单价"),
+        ("total_defect_rate", "总不良率"),
+        ("lead_time", "交货周期"),
+        ("notes", "备注"),
+    ]
+
+    differences = []
+    changed_count = 0
+
+    for field, label in compare_fields:
+        val1 = getattr(quote1, field, None)
+        val2 = getattr(quote2, field, None)
+
+        # 处理 Decimal 类型
+        if val1 is not None and hasattr(val1, '__float__'):
+            val1 = float(val1)
+        if val2 is not None and hasattr(val2, '__float__'):
+            val2 = float(val2)
+
+        changed = val1 != val2
+        if changed:
+            changed_count += 1
+
+        differences.append(VersionComparisonItem(
+            field=field,
+            field_label=label,
+            version1_value=val1,
+            version2_value=val2,
+            changed=changed
+        ))
+
+    # 创建摘要信息
+    quote1_summary = QuoteVersionSummary(
+        id=quote1.id,
+        quote_number=quote1.quote_number,
+        version=quote1.version,
+        is_current_version=quote1.is_current_version,
+        version_note=quote1.version_note,
+        status=quote1.status,
+        unit_price=float(quote1.unit_price) if quote1.unit_price else None,
+        total_amount=float(quote1.total_amount) if quote1.total_amount else None,
+        created_at=quote1.created_at,
+        created_by_name=quote1.created_by_name
+    )
+
+    quote2_summary = QuoteVersionSummary(
+        id=quote2.id,
+        quote_number=quote2.quote_number,
+        version=quote2.version,
+        is_current_version=quote2.is_current_version,
+        version_note=quote2.version_note,
+        status=quote2.status,
+        unit_price=float(quote2.unit_price) if quote2.unit_price else None,
+        total_amount=float(quote2.total_amount) if quote2.total_amount else None,
+        created_at=quote2.created_at,
+        created_by_name=quote2.created_by_name
+    )
+
+    # 计算价格变化
+    price_change = None
+    price_change_pct = None
+    if quote1.total_amount and quote2.total_amount:
+        price_change = float(quote2.total_amount) - float(quote1.total_amount)
+        if float(quote1.total_amount) != 0:
+            price_change_pct = (price_change / float(quote1.total_amount)) * 100
+
+    summary = {
+        "total_fields": len(compare_fields),
+        "changed_fields": changed_count,
+        "unchanged_fields": len(compare_fields) - changed_count,
+        "price_change": price_change,
+        "price_change_pct": round(price_change_pct, 2) if price_change_pct else None
+    }
+
+    return QuoteCompareResponse(
+        quote1=quote1_summary,
+        quote2=quote2_summary,
+        differences=differences,
+        summary=summary
+    )

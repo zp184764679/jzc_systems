@@ -1,3 +1,9 @@
+# Load .env BEFORE any imports that use shared.auth
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
+
 from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -6,7 +12,7 @@ from app.routes.register import register_bp
 from app.routes.auth import auth_bp
 from app.routes.users import users_bp
 from app.routes.hr_sync import hr_sync_bp
-import os
+from app.routes.permissions import permissions_bp
 import logging
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,7 @@ app.register_blueprint(register_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(users_bp)
 app.register_blueprint(hr_sync_bp)
+app.register_blueprint(permissions_bp)
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -87,4 +94,5 @@ with app.app_context():
         print(f"⚠️  Database upgrade warning: {e}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8004, debug=False)
+    port = int(os.getenv('PORT', 8004))
+    app.run(host='0.0.0.0', port=port, debug=False)

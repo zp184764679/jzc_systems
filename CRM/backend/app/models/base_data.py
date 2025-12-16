@@ -4,7 +4,7 @@ from datetime import datetime
 
 class SettlementMethod(db.Model):
     """结算方式"""
-    __tablename__ = 'settlement_methods'
+    __tablename__ = 'crm_settlement_methods'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -28,7 +28,7 @@ class SettlementMethod(db.Model):
 
 class ShippingMethod(db.Model):
     """出货方式"""
-    __tablename__ = 'shipping_methods'
+    __tablename__ = 'crm_shipping_methods'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -52,7 +52,7 @@ class ShippingMethod(db.Model):
 
 class OrderMethod(db.Model):
     """接单方式"""
-    __tablename__ = 'order_methods'
+    __tablename__ = 'crm_order_methods'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -76,7 +76,7 @@ class OrderMethod(db.Model):
 
 class Currency(db.Model):
     """币种"""
-    __tablename__ = 'currencies'
+    __tablename__ = 'crm_currencies'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(10), unique=True, nullable=False)
@@ -102,7 +102,7 @@ class Currency(db.Model):
 
 class OrderStatus(db.Model):
     """订单状态"""
-    __tablename__ = 'order_statuses'
+    __tablename__ = 'crm_order_statuses'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -128,7 +128,7 @@ class OrderStatus(db.Model):
 
 class ProcessType(db.Model):
     """加工类型"""
-    __tablename__ = 'process_types'
+    __tablename__ = 'crm_process_types'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -152,7 +152,7 @@ class ProcessType(db.Model):
 
 class Warehouse(db.Model):
     """仓库/库存所在地"""
-    __tablename__ = 'warehouses'
+    __tablename__ = 'crm_warehouses'
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(50), unique=True, nullable=False)

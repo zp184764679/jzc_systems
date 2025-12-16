@@ -1,4 +1,4 @@
-// CRM订单列表页面 - 使用Ant Design组件
+// CRM订单列表页面 - 增强版（工作流+报表+导入导出）
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,6 +19,11 @@ import {
   message,
   Popconfirm,
   Statistic,
+  Modal,
+  Timeline,
+  Upload,
+  Alert,
+  Progress,
 } from 'antd';
 import {
   PlusOutlined,
@@ -31,19 +36,41 @@ import {
   ReloadOutlined,
   MoreOutlined,
   ClearOutlined,
-  ShoppingCartOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  SendOutlined,
+  CarOutlined,
+  ToolOutlined,
+  UploadOutlined,
+  FileExcelOutlined,
+  BarChartOutlined,
+  AuditOutlined,
+  ExclamationCircleOutlined,
+  StopOutlined,
+  PlayCircleOutlined,
+  CheckOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { orderAPI, customerAPI } from '../../services/api';
 
 const { Search } = Input;
 const { Option } = Select;
 const { Panel } = Collapse;
 const { RangePicker } = DatePicker;
 
-/* ================= 通用工具 ================= */
+// 订单状态配置
+const ORDER_STATUS_CONFIG = {
+  draft: { label: '草稿', color: 'default', icon: <EditOutlined /> },
+  pending: { label: '待审批', color: 'orange', icon: <ClockCircleOutlined /> },
+  confirmed: { label: '已确认', color: 'blue', icon: <CheckCircleOutlined /> },
+  in_production: { label: '生产中', color: 'processing', icon: <ToolOutlined /> },
+  in_delivery: { label: '交货中', color: 'cyan', icon: <CarOutlined /> },
+  completed: { label: '已完成', color: 'success', icon: <CheckCircleOutlined /> },
+  cancelled: { label: '已取消', color: 'error', icon: <CloseCircleOutlined /> },
+};
+
+// 工具函数
 const notEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 const cleaned = (obj) => {
   const out = {};
@@ -51,12 +78,6 @@ const cleaned = (obj) => {
     if (notEmpty(v)) out[k] = v;
   });
   return out;
-};
-const normalizeList = (res) => {
-  const root = res?.data ?? res;
-  const items = root?.items ?? root?.list ?? root?.data ?? (Array.isArray(root) ? root : []);
-  const total = root?.total ?? root?.count ?? (Array.isArray(items) ? items.length : 0);
-  return { items: Array.isArray(items) ? items : [], total };
 };
 
 function toNumberSafe(v) {
@@ -80,94 +101,6 @@ function formatDate(val) {
   return d.toLocaleDateString('zh-CN');
 }
 
-/* 可能出现订单明细的字段名 */
-const ARRAY_KEYS = ["items", "lines", "line_items", "order_lines", "details", "entries", "products"];
-
-/* ================ 请求封装 ================ */
-function makeUrl(u, params) {
-  let full = u.startsWith("/") ? "/api" + u : "/api/" + u;
-  const usp = new URLSearchParams(cleaned(params || {}));
-  if ([...usp].length) full += (full.includes("?") ? "&" : "?") + usp.toString();
-  return full;
-}
-
-async function GET(u, { params } = {}) {
-  const res = await fetch(makeUrl(u, params), { credentials: "include" });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    const err = new Error(`[${res.status}] ${res.statusText} ${text}`.trim());
-    err.status = res.status;
-    throw err;
-  }
-  try { return await res.json(); } catch { return await res.text(); }
-}
-
-async function smartDEL(id) {
-  const tryOnce = async (path) => {
-    const r = await fetch(makeUrl(path), { method: "DELETE", credentials: "include" });
-    if (!r.ok) {
-      const t = await r.text().catch(() => "");
-      const e = new Error(`[${r.status}] ${r.statusText} ${t}`.trim());
-      e.status = r.status;
-      throw e;
-    }
-    return r.json().catch(() => ({}));
-  };
-  for (const tpl of ["/orders/" + id, "/orders/" + id + "/"]) {
-    try { return await tryOnce(tpl); } catch (e) { if (e.status !== 404 && e.status !== 405) throw e; }
-  }
-  throw new Error("删除订单失败");
-}
-
-/* ================ 字段抽取 ================ */
-function pickInternalNo(row) {
-  if (notEmpty(row?.product_text)) return row.product_text;
-  if (notEmpty(row?.product)) return row.product;
-  if (notEmpty(row?.internal_no)) return row.internal_no;
-  for (const K of ARRAY_KEYS) {
-    const arr = row?.[K];
-    if (Array.isArray(arr) && arr.length) {
-      for (const it of arr) {
-        const v = it?.product_text || it?.product || it?.internal_no || it?.drawing_no;
-        if (notEmpty(v)) return v;
-      }
-    }
-  }
-  return "";
-}
-
-function pickDemandDate(row) {
-  return row?.request_date || row?.required_date || row?.due_date || row?.delivery_date || "";
-}
-
-function pickOrderDate(row) {
-  return row?.order_date || row?.created_at || row?.create_time || "";
-}
-
-function pickAmount(row) {
-  const totalFields = ["amount_total", "grand_total", "subtotal", "total_amount"];
-  for (const k of totalFields) {
-    if (row && row[k] !== undefined && row[k] !== null && row[k] !== "") return toNumberSafe(row[k]);
-  }
-  let sum = 0, hasLine = false;
-  for (const key of ARRAY_KEYS) {
-    const arr = row?.[key];
-    if (Array.isArray(arr) && arr.length) {
-      hasLine = true;
-      for (const it of arr) {
-        const cand = [it?.amount, it?.line_total, it?.total].find((x) => notEmpty(x));
-        if (cand !== undefined) { sum += toNumberSafe(cand); continue; }
-        const qty = toNumberSafe(it?.qty ?? it?.quantity);
-        const price = toNumberSafe(it?.unit_price ?? it?.price);
-        if (qty || price) sum += qty * price;
-      }
-    }
-  }
-  if (hasLine) return sum;
-  return undefined;
-}
-
-/* ================ 主组件 ================ */
 export default function OrderList() {
   const nav = useNavigate();
 
@@ -178,6 +111,18 @@ export default function OrderList() {
   const [customers, setCustomers] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [filterCollapsed, setFilterCollapsed] = useState([]);
+  const [statistics, setStatistics] = useState(null);
+
+  // 弹窗状态
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importData, setImportData] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState(null);
+  const [approvalHistory, setApprovalHistory] = useState([]);
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [currentAction, setCurrentAction] = useState(null);
+  const [actionComment, setActionComment] = useState('');
 
   // 查询条件
   const [filters, setFilters] = useState({
@@ -205,15 +150,26 @@ export default function OrderList() {
 
   // 加载客户列表
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await GET("/customers", { params: { page: 1, page_size: 999 } });
+    customerAPI.getCustomers({ page: 1, page_size: 999 })
+      .then(res => {
         const items = Array.isArray(res) ? res : res?.items || res?.data || [];
         setCustomers(Array.isArray(items) ? items : []);
-      } catch {
-        setCustomers([]);
-      }
-    })();
+      })
+      .catch(() => setCustomers([]));
+  }, []);
+
+  // 加载统计数据
+  const loadStatistics = async () => {
+    try {
+      const res = await orderAPI.getStatistics();
+      setStatistics(res);
+    } catch (e) {
+      console.error("加载统计失败", e);
+    }
+  };
+
+  useEffect(() => {
+    loadStatistics();
   }, []);
 
   // 拉订单
@@ -221,16 +177,17 @@ export default function OrderList() {
     setLoading(true);
     try {
       const serverParams = cleaned({
-        customer_kw: filters.customer_kw || searchText,
-        order_kw: filters.order_kw,
+        keyword: filters.order_kw || searchText,
+        customer_id: filters.customer_id,
         status: filters.status,
-        from_date: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
-        to_date: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+        date_from: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+        date_to: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
         page: pagination.current,
         page_size: pagination.pageSize,
       });
-      const res = await GET("/orders", { params: serverParams });
-      let { items, total: t } = normalizeList(res);
+      const res = await orderAPI.getOrders(serverParams);
+      const items = res?.items ?? res?.list ?? res?.data ?? (Array.isArray(res) ? res : []);
+      const t = res?.total ?? res?.count ?? (Array.isArray(items) ? items.length : 0);
       setRows(Array.isArray(items) ? items : []);
       setTotal(t);
     } catch (e) {
@@ -275,53 +232,236 @@ export default function OrderList() {
   // 删除
   const handleDelete = async (id) => {
     try {
-      await smartDEL(id);
+      await orderAPI.deleteOrder(id);
       message.success("删除成功");
       fetchOrders();
+      loadStatistics();
     } catch (e) {
       message.error(e?.message || "删除失败");
     }
   };
 
-  // 导出CSV
-  const handleExport = () => {
-    if (rows.length === 0) {
-      message.warning('没有可导出的数据');
-      return;
+  // 导出Excel
+  const handleExport = async () => {
+    try {
+      const params = cleaned({
+        status: filters.status,
+        date_from: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+        date_to: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+        keyword: searchText,
+      });
+      const response = await orderAPI.exportOrders(params);
+      const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `订单导出_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      message.success('导出成功');
+    } catch (e) {
+      message.error('导出失败: ' + (e.message || '未知错误'));
     }
-    const headers = ['订单号', '客户', '内部图号', '状态', '要求纳期', '下单日期', '金额'];
-    const csvRows = rows.map(row => {
-      const custName = row?.customer_name || row?.customer || customersMap.get(String(row?.customer_id)) || '-';
-      return [
-        row?.order_no || row?.no || row?.id || '',
-        custName,
-        pickInternalNo(row) || '',
-        row?.status || '',
-        formatDate(pickDemandDate(row)),
-        formatDate(pickOrderDate(row)),
-        formatAmount(pickAmount(row)),
-      ];
-    });
-    const BOM = '\uFEFF';
-    const csvContent = BOM + [
-      headers.join(','),
-      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `订单列表_${new Date().toLocaleDateString('zh-CN')}.csv`;
-    link.click();
-    message.success('导出成功');
   };
 
-  // 统计
-  const stats = useMemo(() => {
-    const open = rows.filter(r => r?.status === 'Open' || !r?.status).length;
-    const closed = rows.filter(r => r?.status === 'Closed').length;
-    const cancelled = rows.filter(r => r?.status === 'Cancelled').length;
-    return { open, closed, cancelled };
-  }, [rows]);
+  // 下载导入模板
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await orderAPI.downloadTemplate();
+      const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = '订单导入模板.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      message.error('下载模板失败');
+    }
+  };
+
+  // 预览导入
+  const handlePreviewImport = async (file) => {
+    setImportLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await orderAPI.previewImport(formData);
+      setImportData(res);
+    } catch (e) {
+      message.error('预览失败: ' + (e.message || '文件格式错误'));
+    } finally {
+      setImportLoading(false);
+    }
+    return false; // 阻止自动上传
+  };
+
+  // 确认导入
+  const handleConfirmImport = async () => {
+    if (!importData?.preview?.length) {
+      message.warning('没有可导入的数据');
+      return;
+    }
+    setImportLoading(true);
+    try {
+      // 重新上传文件执行导入
+      const fileInput = document.querySelector('.import-upload input[type="file"]');
+      if (!fileInput?.files?.[0]) {
+        message.error('请重新选择文件');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('skip_errors', 'true');
+      const res = await orderAPI.importOrders(formData);
+      message.success(res.message || '导入成功');
+      setImportModalVisible(false);
+      setImportData(null);
+      fetchOrders();
+      loadStatistics();
+    } catch (e) {
+      message.error('导入失败: ' + (e.message || '未知错误'));
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  // 查看审批历史
+  const handleViewApprovals = async (order) => {
+    setCurrentOrder(order);
+    try {
+      const res = await orderAPI.getApprovals(order.id);
+      setApprovalHistory(res.approvals || []);
+      setApprovalModalVisible(true);
+    } catch (e) {
+      message.error('获取审批历史失败');
+    }
+  };
+
+  // 执行工作流操作
+  const handleWorkflowAction = (order, action, actionName) => {
+    setCurrentOrder(order);
+    setCurrentAction({ action, actionName });
+    setActionComment('');
+    setActionModalVisible(true);
+  };
+
+  const confirmWorkflowAction = async () => {
+    if (!currentOrder || !currentAction) return;
+
+    const { action } = currentAction;
+    const id = currentOrder.id;
+
+    // 验证
+    if (['reject', 'cancel'].includes(action) && !actionComment.trim()) {
+      message.warning('请填写原因');
+      return;
+    }
+
+    try {
+      const data = { comment: actionComment };
+      switch (action) {
+        case 'submit':
+          await orderAPI.submitOrder(id, data);
+          break;
+        case 'approve':
+          await orderAPI.approveOrder(id, data);
+          break;
+        case 'reject':
+          await orderAPI.rejectOrder(id, data);
+          break;
+        case 'return':
+          await orderAPI.returnOrder(id, data);
+          break;
+        case 'cancel':
+          await orderAPI.cancelOrder(id, data);
+          break;
+        case 'start_production':
+          await orderAPI.startProduction(id, data);
+          break;
+        case 'start_delivery':
+          await orderAPI.startDelivery(id, data);
+          break;
+        case 'complete':
+          await orderAPI.completeOrder(id, data);
+          break;
+        default:
+          throw new Error('未知操作');
+      }
+      message.success(`${currentAction.actionName}成功`);
+      setActionModalVisible(false);
+      fetchOrders();
+      loadStatistics();
+    } catch (e) {
+      message.error(`${currentAction.actionName}失败: ` + (e.message || '未知错误'));
+    }
+  };
+
+  // 渲染操作按钮
+  const renderActionButtons = (order) => {
+    const status = order.status || 'draft';
+    const buttons = [];
+    const id = order.id;
+
+    switch (status) {
+      case 'draft':
+        buttons.push(
+          <Tooltip title="提交审批" key="submit">
+            <Button type="link" size="small" icon={<SendOutlined />}
+              onClick={() => handleWorkflowAction(order, 'submit', '提交审批')} />
+          </Tooltip>
+        );
+        break;
+      case 'pending':
+        buttons.push(
+          <Tooltip title="审批通过" key="approve">
+            <Button type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }}
+              onClick={() => handleWorkflowAction(order, 'approve', '审批通过')} />
+          </Tooltip>,
+          <Tooltip title="拒绝" key="reject">
+            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+              onClick={() => handleWorkflowAction(order, 'reject', '拒绝')} />
+          </Tooltip>
+        );
+        break;
+      case 'confirmed':
+        buttons.push(
+          <Tooltip title="开始生产" key="production">
+            <Button type="link" size="small" icon={<PlayCircleOutlined />}
+              onClick={() => handleWorkflowAction(order, 'start_production', '开始生产')} />
+          </Tooltip>
+        );
+        break;
+      case 'in_production':
+        buttons.push(
+          <Tooltip title="开始交货" key="delivery">
+            <Button type="link" size="small" icon={<CarOutlined />}
+              onClick={() => handleWorkflowAction(order, 'start_delivery', '开始交货')} />
+          </Tooltip>
+        );
+        break;
+      case 'in_delivery':
+        buttons.push(
+          <Tooltip title="完成" key="complete">
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }}
+              onClick={() => handleWorkflowAction(order, 'complete', '完成订单')} />
+          </Tooltip>
+        );
+        break;
+    }
+
+    // 取消按钮（草稿、待审批、已确认状态可用）
+    if (['draft', 'pending', 'confirmed'].includes(status)) {
+      buttons.push(
+        <Tooltip title="取消订单" key="cancel">
+          <Button type="link" size="small" danger icon={<StopOutlined />}
+            onClick={() => handleWorkflowAction(order, 'cancel', '取消订单')} />
+        </Tooltip>
+      );
+    }
+
+    return buttons;
+  };
 
   // 表格列
   const columns = [
@@ -330,7 +470,9 @@ export default function OrderList() {
       dataIndex: 'order_no',
       key: 'order_no',
       width: 140,
-      render: (text, record) => text || record?.no || record?.id || '-',
+      render: (text, record) => (
+        <a onClick={() => nav(`/orders/${record.id}`)}>{text || record.id || '-'}</a>
+      ),
       sorter: (a, b) => (a.order_no || '').localeCompare(b.order_no || ''),
     },
     {
@@ -339,101 +481,95 @@ export default function OrderList() {
       width: 150,
       render: (_, record) => {
         const name = record?.customer_name || record?.customer ||
-          customersMap.get(String(record?.customer_id)) || '-';
+          customersMap.get(String(record?.customer_id)) || record?.customer_code || '-';
         return <span style={{ fontWeight: 500 }}>{name}</span>;
       },
     },
     {
       title: '内部图号',
-      key: 'internal_no',
+      dataIndex: 'product',
+      key: 'product',
       width: 150,
       ellipsis: true,
-      render: (_, record) => pickInternalNo(record) || '-',
+      render: (text, record) => record?.product_text || text || record?.cn_name || '-',
+    },
+    {
+      title: '数量',
+      key: 'qty',
+      width: 100,
+      align: 'right',
+      render: (_, record) => {
+        const qty = record.order_qty || record.qty_total || 0;
+        const delivered = record.delivered_qty || 0;
+        return (
+          <Tooltip title={`已交: ${delivered} / 订单: ${qty}`}>
+            <span>{delivered} / {qty}</span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      filters: [
-        { text: '进行中', value: 'Open' },
-        { text: '已关闭', value: 'Closed' },
-        { text: '已取消', value: 'Cancelled' },
-      ],
+      filters: Object.entries(ORDER_STATUS_CONFIG).map(([value, { label }]) => ({ text: label, value })),
       onFilter: (value, record) => record.status === value,
       render: (status) => {
-        const config = {
-          'Open': { color: 'processing', text: '进行中', icon: <ClockCircleOutlined /> },
-          'Closed': { color: 'success', text: '已关闭', icon: <CheckCircleOutlined /> },
-          'Cancelled': { color: 'error', text: '已取消', icon: <CloseCircleOutlined /> },
-        };
-        const c = config[status] || config['Open'];
-        return <Tag color={c.color} icon={c.icon}>{c.text}</Tag>;
+        const config = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG.draft;
+        return <Tag color={config.color} icon={config.icon}>{config.label}</Tag>;
       },
     },
     {
-      title: '要求纳期',
-      key: 'demand_date',
-      width: 120,
-      render: (_, record) => formatDate(pickDemandDate(record)),
-      sorter: (a, b) => new Date(pickDemandDate(a) || 0) - new Date(pickDemandDate(b) || 0),
-    },
-    {
-      title: '下单日期',
-      key: 'order_date',
-      width: 120,
-      render: (_, record) => formatDate(pickOrderDate(record)),
-      sorter: (a, b) => new Date(pickOrderDate(a) || 0) - new Date(pickOrderDate(b) || 0),
+      title: '交货日期',
+      dataIndex: 'due_date',
+      key: 'due_date',
+      width: 110,
+      render: (val) => formatDate(val),
+      sorter: (a, b) => new Date(a.due_date || 0) - new Date(b.due_date || 0),
     },
     {
       title: '金额',
       key: 'amount',
-      width: 120,
+      width: 100,
       align: 'right',
       render: (_, record) => {
-        const amt = pickAmount(record);
-        return <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{formatAmount(amt)}</span>;
+        const qty = record.order_qty || record.qty_total || 0;
+        const price = record.unit_price || 0;
+        return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatAmount(qty * price)}</span>;
       },
-      sorter: (a, b) => (pickAmount(a) || 0) - (pickAmount(b) || 0),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 150,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => {
-        const id = record?.id ?? record?.order_id ?? record?.no ?? record?.order_no;
-        return (
-          <Space size="small">
-            <Tooltip title="查看详情">
-              <Button
-                type="link"
-                icon={<EyeOutlined />}
-                onClick={() => nav(`/orders/${id}`)}
-                size="small"
-              />
+      render: (_, record) => (
+        <Space size={0} wrap>
+          {renderActionButtons(record)}
+          <Tooltip title="审批历史">
+            <Button type="link" size="small" icon={<AuditOutlined />}
+              onClick={() => handleViewApprovals(record)} />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button type="link" size="small" icon={<EditOutlined />}
+              onClick={() => nav(`/orders/${record.id}/edit`)}
+              disabled={!['draft'].includes(record.status)} />
+          </Tooltip>
+          <Popconfirm
+            title="确定要删除此订单吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+            disabled={!['draft'].includes(record.status)}
+          >
+            <Tooltip title="删除">
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}
+                disabled={!['draft'].includes(record.status)} />
             </Tooltip>
-            <Tooltip title="编辑">
-              <Button
-                type="link"
-                icon={<EditOutlined />}
-                onClick={() => nav(`/orders/${id}/edit`)}
-                size="small"
-              />
-            </Tooltip>
-            <Popconfirm
-              title="确定要删除此订单吗？"
-              onConfirm={() => handleDelete(id)}
-              okText="确定"
-              cancelText="取消"
-            >
-              <Tooltip title="删除">
-                <Button type="link" danger icon={<DeleteOutlined />} size="small" />
-              </Tooltip>
-            </Popconfirm>
-          </Space>
-        );
-      },
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 
@@ -445,41 +581,80 @@ export default function OrderList() {
 
   // 更多操作
   const moreActions = [
-    { key: 'export', label: '导出CSV', icon: <DownloadOutlined />, onClick: handleExport },
-    { key: 'refresh', label: '刷新数据', icon: <ReloadOutlined />, onClick: fetchOrders },
+    { key: 'export', label: '导出Excel', icon: <DownloadOutlined />, onClick: handleExport },
+    { key: 'import', label: '批量导入', icon: <UploadOutlined />, onClick: () => setImportModalVisible(true) },
+    { key: 'template', label: '下载模板', icon: <FileExcelOutlined />, onClick: handleDownloadTemplate },
+    { type: 'divider' },
+    { key: 'reports', label: '订单报表', icon: <BarChartOutlined />, onClick: () => nav('/orders/reports') },
+    { key: 'refresh', label: '刷新数据', icon: <ReloadOutlined />, onClick: () => { fetchOrders(); loadStatistics(); } },
   ];
 
   return (
     <div style={{ padding: '24px' }}>
       {/* 统计卡片 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={8}>
-          <Card size="small" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable onClick={() => setFilters({ ...filters, status: 'draft' })}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.85)' }}>进行中</span>}
-              value={stats.open}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#fff' }}
+              title="草稿"
+              value={statistics?.by_status?.find(s => s.status === 'draft')?.count || 0}
+              prefix={<EditOutlined style={{ color: '#999' }} />}
+              valueStyle={{ color: '#999' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small" style={{ background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable style={{ borderLeft: '3px solid #fa8c16' }}
+            onClick={() => setFilters({ ...filters, status: 'pending' })}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.85)' }}>已完成</span>}
-              value={stats.closed}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#fff' }}
+              title="待审批"
+              value={statistics?.pending_approval || 0}
+              prefix={<ClockCircleOutlined style={{ color: '#fa8c16' }} />}
+              valueStyle={{ color: '#fa8c16' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small" style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)' }}>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable style={{ borderLeft: '3px solid #1890ff' }}
+            onClick={() => setFilters({ ...filters, status: 'confirmed' })}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.85)' }}>已取消</span>}
-              value={stats.cancelled}
-              prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#fff' }}
+              title="已确认"
+              value={statistics?.by_status?.find(s => s.status === 'confirmed')?.count || 0}
+              prefix={<CheckCircleOutlined style={{ color: '#1890ff' }} />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable style={{ borderLeft: '3px solid #722ed1' }}
+            onClick={() => setFilters({ ...filters, status: 'in_production' })}>
+            <Statistic
+              title="生产中"
+              value={statistics?.by_status?.find(s => s.status === 'in_production')?.count || 0}
+              prefix={<ToolOutlined style={{ color: '#722ed1' }} />}
+              valueStyle={{ color: '#722ed1' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable style={{ borderLeft: '3px solid #13c2c2' }}
+            onClick={() => setFilters({ ...filters, status: 'in_delivery' })}>
+            <Statistic
+              title="交货中"
+              value={statistics?.by_status?.find(s => s.status === 'in_delivery')?.count || 0}
+              prefix={<CarOutlined style={{ color: '#13c2c2' }} />}
+              valueStyle={{ color: '#13c2c2' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable style={{ borderLeft: '3px solid #52c41a' }}
+            onClick={() => setFilters({ ...filters, status: 'completed' })}>
+            <Statistic
+              title="已完成"
+              value={statistics?.by_status?.find(s => s.status === 'completed')?.count || 0}
+              prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+              valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
@@ -488,40 +663,21 @@ export default function OrderList() {
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           {/* 高级筛选 */}
-          <Collapse
-            activeKey={filterCollapsed}
-            onChange={setFilterCollapsed}
-            ghost
-            style={{ background: '#fafafa', borderRadius: 8 }}
-          >
+          <Collapse activeKey={filterCollapsed} onChange={setFilterCollapsed} ghost
+            style={{ background: '#fafafa', borderRadius: 8 }}>
             <Panel
               header={
                 <Space>
                   <FilterOutlined />
                   <span>高级筛选</span>
-                  {activeFilterCount > 0 && (
-                    <Badge count={activeFilterCount} style={{ backgroundColor: '#1890ff' }} />
-                  )}
+                  {activeFilterCount > 0 && <Badge count={activeFilterCount} style={{ backgroundColor: '#1890ff' }} />}
                 </Space>
               }
               key="filter"
             >
               <Row gutter={16}>
                 <Col xs={24} sm={12} md={6}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, color: '#666' }}>客户</label>
-                  </div>
-                  <Input
-                    placeholder="客户名称/代码"
-                    value={filters.customer_kw}
-                    onChange={(e) => setFilters({ ...filters, customer_kw: e.target.value })}
-                    allowClear
-                  />
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, color: '#666' }}>订单号/图号</label>
-                  </div>
+                  <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, color: '#666' }}>订单号/图号</label></div>
                   <Input
                     placeholder="订单号/图号"
                     value={filters.order_kw}
@@ -530,9 +686,23 @@ export default function OrderList() {
                   />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, color: '#666' }}>状态</label>
-                  </div>
+                  <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, color: '#666' }}>客户</label></div>
+                  <Select
+                    placeholder="选择客户"
+                    value={filters.customer_id}
+                    onChange={(v) => setFilters({ ...filters, customer_id: v })}
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    style={{ width: '100%' }}
+                  >
+                    {customers.map(c => (
+                      <Option key={c.id} value={c.id}>{c.short_name || c.name} ({c.code})</Option>
+                    ))}
+                  </Select>
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, color: '#666' }}>状态</label></div>
                   <Select
                     placeholder="选择状态"
                     value={filters.status}
@@ -540,15 +710,13 @@ export default function OrderList() {
                     allowClear
                     style={{ width: '100%' }}
                   >
-                    <Option value="Open">进行中</Option>
-                    <Option value="Closed">已关闭</Option>
-                    <Option value="Cancelled">已取消</Option>
+                    {Object.entries(ORDER_STATUS_CONFIG).map(([value, { label }]) => (
+                      <Option key={value} value={value}>{label}</Option>
+                    ))}
                   </Select>
                 </Col>
                 <Col xs={24} sm={12} md={6}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, color: '#666' }}>日期范围</label>
-                  </div>
+                  <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, color: '#666' }}>日期范围</label></div>
                   <RangePicker
                     value={filters.dateRange}
                     onChange={(dates) => setFilters({ ...filters, dateRange: dates })}
@@ -601,6 +769,11 @@ export default function OrderList() {
               <span style={{ fontSize: 18, fontWeight: 600, color: '#1890ff' }}>{total}</span>
               <span style={{ color: '#666' }}> 条订单</span>
             </div>
+            <div>
+              <span style={{ color: '#666' }}>本月订单 </span>
+              <span style={{ fontWeight: 600 }}>{statistics?.this_month?.count || 0}</span>
+              <span style={{ color: '#666' }}> 条</span>
+            </div>
             {activeFilterCount > 0 && (
               <div style={{ color: '#ff4d4f' }}>
                 <FilterOutlined /> 已启用 {activeFilterCount} 个筛选条件
@@ -613,7 +786,7 @@ export default function OrderList() {
           <Table
             columns={columns}
             dataSource={rows}
-            rowKey={(record) => record?.id ?? record?.order_id ?? record?.no ?? record?.order_no ?? Math.random()}
+            rowKey={(record) => record?.id ?? record?.order_id ?? Math.random()}
             loading={loading}
             rowSelection={rowSelection}
             pagination={{
@@ -631,6 +804,137 @@ export default function OrderList() {
           />
         </Space>
       </Card>
+
+      {/* 导入弹窗 */}
+      <Modal
+        title="批量导入订单"
+        open={importModalVisible}
+        onCancel={() => { setImportModalVisible(false); setImportData(null); }}
+        footer={[
+          <Button key="template" icon={<FileExcelOutlined />} onClick={handleDownloadTemplate}>
+            下载模板
+          </Button>,
+          <Button key="cancel" onClick={() => { setImportModalVisible(false); setImportData(null); }}>
+            取消
+          </Button>,
+          <Button key="import" type="primary" loading={importLoading}
+            disabled={!importData?.valid_count}
+            onClick={handleConfirmImport}>
+            确认导入 ({importData?.valid_count || 0} 条)
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Upload.Dragger
+            accept=".xlsx,.xls"
+            maxCount={1}
+            beforeUpload={handlePreviewImport}
+            showUploadList={false}
+            className="import-upload"
+          >
+            <p className="ant-upload-drag-icon"><UploadOutlined style={{ fontSize: 48, color: '#1890ff' }} /></p>
+            <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
+            <p className="ant-upload-hint">支持 .xlsx, .xls 格式的 Excel 文件</p>
+          </Upload.Dragger>
+
+          {importData && (
+            <>
+              <Alert
+                message={`预览结果：共 ${importData.total} 条，有效 ${importData.valid_count} 条，无效 ${importData.invalid_count} 条`}
+                type={importData.invalid_count > 0 ? "warning" : "success"}
+                showIcon
+              />
+              {importData.invalid_count > 0 && (
+                <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                  {importData.errors?.slice(0, 10).map((err, idx) => (
+                    <Alert
+                      key={idx}
+                      message={`第 ${err.row} 行: ${err.errors.join(', ')}`}
+                      type="error"
+                      size="small"
+                      style={{ marginBottom: 4 }}
+                    />
+                  ))}
+                  {importData.errors?.length > 10 && (
+                    <div style={{ color: '#999', textAlign: 'center' }}>
+                      ... 还有 {importData.errors.length - 10} 条错误
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </Space>
+      </Modal>
+
+      {/* 审批历史弹窗 */}
+      <Modal
+        title={`审批历史 - ${currentOrder?.order_no || ''}`}
+        open={approvalModalVisible}
+        onCancel={() => setApprovalModalVisible(false)}
+        footer={<Button onClick={() => setApprovalModalVisible(false)}>关闭</Button>}
+        width={600}
+      >
+        <div style={{ marginBottom: 16 }}>
+          当前状态: <Tag color={ORDER_STATUS_CONFIG[currentOrder?.status]?.color}>
+            {ORDER_STATUS_CONFIG[currentOrder?.status]?.label || currentOrder?.status}
+          </Tag>
+        </div>
+        {approvalHistory.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#999', padding: 24 }}>暂无审批记录</div>
+        ) : (
+          <Timeline mode="left">
+            {approvalHistory.map((item, idx) => (
+              <Timeline.Item
+                key={idx}
+                label={dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+                color={item.action === 'approve' ? 'green' : item.action === 'reject' ? 'red' : 'blue'}
+              >
+                <div><strong>{item.action_name || item.action}</strong></div>
+                <div style={{ color: '#666' }}>
+                  {item.from_status_name || item.from_status} → {item.to_status_name || item.to_status}
+                </div>
+                <div style={{ color: '#999' }}>操作人: {item.operator_name || '系统'}</div>
+                {item.comment && <div style={{ color: '#666', marginTop: 4 }}>备注: {item.comment}</div>}
+              </Timeline.Item>
+            ))}
+          </Timeline>
+        )}
+      </Modal>
+
+      {/* 工作流操作确认弹窗 */}
+      <Modal
+        title={currentAction?.actionName || '操作确认'}
+        open={actionModalVisible}
+        onCancel={() => setActionModalVisible(false)}
+        onOk={confirmWorkflowAction}
+        okText="确认"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16 }}>
+          订单: <strong>{currentOrder?.order_no}</strong>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          当前状态: <Tag color={ORDER_STATUS_CONFIG[currentOrder?.status]?.color}>
+            {ORDER_STATUS_CONFIG[currentOrder?.status]?.label}
+          </Tag>
+        </div>
+        {['reject', 'return', 'cancel'].includes(currentAction?.action) && (
+          <Alert
+            message={currentAction?.action === 'cancel' ? '取消订单后无法恢复' : '请填写原因'}
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Input.TextArea
+          placeholder={['reject', 'cancel'].includes(currentAction?.action) ? '请填写原因（必填）' : '备注（选填）'}
+          value={actionComment}
+          onChange={(e) => setActionComment(e.target.value)}
+          rows={3}
+        />
+      </Modal>
     </div>
   );
 }
