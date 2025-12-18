@@ -50,13 +50,13 @@ class Project(Base):
 
     # 状态和优先级
     status = Column(
-        Enum(ProjectStatus),
+        Enum(ProjectStatus, values_callable=lambda x: [e.value for e in x]),
         default=ProjectStatus.PLANNING,
         nullable=False,
         comment='项目状态'
     )
     priority = Column(
-        Enum(ProjectPriority),
+        Enum(ProjectPriority, values_callable=lambda x: [e.value for e in x]),
         default=ProjectPriority.NORMAL,
         nullable=False,
         comment='优先级'
