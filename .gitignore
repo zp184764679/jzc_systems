@@ -28,6 +28,11 @@ yarn-error.log*
 !.env.example
 !.env.production.example
 
+# Local secrets (NEVER commit)
+SECRETS.local.md
+*.local.md
+.claude/settings.local.json
+
 # Database files
 *.db
 *.sqlite
