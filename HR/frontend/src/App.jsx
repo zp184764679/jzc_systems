@@ -18,7 +18,7 @@ import LeaveManagement from "./pages/LeaveManagement";
 import PayrollManagement from "./pages/PayrollManagement";
 import PerformanceManagement from "./pages/PerformanceManagement";
 import RecruitmentManagement from "./pages/RecruitmentManagement";
-import { authEvents, AUTH_EVENTS, initStorageSync } from "./utils/authEvents";
+import { authEvents, AUTH_EVENTS, initStorageSync, startTokenAutoRefresh, stopTokenAutoRefresh } from "./utils/authEvents";
 import "./App.css";
 
 dayjs.locale("zh-cn");
@@ -68,7 +68,8 @@ function App() {
   // 验证 URL 中的 SSO token
   const validateUrlToken = async (token) => {
     try {
-      const response = await fetch('/portal-api/auth/verify', {
+      // P1-12: 修正 Portal API 路径
+      const response = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
@@ -159,6 +160,14 @@ function App() {
     const unsubscribe = authEvents.on(AUTH_EVENTS.STORAGE_SYNC, handleStorageSync);
     return () => unsubscribe();
   }, []);
+
+  // P1-13: 启用 Token 自动刷新
+  useEffect(() => {
+    if (user) {
+      startTokenAutoRefresh(5); // 每5分钟检查一次
+      return () => stopTokenAutoRefresh();
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {

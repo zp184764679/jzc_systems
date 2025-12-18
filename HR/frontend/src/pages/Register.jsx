@@ -102,10 +102,23 @@ export default function Register({ onShowLogin }) {
             label="密码"
             rules={[
               { required: true, message: "请输入密码" },
-              { min: 6, message: "密码长度至少6个字符" }
+              { min: 8, message: "密码长度至少8个字符" },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve();
+                  const hasUpper = /[A-Z]/.test(value);
+                  const hasLower = /[a-z]/.test(value);
+                  const hasDigit = /[0-9]/.test(value);
+                  const complexityCount = [hasUpper, hasLower, hasDigit].filter(Boolean).length;
+                  if (complexityCount < 2) {
+                    return Promise.reject(new Error('密码需包含大写字母、小写字母、数字中的至少两种'));
+                  }
+                  return Promise.resolve();
+                }
+              }
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="请设置您的密码" size="large" />
+            <Input.Password prefix={<LockOutlined />} placeholder="请设置您的密码（8位以上，含大小写或数字）" size="large" />
           </Form.Item>
 
           <Form.Item

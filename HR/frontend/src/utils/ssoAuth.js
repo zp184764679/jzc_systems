@@ -32,7 +32,8 @@ export const checkSSOToken = async () => {
 
     console.log('[SSO] Token found in URL, validating...');
 
-    const response = await fetch('/portal-api/auth/verify', {
+    // P1-12: 修正 Portal API 路径
+    const response = await fetch('/api/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),

@@ -187,7 +187,7 @@ def _get_db_config():
     db_user = os.getenv('AUTH_DB_USER')
     db_password = os.getenv('AUTH_DB_PASSWORD')
     db_host = os.getenv('AUTH_DB_HOST', 'localhost')
-    db_name = os.getenv('AUTH_DB_NAME', 'account')
+    db_name = os.getenv('AUTH_DB_NAME', 'cncplan')  # P0-4: 默认值改为 cncplan
 
     # 验证必须的数据库凭证
     if not db_user or not db_password:

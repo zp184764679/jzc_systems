@@ -64,9 +64,17 @@ def submit_registration():
     if not re.match(username_pattern, username):
         return jsonify({'error': '用户名只能包含字母、数字和下划线，长度3-20字符'}), 400
 
-    # 验证密码强度(至少6字符)
-    if len(password) < 6:
-        return jsonify({'error': '密码长度至少6个字符'}), 400
+    # P1-6: 验证密码强度(至少8字符+复杂度)
+    if len(password) < 8:
+        return jsonify({'error': '密码长度至少8个字符'}), 400
+
+    # 检查复杂度：至少包含大写、小写、数字中的两种
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    complexity_count = sum([has_upper, has_lower, has_digit])
+    if complexity_count < 2:
+        return jsonify({'error': '密码需包含大写字母、小写字母、数字中的至少两种'}), 400
 
     # 验证工号和姓名是否匹配HR系统数据库
     employee = Employee.query.filter_by(empNo=emp_no).first()

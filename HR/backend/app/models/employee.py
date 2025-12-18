@@ -91,6 +91,18 @@ class Employee(db.Model):
         onupdate=datetime.utcnow,
         comment='Record Last Update Time'
     )
+    # Soft delete support
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        default=None,
+        comment='Soft delete timestamp'
+    )
+    deleted_by: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment='User ID who deleted this record'
+    )
 
     # Relationships
     department_ref = relationship('Department', backref='employees', foreign_keys=[department_id])
@@ -152,7 +164,10 @@ class Employee(db.Model):
             'blacklist_date': self.blacklist_date.strftime('%Y-%m-%d') if self.blacklist_date else None,
             # Timestamps
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
-            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None,
+            # Soft delete
+            'deleted_at': self.deleted_at.strftime('%Y-%m-%d %H:%M:%S') if self.deleted_at else None,
+            'deleted_by': self.deleted_by
         }
 
     def __repr__(self):

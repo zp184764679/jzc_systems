@@ -4,9 +4,97 @@ from app.models.employee import Employee
 from app.models.base_data import Department, Position, Team, Factory
 from datetime import datetime
 from sqlalchemy import or_, and_
-from app.routes.auth import require_auth
+from app.routes.auth import require_auth, require_admin
+from functools import wraps
+import sys
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Add shared module to path for AuditService
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..', '../..', '..'))
+from shared.auth import is_admin, has_system_permission
+from shared.auth.audit_service import AuditService
 
 employees_bp = Blueprint('employees', __name__, url_prefix='/api')
+
+# Constants
+MAX_PAGE_SIZE = 100  # P1-9: Maximum pagination limit
+VALID_EMPLOYMENT_STATUS = ['Active', 'Resigned', 'Terminated', 'On Leave']
+
+# P2-14: Error message sanitization
+def safe_error_message(operation: str, error: Exception) -> str:
+    """
+    Return a safe error message that doesn't expose system internals.
+    In production, returns generic message; in development, includes details.
+    """
+    is_dev = os.getenv('FLASK_DEBUG', '').lower() == 'true' or os.getenv('FLASK_ENV') == 'development'
+    if is_dev:
+        return f'{operation}失败: {str(error)}'
+    # Production: log the error but return generic message
+    logger.error(f'{operation} error: {str(error)}')
+    return f'{operation}失败，请稍后重试或联系管理员'
+
+
+def require_hr_admin(f):
+    """
+    Decorator to require HR admin role for write operations.
+    Only admin/super_admin roles can create, update, or delete employees.
+    """
+    @wraps(f)
+    def decorated_function(user, *args, **kwargs):
+        if not is_admin(user.role):
+            return jsonify({
+                'success': False,
+                'message': '需要 HR 管理员权限才能执行此操作'
+            }), 403
+        return f(user=user, *args, **kwargs)
+    return decorated_function
+
+
+def validate_dates(data):
+    """
+    P1-7: Validate date logic
+    Returns (is_valid, error_message)
+    """
+    errors = []
+
+    hire_date = parse_date(data.get('hire_date'))
+    contract_start = parse_date(data.get('contract_start_date'))
+    contract_end = parse_date(data.get('contract_end_date'))
+    resignation_date = parse_date(data.get('resignation_date'))
+
+    # Contract dates should be in order
+    if contract_start and contract_end and contract_start > contract_end:
+        errors.append('合同开始日期不能晚于合同结束日期')
+
+    # Resignation date should be after hire date
+    if hire_date and resignation_date and resignation_date < hire_date:
+        errors.append('离职日期不能早于入职日期')
+
+    # Hire date should be before or equal to contract start
+    if hire_date and contract_start and hire_date > contract_start:
+        errors.append('入职日期不能晚于合同开始日期')
+
+    return (len(errors) == 0, '; '.join(errors))
+
+
+def validate_salary(data):
+    """
+    P1-8: Validate salary fields (must be non-negative if provided)
+    Returns (is_valid, error_message)
+    """
+    errors = []
+    salary_fields = ['base_salary', 'performance_salary', 'total_salary']
+
+    for field in salary_fields:
+        value = parse_float(data.get(field))
+        if value is not None and value < 0:
+            field_name = {'base_salary': '基本工资', 'performance_salary': '绩效工资', 'total_salary': '总工资'}
+            errors.append(f'{field_name.get(field, field)} 不能为负数')
+
+    return (len(errors) == 0, '; '.join(errors))
 
 def parse_date(date_string):
     """Parse date string to date object"""
@@ -67,21 +155,28 @@ def get_employees(user):
     Get all employees with pagination and search
     Query params:
     - page: page number (default: 1)
-    - per_page: items per page (default: 10)
+    - per_page: items per page (default: 10, max: 100)
     - search: search term for empNo, name, department, title
     - department: filter by department
     - employment_status: filter by employment status
+    - include_deleted: include soft-deleted records (admin only)
     """
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10000, type=int)  # Increased to handle all employees
+        per_page = request.args.get('per_page', 10, type=int)
+        # P1-9: Enforce pagination limit
+        per_page = min(per_page, MAX_PAGE_SIZE)
+
         search = request.args.get('search', '').strip()
         department_filter = request.args.get('department', '').strip()
         status_filter = request.args.get('employment_status', '').strip()
         factory_filter = request.args.get('factory_id', '').strip()
+        include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
 
-        # Build query
+        # Build query - exclude soft-deleted by default
         query = Employee.query
+        if not (include_deleted and is_admin(user.role)):
+            query = query.filter(Employee.deleted_at.is_(None))
 
         # Apply search filter
         if search:
@@ -135,7 +230,7 @@ def get_employees(user):
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error fetching employees: {str(e)}'
+            'message': safe_error_message('获取员工列表', e)
         }), 500
 
 @employees_bp.route('/employees/<int:id>', methods=['GET'])
@@ -148,7 +243,14 @@ def get_employee(id, user):
         if not employee:
             return jsonify({
                 'success': False,
-                'message': 'Employee not found'
+                'message': '员工不存在'
+            }), 404
+
+        # Check if soft-deleted (only admin can view)
+        if employee.deleted_at and not is_admin(user.role):
+            return jsonify({
+                'success': False,
+                'message': '员工不存在'
             }), 404
 
         return jsonify({
@@ -157,52 +259,78 @@ def get_employee(id, user):
         }), 200
 
     except Exception as e:
+        logger.error(f'Error fetching employee {id}: {str(e)}')
         return jsonify({
             'success': False,
-            'message': f'Error fetching employee: {str(e)}'
+            'message': '获取员工信息失败'
         }), 500
 
 @employees_bp.route('/employees', methods=['POST'])
 @require_auth
+@require_hr_admin
 def create_employee(user):
-    """Create new employee"""
+    """Create new employee (Admin only)"""
     try:
         data = request.get_json()
 
         if not data:
             return jsonify({
                 'success': False,
-                'message': 'No data provided'
+                'message': '请提供员工数据'
             }), 400
 
         # Validate required fields
         if not data.get('empNo'):
             return jsonify({
                 'success': False,
-                'message': 'Employee number (empNo) is required'
+                'message': '员工编号 (empNo) 为必填项'
             }), 400
 
         if not data.get('name'):
             return jsonify({
                 'success': False,
-                'message': 'Employee name is required'
+                'message': '员工姓名为必填项'
             }), 400
 
-        # Check if empNo already exists
-        existing = Employee.query.filter_by(empNo=data['empNo']).first()
-        if existing:
+        # P1-7: Validate date logic
+        date_valid, date_error = validate_dates(data)
+        if not date_valid:
             return jsonify({
                 'success': False,
-                'message': f'Employee number {data["empNo"]} already exists'
+                'message': date_error
+            }), 400
+
+        # P1-8: Validate salary fields
+        salary_valid, salary_error = validate_salary(data)
+        if not salary_valid:
+            return jsonify({
+                'success': False,
+                'message': salary_error
+            }), 400
+
+        # Check if empNo already exists (including soft-deleted)
+        existing = Employee.query.filter_by(empNo=data['empNo']).first()
+        if existing:
+            if existing.deleted_at:
+                return jsonify({
+                    'success': False,
+                    'message': f'员工编号 {data["empNo"]} 已存在（已删除员工），请使用其他编号或恢复该员工'
+                }), 400
+            return jsonify({
+                'success': False,
+                'message': f'员工编号 {data["empNo"]} 已存在'
             }), 400
 
         # Check if id_card already exists (if provided)
         if data.get('id_card'):
-            existing_id = Employee.query.filter_by(id_card=data['id_card']).first()
+            existing_id = Employee.query.filter(
+                Employee.id_card == data['id_card'],
+                Employee.deleted_at.is_(None)
+            ).first()
             if existing_id:
                 return jsonify({
                     'success': False,
-                    'message': f'ID card number already exists'
+                    'message': '身份证号已存在'
                 }), 400
 
         # Resolve base data IDs to names
@@ -252,57 +380,115 @@ def create_employee(user):
         db.session.add(employee)
         db.session.commit()
 
+        # P0-5: Audit logging for employee creation
+        AuditService.log(
+            action_type=AuditService.ACTION_DATA_CREATE,
+            user_id=user.id,
+            username=user.username,
+            resource_type='employee',
+            resource_id=str(employee.id),
+            description=f'创建员工: {employee.name} (工号: {employee.empNo})',
+            status='success',
+            module='hr'
+        )
+
         return jsonify({
             'success': True,
-            'message': 'Employee created successfully',
+            'message': '员工创建成功',
             'data': employee.to_dict()
         }), 201
 
     except Exception as e:
         db.session.rollback()
+        logger.error(f'Error creating employee: {str(e)}')
         return jsonify({
             'success': False,
-            'message': f'Error creating employee: {str(e)}'
+            'message': '创建员工失败，请稍后重试'
         }), 500
 
 @employees_bp.route('/employees/<int:id>', methods=['PUT'])
 @require_auth
+@require_hr_admin
 def update_employee(id, user):
-    """Update employee by ID"""
+    """Update employee by ID (Admin only)"""
     try:
         employee = Employee.query.get(id)
 
         if not employee:
             return jsonify({
                 'success': False,
-                'message': 'Employee not found'
+                'message': '员工不存在'
             }), 404
+
+        # Don't allow updating soft-deleted employees
+        if employee.deleted_at:
+            return jsonify({
+                'success': False,
+                'message': '无法修改已删除的员工，请先恢复该员工'
+            }), 400
 
         data = request.get_json()
 
         if not data:
             return jsonify({
                 'success': False,
-                'message': 'No data provided'
+                'message': '请提供更新数据'
+            }), 400
+
+        # P1-7: Validate date logic (merge with existing data)
+        merged_data = {
+            'hire_date': data.get('hire_date', employee.hire_date.strftime('%Y-%m-%d') if employee.hire_date else None),
+            'contract_start_date': data.get('contract_start_date', employee.contract_start_date.strftime('%Y-%m-%d') if employee.contract_start_date else None),
+            'contract_end_date': data.get('contract_end_date', employee.contract_end_date.strftime('%Y-%m-%d') if employee.contract_end_date else None),
+            'resignation_date': data.get('resignation_date', employee.resignation_date.strftime('%Y-%m-%d') if employee.resignation_date else None),
+        }
+        date_valid, date_error = validate_dates(merged_data)
+        if not date_valid:
+            return jsonify({
+                'success': False,
+                'message': date_error
+            }), 400
+
+        # P1-8: Validate salary fields
+        salary_valid, salary_error = validate_salary(data)
+        if not salary_valid:
+            return jsonify({
+                'success': False,
+                'message': salary_error
             }), 400
 
         # Check if empNo is being changed and if it conflicts
         if 'empNo' in data and data['empNo'] != employee.empNo:
-            existing = Employee.query.filter_by(empNo=data['empNo']).first()
+            existing = Employee.query.filter(
+                Employee.empNo == data['empNo'],
+                Employee.id != id
+            ).first()
             if existing:
                 return jsonify({
                     'success': False,
-                    'message': f'Employee number {data["empNo"]} already exists'
+                    'message': f'员工编号 {data["empNo"]} 已存在'
                 }), 400
 
         # Check if id_card is being changed and if it conflicts
         if 'id_card' in data and data['id_card'] and data['id_card'] != employee.id_card:
-            existing_id = Employee.query.filter_by(id_card=data['id_card']).first()
+            existing_id = Employee.query.filter(
+                Employee.id_card == data['id_card'],
+                Employee.id != id,
+                Employee.deleted_at.is_(None)
+            ).first()
             if existing_id:
                 return jsonify({
                     'success': False,
-                    'message': f'ID card number already exists'
+                    'message': '身份证号已存在'
                 }), 400
+
+        # Store old values for audit log
+        old_values = {
+            'name': employee.name,
+            'empNo': employee.empNo,
+            'base_salary': employee.base_salary,
+            'is_blacklisted': employee.is_blacklisted
+        }
 
         # Resolve base data IDs to names
         base_data = resolve_base_data(data)
@@ -393,49 +579,147 @@ def update_employee(id, user):
 
         db.session.commit()
 
+        # P0-5: Audit logging for employee update
+        # Detect significant changes
+        changes = []
+        if old_values['name'] != employee.name:
+            changes.append(f'姓名: {old_values["name"]} -> {employee.name}')
+        if old_values['base_salary'] != employee.base_salary:
+            changes.append(f'薪资变更')
+        if old_values['is_blacklisted'] != employee.is_blacklisted:
+            changes.append(f'黑名单状态: {"加入" if employee.is_blacklisted else "移除"}')
+
+        AuditService.log(
+            action_type=AuditService.ACTION_DATA_UPDATE,
+            user_id=user.id,
+            username=user.username,
+            resource_type='employee',
+            resource_id=str(employee.id),
+            description=f'更新员工: {employee.name} (工号: {employee.empNo})' + (f' - {"; ".join(changes)}' if changes else ''),
+            status='success',
+            module='hr'
+        )
+
         return jsonify({
             'success': True,
-            'message': 'Employee updated successfully',
+            'message': '员工信息更新成功',
             'data': employee.to_dict()
         }), 200
 
     except Exception as e:
         db.session.rollback()
+        logger.error(f'Error updating employee {id}: {str(e)}')
         return jsonify({
             'success': False,
-            'message': f'Error updating employee: {str(e)}'
+            'message': '更新员工信息失败，请稍后重试'
         }), 500
 
 @employees_bp.route('/employees/<int:id>', methods=['DELETE'])
 @require_auth
+@require_hr_admin
 def delete_employee(id, user):
-    """Delete employee by ID"""
+    """Soft delete employee by ID (Admin only)"""
     try:
         employee = Employee.query.get(id)
 
         if not employee:
             return jsonify({
                 'success': False,
-                'message': 'Employee not found'
+                'message': '员工不存在'
             }), 404
+
+        # Already deleted?
+        if employee.deleted_at:
+            return jsonify({
+                'success': False,
+                'message': '该员工已被删除'
+            }), 400
 
         # Store employee data before deletion
         employee_data = employee.to_dict()
 
-        db.session.delete(employee)
+        # P1-10: Soft delete instead of hard delete
+        employee.deleted_at = datetime.utcnow()
+        employee.deleted_by = user.id
         db.session.commit()
+
+        # P0-5: Audit logging for employee deletion
+        AuditService.log(
+            action_type=AuditService.ACTION_DATA_DELETE,
+            user_id=user.id,
+            username=user.username,
+            resource_type='employee',
+            resource_id=str(employee.id),
+            description=f'删除员工: {employee.name} (工号: {employee.empNo})',
+            status='success',
+            module='hr'
+        )
 
         return jsonify({
             'success': True,
-            'message': 'Employee deleted successfully',
+            'message': '员工删除成功',
             'data': employee_data
         }), 200
 
     except Exception as e:
         db.session.rollback()
+        logger.error(f'Error deleting employee {id}: {str(e)}')
         return jsonify({
             'success': False,
-            'message': f'Error deleting employee: {str(e)}'
+            'message': '删除员工失败，请稍后重试'
+        }), 500
+
+
+@employees_bp.route('/employees/<int:id>/restore', methods=['POST'])
+@require_auth
+@require_hr_admin
+def restore_employee(id, user):
+    """Restore soft-deleted employee (Admin only)"""
+    try:
+        employee = Employee.query.get(id)
+
+        if not employee:
+            return jsonify({
+                'success': False,
+                'message': '员工不存在'
+            }), 404
+
+        if not employee.deleted_at:
+            return jsonify({
+                'success': False,
+                'message': '该员工未被删除，无需恢复'
+            }), 400
+
+        # Restore employee
+        employee.deleted_at = None
+        employee.deleted_by = None
+        employee.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        # Audit logging
+        AuditService.log(
+            action_type=AuditService.ACTION_DATA_UPDATE,
+            user_id=user.id,
+            username=user.username,
+            resource_type='employee',
+            resource_id=str(employee.id),
+            description=f'恢复已删除员工: {employee.name} (工号: {employee.empNo})',
+            status='success',
+            module='hr'
+        )
+
+        return jsonify({
+            'success': True,
+            'message': '员工恢复成功',
+            'data': employee.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Error restoring employee {id}: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': '恢复员工失败，请稍后重试'
         }), 500
 
 @employees_bp.route('/employees/list', methods=['POST'])
@@ -450,12 +734,15 @@ def list_employees(user):
 
         page = data.get('page', 1)
         per_page = data.get('per_page', 10)
+        # P1-9: Enforce pagination limit
+        per_page = min(per_page, MAX_PAGE_SIZE)
+
         search = data.get('search', '').strip()
         department_filter = data.get('department', '').strip()
         status_filter = data.get('employment_status', '').strip()
 
-        # Build query
-        query = Employee.query
+        # Build query - exclude soft-deleted
+        query = Employee.query.filter(Employee.deleted_at.is_(None))
 
         # Apply search filter
         if search:
@@ -501,24 +788,28 @@ def list_employees(user):
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error fetching employees: {str(e)}'
+            'message': safe_error_message('获取员工列表', e)
         }), 500
 
 @employees_bp.route('/employees/stats', methods=['GET'])
 @require_auth
 def get_employee_stats(user):
-    """Get employee statistics"""
+    """Get employee statistics (excludes soft-deleted employees)"""
     try:
-        total_employees = Employee.query.count()
-        active_employees = Employee.query.filter_by(employment_status='Active').count()
-        resigned_employees = Employee.query.filter_by(employment_status='Resigned').count()
+        # Exclude soft-deleted employees from all counts
+        base_query = Employee.query.filter(Employee.deleted_at.is_(None))
 
-        # Department statistics
+        total_employees = base_query.count()
+        active_employees = base_query.filter_by(employment_status='Active').count()
+        resigned_employees = base_query.filter_by(employment_status='Resigned').count()
+
+        # Department statistics (exclude soft-deleted)
         departments = db.session.query(
             Employee.department,
             db.func.count(Employee.id).label('count')
         ).filter(
-            Employee.department.isnot(None)
+            Employee.department.isnot(None),
+            Employee.deleted_at.is_(None)
         ).group_by(
             Employee.department
         ).all()
@@ -538,5 +829,5 @@ def get_employee_stats(user):
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error fetching statistics: {str(e)}'
+            'message': safe_error_message('获取统计数据', e)
         }), 500

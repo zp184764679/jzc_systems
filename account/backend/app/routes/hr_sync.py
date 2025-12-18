@@ -102,15 +102,24 @@ def require_admin(f):
     return decorated_function
 
 
+def get_auth_headers():
+    """获取当前请求的认证头，用于转发给 HR API"""
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        return {'Authorization': auth_header}
+    return {}
+
+
 @hr_sync_bp.route('/employees', methods=['GET'])
 @require_admin
 def get_hr_employees():
     """获取HR系统的在职员工列表"""
     try:
-        # 调用HR后端API获取在职员工
+        # 调用HR后端API获取在职员工 - P0-2: 传递认证头
         response = requests.get(
             f'{HR_BACKEND_URL}/api/employees',
             params={'employment_status': 'Active'},
+            headers=get_auth_headers(),
             timeout=30
         )
 
@@ -154,10 +163,11 @@ def get_hr_employees():
 def preview_sync():
     """预览同步结果 - 显示哪些用户会被更新"""
     try:
-        # 获取HR员工数据
+        # 获取HR员工数据 - P0-2: 传递认证头
         response = requests.get(
             f'{HR_BACKEND_URL}/api/employees',
             params={'employment_status': 'Active'},
+            headers=get_auth_headers(),
             timeout=30
         )
 
@@ -248,10 +258,11 @@ def execute_sync():
         update_name = data.get('update_name', True)  # 是否更新姓名
         user_ids = data.get('user_ids')  # 指定要更新的用户ID列表，为空则更新全部匹配
 
-        # 获取HR员工数据
+        # 获取HR员工数据 - P0-2: 传递认证头
         response = requests.get(
             f'{HR_BACKEND_URL}/api/employees',
             params={'employment_status': 'Active'},
+            headers=get_auth_headers(),
             timeout=30
         )
 
@@ -361,10 +372,11 @@ def batch_create_users():
         if not emp_nos:
             return jsonify({'error': '请提供要创建的工号列表'}), 400
 
-        # 获取HR员工数据
+        # 获取HR员工数据 - P0-2: 传递认证头
         response = requests.get(
             f'{HR_BACKEND_URL}/api/employees',
             params={'employment_status': 'Active'},
+            headers=get_auth_headers(),
             timeout=30
         )
 
