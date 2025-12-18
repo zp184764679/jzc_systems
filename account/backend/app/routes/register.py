@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 import sys
 import os
 import requests
@@ -7,6 +7,9 @@ import requests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
 from shared.auth import User, hash_password, init_auth_db, create_access_token
+from shared.auth.permissions import is_admin
+from shared.auth.audit_service import AuditService
+from shared.auth_middleware import requires_auth
 import shared.auth.models as auth_models
 from app.models.registration import RegistrationRequest, get_db, init_db
 import json
@@ -104,9 +107,15 @@ def submit_registration():
 
 
 @register_bp.route('/requests', methods=['GET'])
+@requires_auth
 def get_requests():
+    # 检查是否为管理员
+    current_user = g.current_user
+    if not is_admin(current_user.get('role')):
+        return jsonify({'error': '需要管理员权限'}), 403
+
     status = request.args.get('status', 'pending')
-    
+
     db = get_db()
     try:
         if status == 'all':
@@ -117,17 +126,27 @@ def get_requests():
             requests_list = db.query(RegistrationRequest).filter(
                 RegistrationRequest.status == status
             ).order_by(RegistrationRequest.created_at.desc()).all()
-        
+
         return jsonify([req.to_dict() for req in requests_list])
     finally:
         db.close()
 
 
 @register_bp.route('/approve/<int:request_id>', methods=['POST'])
+@requires_auth
 def approve_registration(request_id):
+    # 检查是否为管理员
+    current_user = g.current_user
+    if not is_admin(current_user.get('role')):
+        return jsonify({'error': '需要管理员权限'}), 403
+
     data = request.get_json()
     permissions = data.get('permissions', []) if data else []
-    role = data.get('role', 'user') if data else 'user'  # Get role from request, default to 'user'
+    role = data.get('role', 'user') if data else 'user'
+
+    # 验证权限不能为空
+    if not permissions or len(permissions) == 0:
+        return jsonify({'error': '请至少为用户分配一个系统权限'}), 400
 
     db = get_db()
     auth_session = auth_models.AuthSessionLocal()
@@ -153,8 +172,8 @@ def approve_registration(request_id):
         if existing_user:
             return jsonify({'error': '用户名已存在'}), 400
 
-        # Determine is_admin based on role
-        is_admin = role in ['admin', 'super_admin']
+        # Determine is_admin_flag based on role
+        is_admin_flag = role in ['admin', 'super_admin']
 
         # Create new user using saved username and hashed password
         new_user = User(
@@ -170,9 +189,9 @@ def approve_registration(request_id):
             team_id=reg_request.team_id,
             team_name=reg_request.team,
             is_active=True,
-            is_admin=is_admin,
+            is_admin=is_admin_flag,
             role=role,
-            permissions=json.dumps(permissions) if permissions else json.dumps([])
+            permissions=json.dumps(permissions)
         )
         auth_session.add(new_user)
         auth_session.commit()
@@ -180,6 +199,21 @@ def approve_registration(request_id):
         # Update registration request status
         reg_request.status = 'approved'
         db.commit()
+
+        # 记录审计日志
+        try:
+            AuditService.log(
+                action_type='user_approve',
+                user_id=current_user.get('user_id'),
+                username=current_user.get('username'),
+                resource_type='registration',
+                resource_id=str(request_id),
+                description=f'审批通过用户注册: {reg_request.username} (角色: {role}, 权限: {permissions})',
+                status='success',
+                module='account'
+            )
+        except Exception as audit_error:
+            print(f"审计日志记录失败: {audit_error}")
 
         # Sync data back to HR system - update employee info if emp_no matches
         hr_sync_result = None
@@ -193,10 +227,25 @@ def approve_registration(request_id):
             'user': new_user.to_dict(),
             'hr_sync': hr_sync_result
         })
-    
+
     except Exception as e:
         auth_session.rollback()
         db.rollback()
+        # 记录失败的审计日志
+        try:
+            AuditService.log(
+                action_type='user_approve',
+                user_id=current_user.get('user_id'),
+                username=current_user.get('username'),
+                resource_type='registration',
+                resource_id=str(request_id),
+                description=f'审批用户注册失败: {str(e)}',
+                status='failed',
+                error_message=str(e),
+                module='account'
+            )
+        except Exception:
+            pass
         return jsonify({'error': f'创建用户失败: {str(e)}'}), 500
     finally:
         auth_session.close()
@@ -297,34 +346,55 @@ def sync_to_hr_system(reg_request):
 
 
 @register_bp.route('/reject/<int:request_id>', methods=['POST'])
+@requires_auth
 def reject_registration(request_id):
+    # 检查是否为管理员
+    current_user = g.current_user
+    if not is_admin(current_user.get('role')):
+        return jsonify({'error': '需要管理员权限'}), 403
+
     data = request.get_json()
-    
+
     if not data or 'reason' not in data:
         return jsonify({'error': '请提供拒绝原因'}), 400
-    
+
     reason = data['reason']
-    
+
     db = get_db()
     try:
         # Find registration request
         reg_request = db.query(RegistrationRequest).filter(
             RegistrationRequest.id == request_id
         ).first()
-        
+
         if not reg_request:
             return jsonify({'error': '申请不存在'}), 404
-        
+
         if reg_request.status != 'pending':
             return jsonify({'error': '该申请已处理'}), 400
-        
+
         # Update registration request status
         reg_request.status = 'rejected'
         reg_request.reason = reason
         db.commit()
-        
+
+        # 记录审计日志
+        try:
+            AuditService.log(
+                action_type='user_reject',
+                user_id=current_user.get('user_id'),
+                username=current_user.get('username'),
+                resource_type='registration',
+                resource_id=str(request_id),
+                description=f'拒绝用户注册: {reg_request.username} (原因: {reason})',
+                status='success',
+                module='account'
+            )
+        except Exception as audit_error:
+            print(f"审计日志记录失败: {audit_error}")
+
         return jsonify({'message': '申请已拒绝'})
-    
+
     except Exception as e:
         db.rollback()
         return jsonify({'error': f'更新状态失败: {str(e)}'}), 500

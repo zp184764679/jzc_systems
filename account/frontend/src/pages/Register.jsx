@@ -217,8 +217,17 @@ const Register = () => {
                   name="password"
                   rules={[
                     { required: true, message: '请输入密码' },
-                    { min: 6, message: '密码长度至少6个字符' },
+                    { min: 8, message: '密码长度至少8个字符' },
+                    {
+                      pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/,
+                      message: '密码必须包含大小写字母、数字和特殊字符'
+                    }
                   ]}
+                  extra={
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      密码要求：至少8个字符，包含大写字母、小写字母、数字和特殊字符
+                    </Text>
+                  }
                 >
                   <Input.Password prefix={<LockOutlined />} placeholder="请设置您的密码" autoComplete="new-password" />
                 </Form.Item>

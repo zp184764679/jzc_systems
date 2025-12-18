@@ -6,11 +6,13 @@ import {
   Form,
   Input,
   Checkbox,
+  Select,
   message,
   Typography,
   Space,
   Tabs,
   Tag,
+  Alert,
 } from 'antd';
 import {
   CheckOutlined,
@@ -58,13 +60,36 @@ const RegistrationApproval = () => {
     return () => clearInterval(interval);
   }, [fetchRequests]);
 
+  // 可用的系统权限列表
+  const SYSTEM_PERMISSIONS = [
+    { value: 'portal', label: 'Portal - 门户系统' },
+    { value: 'hr', label: 'HR - 人力资源管理' },
+    { value: 'account', label: 'Account - 账户管理' },
+    { value: 'quotation', label: 'Quotation - 报价管理' },
+    { value: '采购', label: '采购 - 采购管理' },
+    { value: 'shm', label: 'SHM - 出货管理' },
+    { value: 'crm', label: 'CRM - 客户关系管理' },
+    { value: 'scm', label: 'SCM - 仓库管理' },
+    { value: 'eam', label: 'EAM - 设备资产管理' },
+    { value: 'mes', label: 'MES - 生产执行系统' },
+    { value: 'dashboard', label: 'Dashboard - 数据可视化' },
+  ];
+
+  // 可用的角色列表
+  const ROLE_OPTIONS = [
+    { value: 'user', label: '普通用户 (User)' },
+    { value: 'supervisor', label: '主管 (Supervisor)' },
+    { value: 'admin', label: '管理员 (Admin)' },
+  ];
+
   const handleApproveClick = (record) => {
     setSelectedRequest(record);
     setApproveModalVisible(true);
     approveForm.setFieldsValue({
       username: record.empNo.toLowerCase(),
       password: '',
-      permissions: [],
+      role: 'user',
+      permissions: ['portal'],  // 默认选中 portal
     });
   };
 
@@ -78,7 +103,8 @@ const RegistrationApproval = () => {
     try {
       await approveRequest(
         selectedRequest.id,
-        values.permissions || []
+        values.permissions || [],
+        values.role || 'user'
       );
       message.success('申请已批准');
       setApproveModalVisible(false);
@@ -257,12 +283,44 @@ const RegistrationApproval = () => {
           </div>
         )}
         <Form form={approveForm} layout="vertical" onFinish={handleApproveSubmit}>
-          <Form.Item label="权限 (Permissions)" name="permissions">
-            <Checkbox.Group>
-              <Space direction="vertical">
-                <Checkbox value="hr">HR - 人力资源管理</Checkbox>
-                <Checkbox value="quotation">Quotation - 报价管理</Checkbox>
-                <Checkbox value="account">Account - 账务管理</Checkbox>
+          <Alert
+            message="请为新用户分配角色和系统权限"
+            description="至少需要选择一个系统权限，否则用户将无法访问任何子系统。"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          <Form.Item
+            label="角色 (Role)"
+            name="role"
+            rules={[{ required: true, message: '请选择角色' }]}
+          >
+            <Select placeholder="请选择角色">
+              {ROLE_OPTIONS.map(opt => (
+                <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            label="系统权限 (Permissions)"
+            name="permissions"
+            rules={[
+              { required: true, message: '请至少选择一个系统权限' },
+              {
+                validator: (_, value) => {
+                  if (!value || value.length === 0) {
+                    return Promise.reject(new Error('请至少选择一个系统权限'));
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
+          >
+            <Checkbox.Group style={{ width: '100%' }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {SYSTEM_PERMISSIONS.map(perm => (
+                  <Checkbox key={perm.value} value={perm.value}>{perm.label}</Checkbox>
+                ))}
               </Space>
             </Checkbox.Group>
           </Form.Item>

@@ -86,8 +86,8 @@ export const getRegistrationRequests = (status = 'pending') => {
   return api.get('/register/requests', { params: { status } });
 };
 
-export const approveRequest = (requestId, permissions) => {
-  return api.post(`/register/approve/${requestId}`, { permissions });
+export const approveRequest = (requestId, permissions, role = 'user') => {
+  return api.post(`/register/approve/${requestId}`, { permissions, role });
 };
 
 export const rejectRequest = (requestId, reason) => {
