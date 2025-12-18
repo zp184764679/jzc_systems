@@ -307,7 +307,8 @@ def get_module_name(module):
         'shm': '出货管理',
         'portal': '门户系统',
         'account': '账户管理',
-        'dashboard': '可视化看板'
+        'dashboard': '可视化看板',
+        'project': '项目管理'
     }
     return module_names.get(module, module)
 
