@@ -43,24 +43,13 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 
 ### SSH 连接方式
 
-```bash
-# 1. 创建私钥文件 (如果不存在)
-mkdir -p ~/.ssh
-cat > ~/.ssh/jzc_server << 'EOF'
------BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACDQqwuFosEJVw+xIxkf0TKiLJ1oci5an62QJalVL2vghwAAAJgIKJGUCCiR
-lAAAAAtzc2gtZWQyNTUxOQAAACDQqwuFosEJVw+xIxkf0TKiLJ1oci5an62QJalVL2vghw
-AAAEAJrVmyHBSmuZlIKpQtbH0fvH8Z0bigTEpNSuzd8mlvaNCrC4WiwQlXD7EjGR/RMqIs
-nWhyLlqfrZAlqVUva+CHAAAAEmRldi1tYWNoaW5lLWFjY2VzcwECAw==
------END OPENSSH PRIVATE KEY-----
-EOF
-chmod 600 ~/.ssh/jzc_server
+> ⚠️ **安全提示**: SSH 私钥不应存储在代码仓库中。请向管理员获取访问凭据。
 
-# 2. 连接服务器
+```bash
+# 连接服务器 (需要配置私钥)
 ssh -i ~/.ssh/jzc_server aaa@61.145.212.28
 
-# 3. 常用命令
+# 常用命令
 ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 list"
 ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
 ```
@@ -339,16 +328,18 @@ pm2 start celery-worker
 
 ```bash
 # 认证数据库 - 所有子系统统一使用 cncplan
-AUTH_DB_USER=app
-AUTH_DB_PASSWORD=app
+AUTH_DB_USER=<db_user>
+AUTH_DB_PASSWORD=<db_password>
 AUTH_DB_HOST=localhost
 AUTH_DB_NAME=cncplan        # 重要：必须是 cncplan，不是 account
 
 # JWT配置 - 所有子系统必须相同
-SECRET_KEY=jzc-dev-shared-secret-key-2025
-JWT_SECRET_KEY=jzc-dev-shared-secret-key-2025
+SECRET_KEY=<your_secret_key>
+JWT_SECRET_KEY=<your_jwt_secret_key>
 ALGORITHM=HS256
 ```
+
+> ⚠️ **安全提示**: 实际密钥请从 `.env` 文件获取，不要在文档中存储真实密钥。
 
 ⚠️ **警告**：如果 JWT_SECRET_KEY 或 AUTH_DB_NAME 配置不一致，会导致：
 - Token 验证失败（用户从 Portal 登录后无法访问子系统）
@@ -358,19 +349,19 @@ ALGORITHM=HS256
 ```bash
 # 数据库
 DB_HOST=localhost
-MYSQL_USER=app
-MYSQL_PASSWORD=your_password
+MYSQL_USER=<db_user>
+MYSQL_PASSWORD=<db_password>
 MYSQL_DATABASE=cncplan
 
 # 认证数据库 (shared/auth)
-AUTH_DB_USER=app
-AUTH_DB_PASSWORD=app
+AUTH_DB_USER=<db_user>
+AUTH_DB_PASSWORD=<db_password>
 AUTH_DB_HOST=localhost
 AUTH_DB_NAME=cncplan
 
 # JWT - 统一密钥
-SECRET_KEY=jzc-dev-shared-secret-key-2025
-JWT_SECRET_KEY=jzc-dev-shared-secret-key-2025
+SECRET_KEY=<your_secret_key>
+JWT_SECRET_KEY=<your_jwt_secret_key>
 
 # Flask
 FLASK_ENV=production
