@@ -63,6 +63,7 @@ class User(Base):
     # Login security fields
     failed_login_attempts = Column(Integer, default=0)  # 登录失败次数
     locked_until = Column(DateTime, nullable=True)  # 账户锁定截止时间
+    last_failed_attempt_at = Column(DateTime, nullable=True)  # P2-22: 最后一次失败尝试时间
     last_login_at = Column(DateTime, nullable=True)  # 上次登录时间
     last_login_ip = Column(String(45), nullable=True)  # 上次登录 IP
 
@@ -130,10 +131,17 @@ class User(Base):
         return ROLE_LEVELS.get(self.role, 0)
 
     def is_account_locked(self):
-        """Check if account is currently locked"""
+        """Check if account is currently locked
+        P2-17: 如果锁定已过期，自动重置失败计数
+        """
         if self.locked_until is None:
             return False
-        return datetime.utcnow() < self.locked_until
+        if datetime.utcnow() >= self.locked_until:
+            # P2-17: 锁定已过期，重置失败计数
+            self.failed_login_attempts = 0
+            self.locked_until = None
+            return False
+        return True
 
     def is_password_expired(self):
         """Check if password has expired"""
@@ -144,6 +152,7 @@ class User(Base):
     def increment_failed_login(self, lockout_threshold=5, lockout_minutes=30):
         """Increment failed login attempts and lock if threshold reached"""
         self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
+        self.last_failed_attempt_at = datetime.utcnow()  # P2-22: 记录失败时间
         if self.failed_login_attempts >= lockout_threshold:
             from datetime import timedelta
             self.locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
@@ -163,22 +172,35 @@ class User(Base):
 
 
 # Database setup - MySQL configuration
-# 安全修复：移除弱默认凭证，强制环境变量配置
-AUTH_DB_USER = os.getenv('AUTH_DB_USER')
-AUTH_DB_PASSWORD = os.getenv('AUTH_DB_PASSWORD')
-AUTH_DB_HOST = os.getenv('AUTH_DB_HOST', 'localhost')
-AUTH_DB_NAME = os.getenv('AUTH_DB_NAME', 'account')
+# 注意: 配置在 init_auth_db() 调用时读取环境变量，支持 load_dotenv 延迟加载
+AUTH_DB_USER = None
+AUTH_DB_PASSWORD = None
+AUTH_DB_HOST = None
+AUTH_DB_NAME = None
 
-# 验证必须的数据库凭证
-if not AUTH_DB_USER or not AUTH_DB_PASSWORD:
+
+def _get_db_config():
+    """Get database configuration from environment variables (reads at call time)"""
     import logging
     logger = logging.getLogger(__name__)
-    if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
-        logger.warning("AUTH_DB_USER/AUTH_DB_PASSWORD 未设置，使用开发默认值")
-        AUTH_DB_USER = AUTH_DB_USER or "app"
-        AUTH_DB_PASSWORD = AUTH_DB_PASSWORD or "app"
-    else:
-        raise RuntimeError("AUTH_DB_USER 和 AUTH_DB_PASSWORD 环境变量必须设置（生产环境）")
+
+    db_user = os.getenv('AUTH_DB_USER')
+    db_password = os.getenv('AUTH_DB_PASSWORD')
+    db_host = os.getenv('AUTH_DB_HOST', 'localhost')
+    db_name = os.getenv('AUTH_DB_NAME', 'account')
+
+    # 验证必须的数据库凭证
+    if not db_user or not db_password:
+        if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG", "").lower() == "true":
+            logger.warning("AUTH_DB_USER/AUTH_DB_PASSWORD 未设置，使用开发默认值")
+            db_user = db_user or "app"
+            db_password = db_password or "app"
+        else:
+            raise RuntimeError("AUTH_DB_USER 和 AUTH_DB_PASSWORD 环境变量必须设置（生产环境）")
+
+    # P2-21: 移除敏感信息日志打印，仅在调试模式下打印非敏感信息
+    logger.debug(f"[Auth] Database config: host={db_host}, db={db_name}")
+    return db_user, db_password, db_host, db_name
 
 auth_engine = None
 AuthSessionLocal = None
@@ -186,7 +208,10 @@ AuthSessionLocal = None
 
 def init_auth_db():
     """Initialize authentication database (MySQL)"""
-    global auth_engine, AuthSessionLocal, AuthEngine
+    global auth_engine, AuthSessionLocal, AuthEngine, AUTH_DB_USER, AUTH_DB_PASSWORD, AUTH_DB_HOST, AUTH_DB_NAME
+
+    # Get database configuration from environment (reads at call time, after load_dotenv)
+    AUTH_DB_USER, AUTH_DB_PASSWORD, AUTH_DB_HOST, AUTH_DB_NAME = _get_db_config()
 
     # Create MySQL engine
     db_url = f'mysql+pymysql://{AUTH_DB_USER}:{AUTH_DB_PASSWORD}@{AUTH_DB_HOST}/{AUTH_DB_NAME}?charset=utf8mb4'
@@ -234,13 +259,30 @@ def init_auth_db():
             if is_dev:
                 # 开发环境：使用固定密码便于测试
                 admin_password = "admin123"
-                init_logger.warning(f"[开发环境] 创建默认管理员: admin / {admin_password}")
+                # P3-49: 安全修复 - 不在日志中打印密码明文
+                init_logger.warning("[开发环境] 创建默认管理员: admin (密码见代码)")
             else:
                 # 生产环境：生成随机密码，要求首次登录后修改
                 admin_password = secrets.token_urlsafe(16)
-                init_logger.critical(f"[生产环境] 创建初始管理员账户")
-                init_logger.critical(f"用户名: admin")
-                init_logger.critical(f"临时密码: {admin_password}")
+                init_logger.critical("[生产环境] 创建初始管理员账户")
+                init_logger.critical("用户名: admin")
+                # P3-49: 安全修复 - 将密码写入临时文件而非日志
+                try:
+                    import tempfile
+                    cred_file = os.path.join(tempfile.gettempdir(), 'jzc_admin_credentials.txt')
+                    with open(cred_file, 'w') as f:
+                        f.write(f"JZC Systems 初始管理员凭据\n")
+                        f.write(f"用户名: admin\n")
+                        f.write(f"临时密码: {admin_password}\n")
+                        f.write(f"请登录后立即修改密码并删除此文件!\n")
+                    # 设置文件权限（仅所有者可读写）
+                    os.chmod(cred_file, 0o600)
+                    init_logger.critical(f"临时密码已写入: {cred_file}")
+                    init_logger.critical("请查看文件获取密码，使用后删除该文件！")
+                except Exception as e:
+                    # 如果文件写入失败，回退到日志（但添加警告）
+                    init_logger.critical(f"无法写入凭据文件: {e}")
+                    init_logger.critical(f"临时密码: {admin_password} (请立即记录并修改)")
                 init_logger.critical("请立即登录并修改密码！")
 
             admin_user = User(

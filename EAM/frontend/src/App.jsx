@@ -8,7 +8,7 @@ import MachineList from './pages/machines/MachineList'
 import MaintenanceManagement from './pages/maintenance/MaintenanceManagement'
 import SparePartManagement from './pages/spare-parts/SparePartManagement'
 import CapacityManagement from './pages/capacity/CapacityManagement'
-import { authEvents, AUTH_EVENTS } from './utils/authEvents'
+import { authEvents, AUTH_EVENTS, initStorageSync } from './utils/authEvents'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -41,6 +41,11 @@ function AppContent() {
     localStorage.removeItem('emp_no')
     window.location.href = PORTAL_URL
   }
+
+  // P2-15: 初始化多标签页同步
+  useEffect(() => {
+    initStorageSync()
+  }, [])
 
   // 验证 URL 中的 SSO token
   const validateUrlToken = async (token) => {

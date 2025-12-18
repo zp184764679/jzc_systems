@@ -13,6 +13,7 @@
     "antd": "^5.22.6",
     "axios": "^1.7.9",
     "dayjs": "^1.11.13",
+    "gantt-schedule-timeline-calendar": "^3.41.2",
     "lodash": "^4.17.21",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

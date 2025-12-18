@@ -85,13 +85,16 @@ def verify_backup_code(plain_code: str, hashed_code: str) -> bool:
     Returns:
         True if the code matches, False otherwise
     """
+    import hmac  # P3-38: 导入 hmac 用于常量时间比较
+
     # Normalize the code (uppercase, ensure format)
     normalized = plain_code.strip().upper()
     if '-' not in normalized and len(normalized) == 8:
         normalized = f"{normalized[:4]}-{normalized[4:]}"
 
     computed_hash = hashlib.sha256(normalized.encode()).hexdigest()
-    return computed_hash == hashed_code
+    # P3-38: 使用 hmac.compare_digest 防止时序攻击
+    return hmac.compare_digest(computed_hash, hashed_code)
 
 
 def get_current_totp_code(secret: str) -> str:

@@ -1,7 +1,13 @@
 # HR人力资源系统集成服务
+# P2-18: 添加跨系统服务调用重试机制
 import os
-import requests
+import sys
 from dotenv import load_dotenv
+
+# 添加 shared 模块路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from shared.http_client import get_with_retry, RETRYABLE_EXCEPTIONS
 
 load_dotenv()
 
@@ -13,7 +19,8 @@ def get_hr_base_url():
 def get_employees(search="", department="", status="Active", page=1, per_page=100):
     """获取员工列表"""
     try:
-        response = requests.get(
+        # P2-18: 使用带重试的 HTTP 客户端
+        response = get_with_retry(
             f"{get_hr_base_url()}/api/employees",
             params={
                 "search": search,
@@ -22,14 +29,21 @@ def get_employees(search="", department="", status="Active", page=1, per_page=10
                 "page": page,
                 "per_page": per_page
             },
+            max_retries=3,
             timeout=10
         )
         response.raise_for_status()
         return response.json()
+    except RETRYABLE_EXCEPTIONS as e:
+        return {
+            'success': False,
+            'error': f'HR系统连接失败: {str(e)} (已重试)',
+            'data': []
+        }
     except Exception as e:
         return {
             'success': False,
-            'error': f'HR系统连接失败: {str(e)}',
+            'error': f'HR系统调用异常: {str(e)}',
             'data': []
         }
 
@@ -37,26 +51,32 @@ def get_employees(search="", department="", status="Active", page=1, per_page=10
 def get_employee(employee_id):
     """获取单个员工详情"""
     try:
-        response = requests.get(
+        # P2-18: 使用带重试的 HTTP 客户端
+        response = get_with_retry(
             f"{get_hr_base_url()}/api/employees/{employee_id}",
+            max_retries=3,
             timeout=10
         )
         response.raise_for_status()
         return response.json()
+    except RETRYABLE_EXCEPTIONS as e:
+        return {'success': False, 'error': f'HR系统连接失败: {str(e)} (已重试)'}
     except Exception as e:
-        return {'success': False, 'error': f'HR系统连接失败: {str(e)}'}
+        return {'success': False, 'error': f'HR系统调用异常: {str(e)}'}
 
 
 def get_operators(department=""):
     """获取操作员/车间员工列表（用于MES报工选择）"""
     try:
-        response = requests.get(
+        # P2-18: 使用带重试的 HTTP 客户端
+        response = get_with_retry(
             f"{get_hr_base_url()}/api/employees",
             params={
                 "department": department,
                 "employment_status": "Active",
                 "per_page": 200
             },
+            max_retries=3,
             timeout=10
         )
         response.raise_for_status()
@@ -80,10 +100,16 @@ def get_operators(department=""):
                 'total': len(operators)
             }
         return result
+    except RETRYABLE_EXCEPTIONS as e:
+        return {
+            'success': False,
+            'error': f'HR系统连接失败: {str(e)} (已重试)',
+            'data': []
+        }
     except Exception as e:
         return {
             'success': False,
-            'error': f'HR系统连接失败: {str(e)}',
+            'error': f'HR系统调用异常: {str(e)}',
             'data': []
         }
 
@@ -91,20 +117,29 @@ def get_operators(department=""):
 def get_employee_stats():
     """获取员工统计数据"""
     try:
-        response = requests.get(
+        # P2-18: 使用带重试的 HTTP 客户端
+        response = get_with_retry(
             f"{get_hr_base_url()}/api/employees/stats",
+            max_retries=3,
             timeout=10
         )
         response.raise_for_status()
         return response.json()
+    except RETRYABLE_EXCEPTIONS as e:
+        return {'success': False, 'error': f'HR系统连接失败: {str(e)} (已重试)'}
     except Exception as e:
-        return {'success': False, 'error': f'HR系统连接失败: {str(e)}'}
+        return {'success': False, 'error': f'HR系统调用异常: {str(e)}'}
 
 
 def check_hr_health():
     """检查HR系统健康状态"""
     try:
-        response = requests.get(f"{get_hr_base_url()}/api/employees/stats", timeout=5)
+        # P2-18: 健康检查不需要重试，使用短超时
+        response = get_with_retry(
+            f"{get_hr_base_url()}/api/employees/stats",
+            max_retries=1,  # 健康检查只重试1次
+            timeout=5
+        )
         return response.status_code == 200
     except Exception:
         return False

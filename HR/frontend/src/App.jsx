@@ -18,7 +18,7 @@ import LeaveManagement from "./pages/LeaveManagement";
 import PayrollManagement from "./pages/PayrollManagement";
 import PerformanceManagement from "./pages/PerformanceManagement";
 import RecruitmentManagement from "./pages/RecruitmentManagement";
-import { authEvents, AUTH_EVENTS } from "./utils/authEvents";
+import { authEvents, AUTH_EVENTS, initStorageSync } from "./utils/authEvents";
 import "./App.css";
 
 dayjs.locale("zh-cn");
@@ -143,6 +143,20 @@ function App() {
       redirectToPortal();
     };
     const unsubscribe = authEvents.on(AUTH_EVENTS.UNAUTHORIZED, handleUnauthorized);
+    return () => unsubscribe();
+  }, []);
+
+  // P2-16: 多标签页同步 - 当其他标签页退出登录时同步
+  useEffect(() => {
+    initStorageSync();
+    const handleStorageSync = ({ action }) => {
+      if (action === 'logout') {
+        console.log('[App] Syncing logout from another tab');
+        setUser(null);
+        setShowLogin(true);
+      }
+    };
+    const unsubscribe = authEvents.on(AUTH_EVENTS.STORAGE_SYNC, handleStorageSync);
     return () => unsubscribe();
   }, []);
 

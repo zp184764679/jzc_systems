@@ -91,6 +91,7 @@ function AppContent() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const isRedirecting = useRef(false)
+  const redirectTimeoutRef = useRef(null)
 
   // 统一的跳转函数 - 防止重复跳转
   const redirectToPortal = () => {
@@ -100,6 +101,15 @@ function AppContent() {
     }
     isRedirecting.current = true
     console.log('[Auth] Redirecting to Portal...')
+
+    // 安全修复：5秒后重置 isRedirecting，防止跳转失败后永久阻塞
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current)
+    }
+    redirectTimeoutRef.current = setTimeout(() => {
+      isRedirecting.current = false
+      console.warn('[Auth] Redirect timeout, resetting flag')
+    }, 5000)
 
     localStorage.removeItem('token')
     localStorage.removeItem('user')

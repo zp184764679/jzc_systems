@@ -12,8 +12,9 @@ def get_work_orders():
     """获取工单列表"""
     status = request.args.get('status', '')
     keyword = request.args.get('keyword', '')
-    page = int(request.args.get('page', 1))
-    page_size = int(request.args.get('page_size', 20))
+    # P1-10: 分页参数验证
+    page = max(1, int(request.args.get('page', 1)))
+    page_size = max(1, min(int(request.args.get('page_size', 20)), 1000))
 
     query = WorkOrder.query
     if status:

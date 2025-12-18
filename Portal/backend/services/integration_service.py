@@ -15,6 +15,8 @@ class IntegrationService:
         self.crm_base_url = os.getenv('CRM_API_BASE_URL', 'http://localhost:8002')
         self.hr_base_url = os.getenv('HR_API_BASE_URL', 'http://localhost:8003')
         self.timeout = 10  # 请求超时时间
+        # 本地请求禁用代理，避免其他功能的代理配置影响子系统调用
+        self.no_proxy = {'http': None, 'https': None}
 
     def _get_headers(self, token: Optional[str] = None) -> Dict[str, str]:
         """构建请求头，包含认证 token"""
@@ -65,12 +67,19 @@ class IntegrationService:
                 url,
                 params=params,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
                 data = response.json()
-                # CRM 返回格式可能是 { items: [...], total: N } 或直接是列表
+                # CRM 返回格式: {"success": True, "data": {"items": [...], "total": N}}
+                # 或直接: {"items": [...], "total": N} 或列表 [...]
+
+                # 处理 {"success": True, "data": {...}} 格式
+                if isinstance(data, dict) and 'success' in data and 'data' in data:
+                    data = data.get('data') or {}
+
                 if isinstance(data, list):
                     return {
                         'success': True,
@@ -83,7 +92,7 @@ class IntegrationService:
                     }
                 elif isinstance(data, dict):
                     # 标准化返回格式
-                    items = data.get('items') or data.get('customers') or data.get('data') or []
+                    items = data.get('items') or data.get('customers') or []
                     total = data.get('total') or data.get('count') or len(items)
                     return {
                         'success': True,
@@ -139,7 +148,8 @@ class IntegrationService:
             response = requests.get(
                 url,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
@@ -215,12 +225,19 @@ class IntegrationService:
                 url,
                 params=params,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
                 data = response.json()
-                # HR 返回格式处理
+                # HR 返回格式: {"success": True, "data": {"items": [...], "total": N}}
+                # 或直接: {"items": [...], "total": N} 或列表 [...]
+
+                # 处理 {"success": True, "data": {...}} 格式
+                if isinstance(data, dict) and 'success' in data and 'data' in data:
+                    data = data.get('data') or {}
+
                 if isinstance(data, list):
                     return {
                         'success': True,
@@ -232,7 +249,7 @@ class IntegrationService:
                         }
                     }
                 elif isinstance(data, dict):
-                    items = data.get('items') or data.get('employees') or data.get('data') or []
+                    items = data.get('items') or data.get('employees') or []
                     total = data.get('total') or data.get('count') or len(items)
                     return {
                         'success': True,
@@ -288,7 +305,8 @@ class IntegrationService:
             response = requests.get(
                 url,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
@@ -339,7 +357,8 @@ class IntegrationService:
             response = requests.get(
                 url,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
@@ -394,7 +413,8 @@ class IntegrationService:
             response = requests.get(
                 url,
                 headers=self._get_headers(token),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies=self.no_proxy
             )
 
             if response.status_code == 200:
@@ -448,7 +468,8 @@ class IntegrationService:
         try:
             response = requests.get(
                 f"{self.crm_base_url}/health",
-                timeout=5
+                timeout=5,
+                proxies=self.no_proxy
             )
             result['crm'] = {
                 'status': 'healthy' if response.status_code == 200 else 'unhealthy',
@@ -466,7 +487,8 @@ class IntegrationService:
         try:
             response = requests.get(
                 f"{self.hr_base_url}/health",
-                timeout=5
+                timeout=5,
+                proxies=self.no_proxy
             )
             result['hr'] = {
                 'status': 'healthy' if response.status_code == 200 else 'unhealthy',

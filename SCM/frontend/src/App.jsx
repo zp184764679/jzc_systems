@@ -19,7 +19,7 @@ import InventoryReports from './pages/reports/InventoryReports'
 import TransferList from './pages/transfer/TransferList'
 import BatchList from './pages/batch-serial/BatchList'
 import SerialList from './pages/batch-serial/SerialList'
-import { authEvents, AUTH_EVENTS } from './utils/authEvents'
+import { authEvents, AUTH_EVENTS, initStorageSync } from './utils/authEvents'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -47,6 +47,11 @@ function AppContent() {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // P2-15: 初始化多标签页同步
+  useEffect(() => {
+    initStorageSync()
   }, [])
 
   // 统一的跳转函数 - 防止重复跳转

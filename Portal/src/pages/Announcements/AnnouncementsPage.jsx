@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import './AnnouncementsPage.css';
 
 const API_BASE = '/api';
 
 function AnnouncementsPage() {
-  const { token, user } = useContext(AuthContext);
+  const { getToken, user } = useAuth();
+  const token = getToken();
   const [announcements, setAnnouncements] = useState([]);
   const [categories, setCategories] = useState({ categories: [], priorities: [], statuses: [] });
   const [loading, setLoading] = useState(true);

@@ -2,10 +2,11 @@
 RBAC Service - Role-Based Access Control Service
 Provides permission checking and role management functions
 """
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 from functools import wraps
 from flask import request, jsonify, g
 import json
+import time
 
 from .models import User, AuthSessionLocal
 from .rbac_models import (
@@ -18,9 +19,17 @@ from .jwt_utils import verify_token
 class RBACService:
     """Service for RBAC operations"""
 
-    # Cache for permission lookups (simple in-memory cache)
-    _permission_cache: Dict[int, Set[str]] = {}
-    _role_cache: Dict[int, List[str]] = {}
+    # P2-23: 缓存 TTL 配置（秒）
+    CACHE_TTL_SECONDS = 300  # 5 分钟
+
+    # Cache for permission lookups with timestamp: {user_id: (permissions, timestamp)}
+    _permission_cache: Dict[int, Tuple[Set[str], float]] = {}
+    _role_cache: Dict[int, Tuple[List[str], float]] = {}
+
+    @staticmethod
+    def _is_cache_valid(timestamp: float) -> bool:
+        """检查缓存是否在 TTL 内有效"""
+        return (time.time() - timestamp) < RBACService.CACHE_TTL_SECONDS
 
     @staticmethod
     def clear_cache(user_id: Optional[int] = None):
@@ -58,24 +67,35 @@ class RBACService:
 
     @staticmethod
     def get_user_role_codes(user_id: int) -> List[str]:
-        """Get role codes for a user (cached)"""
+        """Get role codes for a user (cached with TTL)"""
+        # P2-23: 检查缓存是否存在且未过期
         if user_id in RBACService._role_cache:
-            return RBACService._role_cache[user_id]
+            cached_roles, timestamp = RBACService._role_cache[user_id]
+            if RBACService._is_cache_valid(timestamp):
+                return cached_roles
+            # 缓存过期，删除
+            del RBACService._role_cache[user_id]
 
         roles = RBACService.get_user_roles(user_id)
         role_codes = [r.code for r in roles]
 
-        RBACService._role_cache[user_id] = role_codes
+        # P2-23: 缓存时记录时间戳
+        RBACService._role_cache[user_id] = (role_codes, time.time())
         return role_codes
 
     @staticmethod
     def get_user_permissions(user_id: int) -> Set[str]:
         """
-        Get all permission codes for a user (cached)
+        Get all permission codes for a user (cached with TTL)
         Aggregates permissions from all user's roles
         """
+        # P2-23: 检查缓存是否存在且未过期
         if user_id in RBACService._permission_cache:
-            return RBACService._permission_cache[user_id]
+            cached_perms, timestamp = RBACService._permission_cache[user_id]
+            if RBACService._is_cache_valid(timestamp):
+                return cached_perms
+            # 缓存过期，删除
+            del RBACService._permission_cache[user_id]
 
         session = AuthSessionLocal()
         try:
@@ -93,12 +113,16 @@ class RBACService:
             # Super admin has all permissions
             role_codes = [r.code for r in roles]
             if 'super_admin' in role_codes:
-                # Add all active permissions
+                # 安全修复：Super Admin 使用特殊标记，在权限检查时直接放行
+                # 而不是依赖权限表中的记录（权限表为空时会导致权限失效）
+                permissions.add('*')  # 特殊通配符权限，表示拥有所有权限
+                # 同时加载所有已定义的权限（向后兼容）
                 all_perms = session.query(Permission).filter_by(is_active=True).all()
                 for perm in all_perms:
                     permissions.add(perm.code)
 
-            RBACService._permission_cache[user_id] = permissions
+            # P2-23: 缓存时记录时间戳
+            RBACService._permission_cache[user_id] = (permissions, time.time())
             return permissions
         finally:
             session.close()
@@ -107,24 +131,36 @@ class RBACService:
     def has_permission(user_id: int, permission_code: str) -> bool:
         """Check if user has a specific permission"""
         permissions = RBACService.get_user_permissions(user_id)
+        # 安全修复：检查通配符权限（Super Admin）
+        if '*' in permissions:
+            return True
         return permission_code in permissions
 
     @staticmethod
     def has_any_permission(user_id: int, permission_codes: List[str]) -> bool:
         """Check if user has any of the given permissions"""
         permissions = RBACService.get_user_permissions(user_id)
+        # 安全修复：检查通配符权限（Super Admin）
+        if '*' in permissions:
+            return True
         return any(code in permissions for code in permission_codes)
 
     @staticmethod
     def has_all_permissions(user_id: int, permission_codes: List[str]) -> bool:
         """Check if user has all of the given permissions"""
         permissions = RBACService.get_user_permissions(user_id)
+        # 安全修复：检查通配符权限（Super Admin）
+        if '*' in permissions:
+            return True
         return all(code in permissions for code in permission_codes)
 
     @staticmethod
     def has_module_access(user_id: int, module: str) -> bool:
         """Check if user has any permission for a module"""
         permissions = RBACService.get_user_permissions(user_id)
+        # 安全修复：检查通配符权限（Super Admin）
+        if '*' in permissions:
+            return True
         return any(perm.startswith(f"{module}:") for perm in permissions)
 
     @staticmethod
@@ -354,13 +390,22 @@ def require_permission(permission_code: str):
             if not auth_header or not auth_header.startswith('Bearer '):
                 return jsonify({'error': '缺少认证信息'}), 401
 
-            token = auth_header.split(' ')[1]
+            # P1-5: 安全修复 - 验证 Authorization 头格式
+            parts = auth_header.split(' ')
+            if len(parts) != 2 or not parts[1]:
+                return jsonify({'error': '无效的认证头格式'}), 401
+
+            token = parts[1]
             payload = verify_token(token)
 
             if not payload:
                 return jsonify({'error': 'Token无效或已过期'}), 401
 
             user_id = payload.get('user_id') or payload.get('id')
+
+            # P1-13: 安全修复 - 验证 user_id 存在
+            if not user_id:
+                return jsonify({'error': 'Token缺少用户信息'}), 401
 
             # Check permission
             if not RBACService.has_permission(user_id, permission_code):
@@ -395,13 +440,22 @@ def require_any_permission(*permission_codes):
             if not auth_header or not auth_header.startswith('Bearer '):
                 return jsonify({'error': '缺少认证信息'}), 401
 
-            token = auth_header.split(' ')[1]
+            # P1-5: 安全修复 - 验证 Authorization 头格式
+            parts = auth_header.split(' ')
+            if len(parts) != 2 or not parts[1]:
+                return jsonify({'error': '无效的认证头格式'}), 401
+
+            token = parts[1]
             payload = verify_token(token)
 
             if not payload:
                 return jsonify({'error': 'Token无效或已过期'}), 401
 
             user_id = payload.get('user_id') or payload.get('id')
+
+            # P1-13: 安全修复 - 验证 user_id 存在
+            if not user_id:
+                return jsonify({'error': 'Token缺少用户信息'}), 401
 
             if not RBACService.has_any_permission(user_id, list(permission_codes)):
                 return jsonify({
@@ -434,13 +488,22 @@ def require_module_access(module: str):
             if not auth_header or not auth_header.startswith('Bearer '):
                 return jsonify({'error': '缺少认证信息'}), 401
 
-            token = auth_header.split(' ')[1]
+            # P1-5: 安全修复 - 验证 Authorization 头格式
+            parts = auth_header.split(' ')
+            if len(parts) != 2 or not parts[1]:
+                return jsonify({'error': '无效的认证头格式'}), 401
+
+            token = parts[1]
             payload = verify_token(token)
 
             if not payload:
                 return jsonify({'error': 'Token无效或已过期'}), 401
 
             user_id = payload.get('user_id') or payload.get('id')
+
+            # P1-13: 安全修复 - 验证 user_id 存在
+            if not user_id:
+                return jsonify({'error': 'Token缺少用户信息'}), 401
 
             # Check legacy permissions array first
             permissions = payload.get('permissions', [])

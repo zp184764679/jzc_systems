@@ -72,6 +72,13 @@ module.exports = {
       env: { PORT: 8007 }
     },
     {
+      name: 'dashboard-backend',
+      cwd: './Dashboard/backend',
+      script: 'main.py',
+      interpreter: 'python',
+      env: { PORT: 8100 }
+    },
+    {
       name: 'docs-strapi',
       cwd: './DocPublisher/strapi',
       script: 'node_modules/@strapi/strapi/bin/strapi.js',
@@ -148,6 +155,13 @@ module.exports = {
       cwd: './MES/frontend',
       script: 'node_modules/vite/bin/vite.js',
       args: '--port 7800 --host',
+      env: { NODE_ENV: 'development' }
+    },
+    {
+      name: 'dashboard-frontend',
+      cwd: './Dashboard/frontend',
+      script: 'node_modules/vite/bin/vite.js',
+      args: '--port 6100 --host',
       env: { NODE_ENV: 'development' }
     },
     {

@@ -13,11 +13,25 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const isRedirecting = useRef(false);
+  const redirectTimeoutRef = useRef(null);
 
   // 统一的跳转函数 - 防止重复跳转
   const redirectToPortal = () => {
-    if (isRedirecting.current) return;
+    if (isRedirecting.current) {
+      console.warn('[SSO] Already redirecting, skipping');
+      return;
+    }
     isRedirecting.current = true;
+
+    // 安全修复：5秒后重置 isRedirecting，防止跳转失败后永久阻塞
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+    }
+    redirectTimeoutRef.current = setTimeout(() => {
+      isRedirecting.current = false;
+      console.warn('[SSO] Redirect timeout, resetting flag');
+    }, 5000);
+
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('User-ID');

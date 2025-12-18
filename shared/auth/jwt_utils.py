@@ -12,11 +12,17 @@ logger = logging.getLogger(__name__)
 
 # JWT Configuration - 安全修复：强制要求环境变量
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+FLASK_ENV = os.getenv("FLASK_ENV", "development")
+
 if not SECRET_KEY:
-    # 生产环境必须配置 JWT_SECRET_KEY
-    logger.warning("JWT_SECRET_KEY 环境变量未设置！使用临时密钥（仅限开发环境）")
-    # 开发环境使用固定密钥，确保所有后端进程使用相同密钥
-    SECRET_KEY = "jzc-dev-shared-secret-key-2025"
+    if FLASK_ENV == "production":
+        # 生产环境必须配置 JWT_SECRET_KEY，否则拒绝启动
+        logger.critical("JWT_SECRET_KEY 环境变量未设置！生产环境必须配置此密钥！")
+        raise RuntimeError("SECURITY ERROR: JWT_SECRET_KEY must be set in production environment!")
+    else:
+        # 开发环境使用固定密钥，确保所有后端进程使用相同密钥
+        logger.warning("JWT_SECRET_KEY 环境变量未设置！使用临时密钥（仅限开发环境）")
+        SECRET_KEY = "jzc-dev-shared-secret-key-2025"
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
@@ -81,25 +87,28 @@ def create_token_from_user(user_dict: Dict[str, Any]) -> str:
     return create_access_token(token_data)
 
 
-def verify_token(token: str) -> Optional[Dict[str, Any]]:
+def verify_token(token: str, return_error: bool = False) -> Optional[Dict[str, Any]]:
     """
     Verify and decode a JWT token
 
     Args:
         token: JWT token string to verify
+        return_error: P3-46 - 如果为 True，返回 {'error': 'reason'} 而不是 None
 
     Returns:
-        Decoded payload dict if valid, None if invalid/expired
+        Decoded payload dict if valid
+        None if invalid/expired (return_error=False)
+        {'error': 'reason'} if invalid/expired (return_error=True)
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         logger.debug("Token verification failed: Token expired")
-        return None
+        return {'error': 'token_expired', 'message': 'Token已过期'} if return_error else None
     except jwt.InvalidTokenError as e:
         logger.warning(f"Token verification failed: Invalid token - {e}")
-        return None
+        return {'error': 'invalid_token', 'message': f'无效的Token: {type(e).__name__}'} if return_error else None
     except Exception as e:
         logger.error(f"Token verification failed: Unexpected error - {e}")
-        return None
+        return {'error': 'verification_error', 'message': '验证失败'} if return_error else None

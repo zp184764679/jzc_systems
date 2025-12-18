@@ -1,7 +1,9 @@
 """
 Audit Service - Centralized audit logging for all subsystems
+P2-22: 添加审计日志备用记录机制
 """
 import logging
+import os
 from datetime import datetime
 from typing import Optional, Dict, Any
 from functools import wraps
@@ -9,10 +11,207 @@ from flask import request, g
 import json
 import hashlib
 import re
+from pathlib import Path
+import threading
 
-from .models import AuditLog, LoginHistory, AuthSessionLocal
+from . import models as auth_models
+from .models import AuditLog, LoginHistory
 
 logger = logging.getLogger(__name__)
+
+# P2-22: 备用日志文件配置
+AUDIT_BACKUP_DIR = os.getenv('AUDIT_BACKUP_DIR', '/tmp/jzc_audit_backup')
+AUDIT_BACKUP_MAX_SIZE = int(os.getenv('AUDIT_BACKUP_MAX_SIZE', 10 * 1024 * 1024))  # 10MB
+AUDIT_BACKUP_MAX_FILES = int(os.getenv('AUDIT_BACKUP_MAX_FILES', 5))
+
+# 线程锁，确保文件写入安全
+_backup_lock = threading.Lock()
+
+
+def _ensure_backup_dir():
+    """确保备用日志目录存在"""
+    try:
+        Path(AUDIT_BACKUP_DIR).mkdir(parents=True, exist_ok=True)
+        return True
+    except Exception as e:
+        logger.error(f"P2-22: 无法创建审计备用目录: {e}")
+        return False
+
+
+def _get_backup_file_path():
+    """获取当前备用日志文件路径"""
+    return os.path.join(AUDIT_BACKUP_DIR, 'audit_backup.jsonl')
+
+
+def _rotate_backup_files():
+    """P2-22: 日志文件轮转"""
+    try:
+        current_file = _get_backup_file_path()
+        if not os.path.exists(current_file):
+            return
+
+        file_size = os.path.getsize(current_file)
+        if file_size < AUDIT_BACKUP_MAX_SIZE:
+            return
+
+        # 轮转文件
+        for i in range(AUDIT_BACKUP_MAX_FILES - 1, 0, -1):
+            old_file = f"{current_file}.{i}"
+            new_file = f"{current_file}.{i + 1}"
+            if os.path.exists(old_file):
+                if i + 1 >= AUDIT_BACKUP_MAX_FILES:
+                    os.remove(old_file)
+                else:
+                    os.rename(old_file, new_file)
+
+        # 重命名当前文件
+        os.rename(current_file, f"{current_file}.1")
+        logger.info(f"P2-22: 审计备用日志已轮转")
+    except Exception as e:
+        logger.error(f"P2-22: 日志轮转失败: {e}")
+
+
+def _write_backup_audit(audit_data: Dict) -> bool:
+    """
+    P2-22: 将审计事件写入备用文件
+
+    当数据库写入失败时，将审计事件写入本地文件作为备份。
+    使用 JSONL 格式（每行一条 JSON 记录）便于后续恢复。
+    """
+    if not _ensure_backup_dir():
+        return False
+
+    try:
+        with _backup_lock:
+            _rotate_backup_files()
+
+            backup_file = _get_backup_file_path()
+            with open(backup_file, 'a', encoding='utf-8') as f:
+                # 添加备份元数据
+                audit_data['_backup_time'] = datetime.utcnow().isoformat()
+                audit_data['_recovered'] = False
+                f.write(json.dumps(audit_data, ensure_ascii=False, default=str) + '\n')
+
+            logger.warning(f"P2-22: 审计事件已写入备用文件: {backup_file}")
+            return True
+    except Exception as e:
+        logger.critical(f"P2-22: 审计备用写入也失败: {e}")
+        return False
+
+
+def recover_backup_audits() -> Dict[str, Any]:
+    """
+    P2-22: 从备用文件恢复审计记录到数据库
+
+    Returns:
+        dict: 恢复结果 {success: bool, recovered: int, failed: int, errors: list}
+    """
+    result = {'success': False, 'recovered': 0, 'failed': 0, 'errors': []}
+    backup_file = _get_backup_file_path()
+
+    if not os.path.exists(backup_file):
+        result['success'] = True
+        result['message'] = '无待恢复的审计记录'
+        return result
+
+    session = auth_models.AuthSessionLocal()
+    recovered_lines = []
+    failed_lines = []
+
+    try:
+        with open(backup_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        for i, line in enumerate(lines):
+            try:
+                audit_data = json.loads(line.strip())
+
+                # 跳过已恢复的记录
+                if audit_data.get('_recovered'):
+                    recovered_lines.append(line)
+                    continue
+
+                # 移除备份元数据
+                audit_data.pop('_backup_time', None)
+                audit_data.pop('_recovered', None)
+
+                # 创建审计记录
+                audit = AuditLog(
+                    user_id=audit_data.get('user_id'),
+                    username=audit_data.get('username'),
+                    action_type=audit_data.get('action_type'),
+                    resource_type=audit_data.get('resource_type'),
+                    resource_id=audit_data.get('resource_id'),
+                    description=audit_data.get('description'),
+                    ip_address=audit_data.get('ip_address'),
+                    user_agent=audit_data.get('user_agent'),
+                    request_method=audit_data.get('request_method'),
+                    request_path=audit_data.get('request_path'),
+                    request_body=audit_data.get('request_body'),
+                    status=audit_data.get('status'),
+                    error_message=audit_data.get('error_message'),
+                    module=audit_data.get('module'),
+                    created_at=datetime.fromisoformat(audit_data['created_at']) if audit_data.get('created_at') else datetime.utcnow()
+                )
+                session.add(audit)
+                session.commit()
+
+                # 标记为已恢复
+                audit_data['_recovered'] = True
+                recovered_lines.append(json.dumps(audit_data, ensure_ascii=False, default=str) + '\n')
+                result['recovered'] += 1
+
+            except Exception as e:
+                result['failed'] += 1
+                result['errors'].append(f"行 {i + 1}: {str(e)}")
+                failed_lines.append(line)
+                session.rollback()
+
+        # 重写备用文件（只保留未恢复的记录）
+        with _backup_lock:
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                f.writelines(failed_lines)
+
+        result['success'] = True
+        logger.info(f"P2-22: 审计记录恢复完成 - 成功: {result['recovered']}, 失败: {result['failed']}")
+
+    except Exception as e:
+        result['errors'].append(f"恢复过程错误: {str(e)}")
+        logger.error(f"P2-22: 审计记录恢复失败: {e}")
+    finally:
+        session.close()
+
+    return result
+
+
+def get_backup_status() -> Dict[str, Any]:
+    """
+    P2-22: 获取审计备用文件状态
+    """
+    backup_file = _get_backup_file_path()
+    result = {
+        'backup_dir': AUDIT_BACKUP_DIR,
+        'backup_file': backup_file,
+        'exists': os.path.exists(backup_file),
+        'pending_count': 0,
+        'file_size': 0
+    }
+
+    if result['exists']:
+        result['file_size'] = os.path.getsize(backup_file)
+        try:
+            with open(backup_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        data = json.loads(line.strip())
+                        if not data.get('_recovered'):
+                            result['pending_count'] += 1
+                    except:
+                        pass
+        except:
+            pass
+
+    return result
 
 
 # Sensitive fields to redact in request body
@@ -164,7 +363,26 @@ class AuditService:
             module: Which subsystem (portal, hr, crm, etc.)
             request_body: Request body dict (will be sanitized)
         """
-        session = AuthSessionLocal()
+        # P2-22: 构建审计数据（用于数据库和备用存储）
+        audit_data = {
+            'user_id': user_id,
+            'username': username,
+            'action_type': action_type,
+            'resource_type': resource_type,
+            'resource_id': str(resource_id) if resource_id else None,
+            'description': description,
+            'ip_address': get_client_ip(),
+            'user_agent': request.headers.get('User-Agent') if request else None,
+            'request_method': request.method if request else None,
+            'request_path': request.path if request else None,
+            'request_body': sanitize_request_body(request_body),
+            'status': status,
+            'error_message': error_message,
+            'module': module,
+            'created_at': datetime.utcnow().isoformat()
+        }
+
+        session = auth_models.AuthSessionLocal()
         try:
             audit = AuditLog(
                 user_id=user_id,
@@ -173,11 +391,11 @@ class AuditService:
                 resource_type=resource_type,
                 resource_id=str(resource_id) if resource_id else None,
                 description=description,
-                ip_address=get_client_ip(),
-                user_agent=request.headers.get('User-Agent') if request else None,
-                request_method=request.method if request else None,
-                request_path=request.path if request else None,
-                request_body=sanitize_request_body(request_body),
+                ip_address=audit_data['ip_address'],
+                user_agent=audit_data['user_agent'],
+                request_method=audit_data['request_method'],
+                request_path=audit_data['request_path'],
+                request_body=audit_data['request_body'],
                 status=status,
                 error_message=error_message,
                 module=module,
@@ -187,8 +405,15 @@ class AuditService:
             session.commit()
             return audit
         except Exception as e:
-            logger.error(f"Failed to write audit log: {e}")
+            logger.error(f"Failed to write audit log to database: {e}")
             session.rollback()
+
+            # P2-22: 数据库写入失败时，写入备用文件
+            if _write_backup_audit(audit_data):
+                logger.warning(f"P2-22: 审计记录已写入备用存储 - {action_type}")
+            else:
+                logger.critical(f"P2-22: 审计记录丢失 - 数据库和备用存储都失败: {action_type}")
+
             return None
         finally:
             session.close()
@@ -215,18 +440,35 @@ class AuditService:
             token: JWT token (will be hashed)
             module: Which subsystem
         """
-        session = AuthSessionLocal()
-        try:
-            ua_info = parse_user_agent(
-                request.headers.get('User-Agent') if request else None
-            )
+        ua_info = parse_user_agent(
+            request.headers.get('User-Agent') if request else None
+        )
 
+        # P2-22: 构建登录历史数据（用于备用存储）
+        login_data = {
+            'user_id': user_id,
+            'username': username,
+            'login_time': datetime.utcnow().isoformat(),
+            'ip_address': get_client_ip(),
+            'user_agent': request.headers.get('User-Agent') if request else None,
+            'device_type': ua_info['device_type'],
+            'browser': ua_info['browser'],
+            'os': ua_info['os'],
+            'is_success': success,
+            'failure_reason': failure_reason,
+            'login_type': login_type,
+            'module': module,
+            '_type': 'login_history'
+        }
+
+        session = auth_models.AuthSessionLocal()
+        try:
             login_record = LoginHistory(
                 user_id=user_id,
                 username=username,
                 login_time=datetime.utcnow(),
-                ip_address=get_client_ip(),
-                user_agent=request.headers.get('User-Agent') if request else None,
+                ip_address=login_data['ip_address'],
+                user_agent=login_data['user_agent'],
                 device_type=ua_info['device_type'],
                 browser=ua_info['browser'],
                 os=ua_info['os'],
@@ -252,8 +494,15 @@ class AuditService:
             session.commit()
             return login_record
         except Exception as e:
-            logger.error(f"Failed to write login history: {e}")
+            logger.error(f"Failed to write login history to database: {e}")
             session.rollback()
+
+            # P2-22: 数据库写入失败时，写入备用文件
+            if _write_backup_audit(login_data):
+                logger.warning(f"P2-22: 登录历史已写入备用存储 - {username}")
+            else:
+                logger.critical(f"P2-22: 登录历史丢失 - 数据库和备用存储都失败: {username}")
+
             return None
         finally:
             session.close()
@@ -261,7 +510,7 @@ class AuditService:
     @staticmethod
     def log_logout(user_id: int, username: str, module: str = 'portal'):
         """Log a logout event"""
-        session = AuthSessionLocal()
+        session = auth_models.AuthSessionLocal()
         try:
             # Update current session to mark as logged out
             session.query(LoginHistory).filter(
@@ -296,7 +545,7 @@ class AuditService:
         end_date: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Get login history for a user"""
-        session = AuthSessionLocal()
+        session = auth_models.AuthSessionLocal()
         try:
             query = session.query(LoginHistory).filter(
                 LoginHistory.user_id == user_id
@@ -335,7 +584,7 @@ class AuditService:
         search: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get audit logs with filters"""
-        session = AuthSessionLocal()
+        session = auth_models.AuthSessionLocal()
         try:
             query = session.query(AuditLog)
 
@@ -382,7 +631,7 @@ class AuditService:
     ) -> Dict[str, Any]:
         """Get security-related events (failed logins, password changes, etc.)"""
         from datetime import timedelta
-        session = AuthSessionLocal()
+        session = auth_models.AuthSessionLocal()
         try:
             security_actions = [
                 AuditService.ACTION_LOGIN_FAILED,

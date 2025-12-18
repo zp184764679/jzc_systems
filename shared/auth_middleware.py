@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 # 开发环境默认密钥必须一致: jzc-dev-shared-secret-key-2025
 JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'jzc-dev-shared-secret-key-2025')
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', 24))
+# 统一使用 8 小时过期时间，与 jwt_utils.py 中的 ACCESS_TOKEN_EXPIRE_MINUTES = 480 保持一致
+JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', 8))
 
 
 def generate_token(user_id, username, role='user', extra_claims=None):
@@ -337,6 +338,37 @@ def error_response(error, code='ERROR', status_code=400):
     }), status_code
 
 
+def validate_pagination_params(page=1, per_page=20, max_per_page=1000):
+    """
+    P3-28: 统一分页参数验证
+
+    Args:
+        page: 页码（必须 >= 1）
+        per_page: 每页数量（必须 >= 1 且 <= max_per_page）
+        max_per_page: 每页最大数量限制
+
+    Returns:
+        tuple: (page, per_page, error)
+        - 如果参数有效: (page, per_page, None)
+        - 如果参数无效: (1, 20, error_message)
+    """
+    try:
+        page = int(page)
+        per_page = int(per_page)
+    except (TypeError, ValueError):
+        return 1, 20, '分页参数必须为数字'
+
+    if page < 1:
+        page = 1  # 自动修正为最小值
+
+    if per_page < 1:
+        per_page = 1  # 自动修正为最小值
+    elif per_page > max_per_page:
+        per_page = max_per_page  # 自动修正为最大值
+
+    return page, per_page, None
+
+
 def paginated_response(items, total, page=1, per_page=20):
     """
     统一分页响应格式
@@ -350,6 +382,10 @@ def paginated_response(items, total, page=1, per_page=20):
     Returns:
         dict: 包含分页信息的响应
     """
+    # P3-28: 确保分页参数有效
+    page = max(1, int(page) if page else 1)
+    per_page = max(1, min(1000, int(per_page) if per_page else 20))
+
     return {
         'success': True,
         'data': items,
@@ -357,6 +393,6 @@ def paginated_response(items, total, page=1, per_page=20):
             'total': total,
             'page': page,
             'per_page': per_page,
-            'pages': (total + per_page - 1) // per_page
+            'pages': (total + per_page - 1) // per_page if per_page > 0 else 0
         }
     }

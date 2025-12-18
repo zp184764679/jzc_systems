@@ -16,19 +16,24 @@ shared/
 │   ├── models.py             # User 和 RegistrationRequest 模型
 │   ├── password_utils.py     # 密码哈希和验证
 │   ├── permissions.py        # 权限检查工具
+│   ├── audit_service.py      # 审计日志服务 (P2-22)
 │   ├── migrate_to_role.py    # 角色迁移脚本
 │   └── fix_admin_password.py # 管理员密码修复脚本
 ├── frontend/                  # 前端共享模块
 │   ├── authEvents.js         # 认证事件总线
 │   ├── ssoAuth.js            # SSO 认证工具
 │   └── api.js                # API 客户端模板
+├── config.py                 # 统一配置管理 (P3-42)
+├── http_client.py            # HTTP 客户端（带重试）(P2-18)
 ├── auth_middleware.py        # Flask 认证中间件
 ├── api-config.js             # 前端 API 配置
 ├── cache_config.py           # Redis 缓存配置
 ├── logging_config.py         # 日志配置
+├── pagination.py             # 分页验证工具
 ├── file_storage.py           # 文件存储服务
 ├── operation_history.py      # 操作历史记录
-└── validators.py             # 数据验证工具
+├── validators.py             # 数据验证工具
+└── .env.example              # 环境变量模板 (P3-41)
 ```
 
 ---
@@ -88,6 +93,69 @@ class Roles:
 ### auth_middleware.py - Flask 中间件
 
 提供 `@require_auth` 装饰器用于保护 API 路由。
+
+### config.py - 统一配置管理 (P3-42)
+
+**配置类**:
+
+| 类名 | 说明 |
+|------|------|
+| `DatabaseConfig` | 数据库连接配置 |
+| `JWTConfig` | JWT 认证配置 |
+| `CORSConfig` | 跨域配置 |
+| `RedisConfig` | Redis 缓存配置 |
+| `CeleryConfig` | Celery 异步任务配置 |
+| `ServiceURLConfig` | 系统集成 API URL 配置 |
+| `AppConfig` | 应用全局配置（包含上述所有配置） |
+
+**便捷函数**:
+
+| 函数 | 说明 |
+|------|------|
+| `get_env(key, default, required)` | 获取字符串环境变量 |
+| `get_env_bool(key, default)` | 获取布尔环境变量 |
+| `get_env_int(key, default)` | 获取整数环境变量 |
+| `get_env_list(key, default, separator)` | 获取列表环境变量 |
+| `create_flask_config(config)` | 创建 Flask 配置字典 |
+
+**使用示例**:
+```python
+from shared.config import AppConfig, load_env_file
+
+# 加载环境变量
+load_env_file('.env')
+
+# 创建配置
+config = AppConfig.from_env(
+    app_name='HR System',
+    default_port=8003,
+    db_name='hr_system'
+)
+
+# 验证配置
+result = config.validate()
+if not result['valid']:
+    for error in result['errors']:
+        print(f"配置错误: {error}")
+
+# 应用到 Flask
+app.config.update(create_flask_config(config))
+```
+
+### http_client.py - HTTP 客户端 (P2-18)
+
+提供带自动重试的 HTTP 请求功能。
+
+| 函数 | 说明 |
+|------|------|
+| `get_with_retry(url, **kwargs)` | 带重试的 GET 请求 |
+| `post_with_retry(url, **kwargs)` | 带重试的 POST 请求 |
+
+**重试配置**:
+- `max_retries`: 最大重试次数（默认 3）
+- `initial_delay`: 初始延迟（默认 0.5秒）
+- `max_delay`: 最大延迟（默认 10秒）
+- `backoff_factor`: 退避因子（默认 2）
 
 ---
 

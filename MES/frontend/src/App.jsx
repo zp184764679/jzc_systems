@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { authEvents, AUTH_EVENTS } from './utils/authEvents'
+import { authEvents, AUTH_EVENTS, initStorageSync } from './utils/authEvents'
 import {
   dashboardApi, workOrderApi, integrationApi, processDefinitionApi, processRouteApi,
   qualityInspectionApi, inspectionStandardApi, defectTypeApi, ncrApi, qualityStatsApi, qualityEnumsApi,
@@ -105,6 +105,11 @@ function App() {
     localStorage.removeItem('emp_no')
     window.location.href = PORTAL_URL
   }
+
+  // P2-15: 初始化多标签页同步
+  useEffect(() => {
+    initStorageSync()
+  }, [])
 
   // 验证 URL 中的 SSO token
   const validateUrlToken = async (token) => {

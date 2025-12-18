@@ -1,0 +1,417 @@
+/* DocPublisher - Document Publishing System */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 文档内容样式 */
+.document-content {
+  padding: 16px 0;
+}
+
+.document-content h1,
+.document-content h2,
+.document-content h3,
+.document-content h4,
+.document-content h5,
+.document-content h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.document-content h1 { font-size: 2em; }
+.document-content h2 { font-size: 1.5em; }
+.document-content h3 { font-size: 1.25em; }
+.document-content h4 { font-size: 1em; }
+
+.document-content p {
+  margin-bottom: 16px;
+}
+
+.document-content ul,
+.document-content ol {
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.document-content li {
+  margin-bottom: 8px;
+}
+
+.document-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.document-content th,
+.document-content td {
+  border: 1px solid #e8e8e8;
+  padding: 12px;
+  text-align: left;
+}
+
+.document-content th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.document-content blockquote {
+  border-left: 4px solid #1890ff;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #666;
+}
+
+.document-content code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.document-content pre {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.document-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.document-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.document-content a {
+  color: #1890ff;
+}
+
+.document-content a:hover {
+  text-decoration: underline;
+}
+
+/* ==================== 文档纸张样式 ==================== */
+
+/* A4 纸张容器 */
+.document-paper {
+  background: #fff;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 20mm 25mm;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e8e8e8;
+}
+
+/* 文档头部 */
+.document-header {
+  border-bottom: 2px solid #1890ff;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+}
+
+.document-header .company-name {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1890ff;
+  letter-spacing: 2px;
+}
+
+/* 文档标题块 */
+.document-title-block {
+  margin-bottom: 24px;
+}
+
+/* 文档信息表格 */
+.document-info-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.document-info-table td {
+  border: 1px solid #d9d9d9;
+  padding: 10px 16px;
+}
+
+.document-info-table td.label {
+  background: #fafafa;
+  font-weight: 600;
+  width: 100px;
+  color: #666;
+}
+
+/* 文档摘要 */
+.document-summary {
+  background: #f6f8fa;
+  border-left: 4px solid #1890ff;
+  padding: 16px;
+  margin-bottom: 24px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* 文档正文 */
+.document-body {
+  line-height: 1.8;
+  font-size: 15px;
+  min-height: 200px;
+  padding: 16px 0;
+}
+
+.document-body h1,
+.document-body h2,
+.document-body h3,
+.document-body h4 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.document-body h2 {
+  font-size: 1.3em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
+}
+
+.document-body h3 {
+  font-size: 1.1em;
+}
+
+.document-body p {
+  margin-bottom: 12px;
+  text-align: justify;
+}
+
+.document-body ul,
+.document-body ol {
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.document-body li {
+  margin-bottom: 8px;
+}
+
+.document-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.document-body th,
+.document-body td {
+  border: 1px solid #d9d9d9;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.document-body th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* 附件区域 */
+.document-attachments {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px dashed #d9d9d9;
+}
+
+/* 文档页脚 */
+.document-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid #d9d9d9;
+  font-size: 12px;
+}
+
+/* ==================== SOP 模板样式 ==================== */
+
+.sop-body {
+  padding: 0;
+}
+
+.sop-section {
+  margin-bottom: 24px;
+}
+
+.sop-section-title {
+  color: #1890ff;
+  border-bottom: 2px solid #1890ff;
+  padding-bottom: 8px;
+  margin-bottom: 12px !important;
+}
+
+.sop-section-content {
+  padding-left: 16px;
+  line-height: 1.8;
+}
+
+.sop-extra-content {
+  margin-top: 24px;
+}
+
+/* ==================== Markdown 样式 ==================== */
+
+.markdown-body {
+  line-height: 1.8;
+  font-size: 15px;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+.markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h4 { font-size: 1.1em; }
+
+.markdown-body p {
+  margin-bottom: 16px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.markdown-body li {
+  margin-bottom: 8px;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #d9d9d9;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #1890ff;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #666;
+  background: #f6f8fa;
+  padding: 12px 16px;
+  border-radius: 0 4px 4px 0;
+}
+
+.markdown-body code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.markdown-body a {
+  color: #1890ff;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 24px 0;
+}
+
+/* 打印样式 */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .document-paper {
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    padding: 15mm 20mm;
+    max-width: none;
+  }
+
+  /* 避免内容被截断 */
+  .document-body h2,
+  .document-body h3,
+  .document-body h4,
+  .sop-section-title {
+    page-break-after: avoid;
+  }
+
+  .document-body table,
+  .document-body img,
+  .sop-section {
+    page-break-inside: avoid;
+  }
+}

@@ -5,10 +5,16 @@ Provides fine-grained permission control for all subsystems
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime,
-    ForeignKey, Table, Index, JSON, UniqueConstraint
+    ForeignKey, Table, Index, JSON, UniqueConstraint, BigInteger
 )
+from sqlalchemy.dialects.mysql import BIGINT
 from sqlalchemy.orm import relationship
 from .models import AuthBase
+
+
+# Helper: MySQL BIGINT UNSIGNED type for user_id foreign keys
+# This matches the users.id column type in MySQL
+UserIdType = BigInteger().with_variant(BIGINT(unsigned=True), 'mysql')
 
 
 # Association table for Role-Permission many-to-many relationship
@@ -26,10 +32,10 @@ role_permissions = Table(
 user_roles = Table(
     'user_roles',
     AuthBase.metadata,
-    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    Column('user_id', UserIdType, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
     Column('role_id', Integer, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
     Column('created_at', DateTime, default=datetime.utcnow),
-    Column('created_by', Integer, nullable=True),
+    Column('created_by', UserIdType, nullable=True),  # Reference to user who assigned the role
     Column('expires_at', DateTime, nullable=True)  # Optional role expiration
 )
 
@@ -143,7 +149,7 @@ class DataPermissionRule(AuthBase):
 
     # Can apply to user or role
     rule_type = Column(String(20), nullable=False)  # 'user' | 'role'
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+    user_id = Column(UserIdType, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     role_id = Column(Integer, ForeignKey('roles.id', ondelete='CASCADE'), nullable=True)
 
     # Which module and resource this rule applies to

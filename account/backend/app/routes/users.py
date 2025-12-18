@@ -12,6 +12,12 @@ from functools import wraps
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
+# 有效的系统权限白名单
+VALID_SYSTEM_PERMISSIONS = {
+    'hr', 'account', 'crm', 'scm', 'eam', 'mes', 'shm',
+    'quotation', '报价', '采购', 'caigou', 'portal', 'dashboard'
+}
+
 
 def require_admin(f):
     '''Decorator to require admin authentication'''
@@ -98,7 +104,13 @@ def update_user(user_id):
         if 'role' in data and data['role'] in ['user', 'supervisor', 'admin', 'super_admin']:
             user.role = data['role']
         if 'permissions' in data:
-            user.permissions = json.dumps(data['permissions'])
+            # P2-18 安全修复：验证权限列表中的系统名称有效性
+            permissions = data['permissions']
+            if isinstance(permissions, list):
+                invalid_perms = [p for p in permissions if p not in VALID_SYSTEM_PERMISSIONS]
+                if invalid_perms:
+                    return jsonify({'error': f'无效的系统权限: {invalid_perms}，有效值: {list(VALID_SYSTEM_PERMISSIONS)}'}), 400
+            user.permissions = json.dumps(permissions)
         # Organization structure fields
         if 'department_name' in data:
             user.department_name = data['department_name']
@@ -319,6 +331,11 @@ def batch_assign_permissions():
 
     if not isinstance(permissions, list):
         return jsonify({'error': '权限必须是数组'}), 400
+
+    # P2-18 安全修复：验证权限列表中的系统名称有效性
+    invalid_perms = [p for p in permissions if p not in VALID_SYSTEM_PERMISSIONS]
+    if invalid_perms:
+        return jsonify({'error': f'无效的系统权限: {invalid_perms}，有效值: {list(VALID_SYSTEM_PERMISSIONS)}'}), 400
 
     auth_session = auth_models.AuthSessionLocal()
     try:

@@ -27,11 +27,14 @@ class TaskPriority(str, enum.Enum):
 
 class TaskType(str, enum.Enum):
     """任务类型枚举"""
+    GENERAL = 'general'             # 常规任务
     DESIGN = 'design'               # 设计
     DEVELOPMENT = 'development'     # 开发
     TESTING = 'testing'             # 测试
     REVIEW = 'review'               # 审查
+    DEPLOYMENT = 'deployment'       # 部署
     DOCUMENTATION = 'documentation' # 文档
+    MEETING = 'meeting'             # 会议
     OTHER = 'other'                 # 其他
 
 
@@ -51,7 +54,7 @@ class Task(Base):
     description = Column(Text, comment='任务描述')
     task_type = Column(
         Enum(TaskType),
-        default=TaskType.OTHER,
+        default=TaskType.GENERAL,
         nullable=False,
         comment='任务类型'
     )
@@ -99,18 +102,42 @@ class Task(Base):
 
     def to_dict(self):
         """Convert to dictionary"""
+        # Get task_type value (convert to lowercase for frontend)
+        if isinstance(self.task_type, TaskType):
+            task_type_val = self.task_type.value
+        elif self.task_type:
+            task_type_val = str(self.task_type).lower()
+        else:
+            task_type_val = 'general'
+
+        # Get status value (convert to lowercase for frontend)
+        if isinstance(self.status, TaskStatus):
+            status_val = self.status.value
+        elif self.status:
+            status_val = str(self.status).lower()
+        else:
+            status_val = 'pending'
+
+        # Get priority value (convert to lowercase for frontend)
+        if isinstance(self.priority, TaskPriority):
+            priority_val = self.priority.value
+        elif self.priority:
+            priority_val = str(self.priority).lower()
+        else:
+            priority_val = 'normal'
+
         return {
             'id': self.id,
             'project_id': self.project_id,
             'task_no': self.task_no,
             'title': self.title,
             'description': self.description,
-            'task_type': self.task_type.value if isinstance(self.task_type, TaskType) else self.task_type,
+            'task_type': task_type_val,
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'status': self.status.value if isinstance(self.status, TaskStatus) else self.status,
-            'priority': self.priority.value if isinstance(self.priority, TaskPriority) else self.priority,
+            'status': status_val,
+            'priority': priority_val,
             'assigned_to_id': self.assigned_to_id,
             'created_by_id': self.created_by_id,
             'depends_on_task_id': self.depends_on_task_id,

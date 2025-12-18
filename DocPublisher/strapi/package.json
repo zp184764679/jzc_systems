@@ -1,0 +1,28 @@
+{
+  "name": "docpublisher-strapi",
+  "version": "1.0.0",
+  "description": "Document Publisher CMS - Strapi Backend",
+  "scripts": {
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "build": "strapi build",
+    "strapi": "strapi"
+  },
+  "dependencies": {
+    "@ckeditor/strapi-plugin-ckeditor": "^1.1.1",
+    "@strapi/plugin-cloud": "^5.32.0",
+    "@strapi/plugin-users-permissions": "^5.32.0",
+    "@strapi/strapi": "^5.32.0",
+    "better-sqlite3": "^12.5.0",
+    "esbuild": "^0.27.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.2",
+    "styled-components": "^6.1.19"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=22.x.x",
+    "npm": ">=6.0.0"
+  },
+  "license": "MIT"
+}

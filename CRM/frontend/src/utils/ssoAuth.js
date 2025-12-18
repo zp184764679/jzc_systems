@@ -5,6 +5,7 @@
 
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL || '/';
 let isRedirecting = false;
+let redirectTimeout = null;
 
 const redirectToPortal = () => {
   if (isRedirecting) {
@@ -12,6 +13,13 @@ const redirectToPortal = () => {
     return;
   }
   isRedirecting = true;
+
+  // 安全修复：5秒后重置 isRedirecting，防止跳转失败后永久阻塞
+  redirectTimeout = setTimeout(() => {
+    isRedirecting = false;
+    console.warn('[SSO] Redirect timeout, resetting flag');
+  }, 5000);
+
   window.location.href = PORTAL_URL;
 };
 
@@ -33,6 +41,8 @@ export const checkSSOToken = async () => {
     if (!response.ok) {
       console.error('[SSO] Token validation failed - HTTP', response.status);
       clearAuth();
+      // 安全修复：验证失败时跳转到门户，避免用户白屏
+      redirectToPortal();
       return false;
     }
 
@@ -41,6 +51,8 @@ export const checkSSOToken = async () => {
     if (!data.valid || !data.user) {
       console.error('[SSO] Token validation failed:', data.error);
       clearAuth();
+      // 安全修复：验证失败时跳转到门户，避免用户白屏
+      redirectToPortal();
       return false;
     }
 

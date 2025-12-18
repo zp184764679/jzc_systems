@@ -27,19 +27,40 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - 401 只发事件，不做跳转
+// Response interceptor - 401/403 发事件，不做跳转
+// P1-7: 统一错误处理，添加 403 禁止访问处理和网络错误处理
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+
+    if (status === 401) {
       authEvents.emit(AUTH_EVENTS.UNAUTHORIZED, {
         url: error.config?.url,
         status: 401,
       });
       return Promise.reject(error);
+    } else if (status === 403) {
+      authEvents.emit(AUTH_EVENTS.FORBIDDEN, {
+        url: error.config?.url,
+        status: 403,
+        message: error.response?.data?.detail || error.response?.data?.error || '没有访问权限',
+      });
     }
-    const errorMessage = error.response?.data?.detail || error.message || '请求失败';
-    message.error(errorMessage);
+
+    // 提取错误信息并显示
+    if (error.response) {
+      const errorMessage = error.response.data?.detail || error.response.data?.message || error.response.data?.error || '请求失败';
+      message.error(errorMessage);
+      console.error('[API Error]', status, errorMessage);
+      return Promise.reject(new Error(errorMessage));
+    } else if (error.request) {
+      // 网络错误
+      const networkError = '网络连接失败，请检查网络';
+      message.error(networkError);
+      console.error('[Network Error]', error.message);
+      return Promise.reject(new Error(networkError));
+    }
     return Promise.reject(error);
   }
 );

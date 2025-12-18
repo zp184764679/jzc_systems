@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import './SecurityPages.css';
 
 const API_BASE = '/api';
 
 function SessionManagement() {
-  const { token, user } = useContext(AuthContext);
+  const { getToken, user } = useAuth();
+  const token = getToken();
   const [sessions, setSessions] = useState([]);
   const [allSessions, setAllSessions] = useState([]);
   const [statistics, setStatistics] = useState(null);

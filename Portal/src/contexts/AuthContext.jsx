@@ -20,9 +20,9 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // 初始化认证 - 只执行一次
+  // 初始化认证 - 只执行一次，并从后端刷新最新用户数据
   useEffect(() => {
-    const initAuth = () => {
+    const initAuth = async () => {
       const token = localStorage.getItem('token')
       const userStr = localStorage.getItem('user')
 
@@ -32,15 +32,35 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('token')
           localStorage.removeItem('user')
           setUser(null)
-        } else {
-          try {
-            const userData = JSON.parse(userStr)
-            setUser(userData)
-          } catch {
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            setUser(null)
+          setLoading(false)
+          return
+        }
+
+        try {
+          // 先设置 localStorage 中的用户数据，避免闪烁
+          const cachedUser = JSON.parse(userStr)
+          setUser(cachedUser)
+
+          // 从后端获取最新用户数据（可能 full_name 等字段已更新）
+          const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (response.ok) {
+            const freshUserData = await response.json()
+            // 更新 localStorage 和状态
+            localStorage.setItem('user', JSON.stringify(freshUserData))
+            setUser(freshUserData)
           }
+          // 如果刷新失败，保持使用 localStorage 中的数据
+        } catch {
+          // 解析或网络错误，清除数据
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          setUser(null)
         }
       }
       setLoading(false)

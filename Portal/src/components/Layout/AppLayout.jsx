@@ -144,47 +144,50 @@ export default function AppLayout() {
     return []
   }
 
+  // 主页不显示顶部 Header，HomePage 自己有完整的 Header
+  const isHomePage = location.pathname === '/'
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{
-        background: '#001529',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: isMobile ? '0 12px' : '0 24px',
-        height: isMobile ? '56px' : '64px'
-      }}>
-        {isMobile && location.pathname !== '/' && (
-          <Button
-            type="text"
-            icon={<MenuOutlined style={{ color: 'white', fontSize: '18px' }} />}
-            onClick={() => setDrawerOpen(true)}
-            style={{ marginRight: '8px' }}
-          />
-        )}
-        <h1 style={{
-          color: 'white',
-          margin: 0,
-          fontSize: isMobile ? '16px' : '20px',
-          fontWeight: 'bold',
-          flex: isMobile ? 1 : 'none',
-          cursor: 'pointer'
-        }} onClick={handleBackToHome}>
-          {isMobile ? 'JZC Portal' : 'JZC 企业门户'}
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px' }}>
-          {!isMobile && (
-            <span style={{ color: 'white' }}>
-              {user?.full_name || user?.username}
-              {user?.role === 'super_admin' && (
-                <Badge count="超级管理员" style={{ backgroundColor: '#52c41a', marginLeft: 8 }} />
-              )}
-              {user?.role === 'admin' && (
-                <Badge count="管理员" style={{ backgroundColor: '#1890ff', marginLeft: 8 }} />
-              )}
-            </span>
+      {!isHomePage && (
+        <Header style={{
+          background: '#001529',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: isMobile ? '0 12px' : '0 24px',
+          height: isMobile ? '56px' : '64px'
+        }}>
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined style={{ color: 'white', fontSize: '18px' }} />}
+              onClick={() => setDrawerOpen(true)}
+              style={{ marginRight: '8px' }}
+            />
           )}
-          {location.pathname !== '/' && (
+          <h1 style={{
+            color: 'white',
+            margin: 0,
+            fontSize: isMobile ? '16px' : '20px',
+            fontWeight: 'bold',
+            flex: isMobile ? 1 : 'none',
+            cursor: 'pointer'
+          }} onClick={handleBackToHome}>
+            {isMobile ? 'JZC Portal' : 'JZC 企业门户'}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px' }}>
+            {!isMobile && (
+              <span style={{ color: 'white' }}>
+                {user?.full_name || user?.username}
+                {user?.role === 'super_admin' && (
+                  <Badge count="超级管理员" style={{ backgroundColor: '#52c41a', marginLeft: 8 }} />
+                )}
+                {user?.role === 'admin' && (
+                  <Badge count="管理员" style={{ backgroundColor: '#1890ff', marginLeft: 8 }} />
+                )}
+              </span>
+            )}
             <Button
               icon={<HomeOutlined />}
               size={isMobile ? 'small' : 'middle'}
@@ -192,16 +195,16 @@ export default function AppLayout() {
             >
               {!isMobile && '回到主页'}
             </Button>
-          )}
-          <Button
-            icon={<LogoutOutlined />}
-            size={isMobile ? 'small' : 'middle'}
-            onClick={handleLogout}
-          >
-            {!isMobile && '退出登录'}
-          </Button>
-        </div>
-      </Header>
+            <Button
+              icon={<LogoutOutlined />}
+              size={isMobile ? 'small' : 'middle'}
+              onClick={handleLogout}
+            >
+              {!isMobile && '退出登录'}
+            </Button>
+          </div>
+        </Header>
+      )}
       <Layout>
         {/* 主页不显示侧边栏，其他页面显示 */}
         {location.pathname !== '/' && (

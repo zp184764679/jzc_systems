@@ -68,8 +68,9 @@ def generate_shipment_no():
 def get_shipments():
     """获取出货单列表"""
     try:
-        page = request.args.get('page', 1, type=int)
-        page_size = request.args.get('pageSize', 20, type=int)
+        # P1-10: 分页参数验证
+        page = max(1, request.args.get('page', 1, type=int))
+        page_size = max(1, min(request.args.get('pageSize', 20, type=int), 1000))
         status = request.args.get('status')
         customer_name = request.args.get('customer_name')
         shipment_no = request.args.get('shipment_no')
