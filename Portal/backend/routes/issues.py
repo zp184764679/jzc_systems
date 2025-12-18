@@ -28,6 +28,19 @@ def get_current_user():
     return payload if payload else None
 
 
+def safe_parse_date(date_str):
+    """安全解析日期字符串"""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str)
+    except ValueError:
+        try:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+
 @issues_bp.route('/project/<int:project_id>', methods=['GET'])
 def get_project_issues(project_id):
     """获取项目问题列表"""
@@ -85,13 +98,17 @@ def create_issue():
         # 生成问题编号
         issue_no = Issue.generate_issue_no(session)
 
+        # 确保枚举值为小写
+        issue_type = data.get('issue_type', 'other').lower()
+        severity = data.get('severity', 'medium').lower()
+
         issue = Issue(
             project_id=data['project_id'],
             issue_no=issue_no,
             title=data['title'],
             description=data.get('description'),
-            issue_type=data.get('issue_type', 'other'),
-            severity=data.get('severity', 'medium'),
+            issue_type=issue_type,
+            severity=severity,
             status='open',
             affected_phase_id=data.get('affected_phase_id'),
             affected_task_id=data.get('affected_task_id'),
@@ -99,7 +116,7 @@ def create_issue():
             reported_by_name=user.get('full_name') or user.get('username'),
             assigned_to_id=data.get('assigned_to_id'),
             assigned_to_name=data.get('assigned_to_name'),
-            due_date=datetime.fromisoformat(data['due_date']) if data.get('due_date') else None,
+            due_date=safe_parse_date(data.get('due_date')),
         )
 
         session.add(issue)
@@ -108,6 +125,8 @@ def create_issue():
 
         # 如果有负责人，发送通知
         if issue.assigned_to_id:
+            # 获取 severity 值（兼容字符串和枚举）
+            severity_val = issue.severity.value if hasattr(issue.severity, 'value') else issue.severity
             notification = ProjectNotification(
                 recipient_id=issue.assigned_to_id,
                 recipient_name=issue.assigned_to_name,
@@ -116,7 +135,7 @@ def create_issue():
                 notification_type=NotificationType.ISSUE_CREATED,
                 title=f"新问题分配给你：{issue.title}",
                 content=issue.description,
-                related_data={'issue_no': issue.issue_no, 'severity': issue.severity.value},
+                related_data={'issue_no': issue.issue_no, 'severity': severity_val},
                 channels=['in_app']
             )
             session.add(notification)
@@ -171,18 +190,26 @@ def update_issue(issue_id):
 
         # 更新字段
         updatable_fields = [
-            'title', 'description', 'issue_type', 'severity', 'status',
-            'affected_phase_id', 'affected_task_id', 'assigned_to_id',
-            'assigned_to_name', 'root_cause', 'corrective_action',
-            'preventive_action', 'resolution_notes', 'due_date'
+            'title', 'description', 'affected_phase_id', 'affected_task_id',
+            'assigned_to_id', 'assigned_to_name', 'root_cause',
+            'corrective_action', 'preventive_action', 'resolution_notes'
         ]
 
         for field in updatable_fields:
             if field in data:
-                if field == 'due_date' and data[field]:
-                    setattr(issue, field, datetime.fromisoformat(data[field]))
-                else:
-                    setattr(issue, field, data[field])
+                setattr(issue, field, data[field])
+
+        # 处理枚举字段（确保小写）
+        if 'issue_type' in data:
+            issue.issue_type = data['issue_type'].lower() if data['issue_type'] else 'other'
+        if 'severity' in data:
+            issue.severity = data['severity'].lower() if data['severity'] else 'medium'
+        if 'status' in data:
+            issue.status = data['status'].lower() if data['status'] else 'open'
+
+        # 处理日期字段
+        if 'due_date' in data:
+            issue.due_date = safe_parse_date(data['due_date'])
 
         session.commit()
         session.refresh(issue)
@@ -211,7 +238,7 @@ def resolve_issue(issue_id):
         if not issue:
             return jsonify({'error': '问题不存在'}), 404
 
-        issue.status = IssueStatus.RESOLVED
+        issue.status = 'resolved'  # 使用小写字符串
         issue.resolved_at = datetime.now()
         issue.resolution_notes = data.get('resolution_notes', issue.resolution_notes)
         issue.corrective_action = data.get('corrective_action', issue.corrective_action)
@@ -258,7 +285,7 @@ def close_issue(issue_id):
         if not issue:
             return jsonify({'error': '问题不存在'}), 404
 
-        issue.status = IssueStatus.CLOSED
+        issue.status = 'closed'  # 使用小写字符串
         issue.closed_at = datetime.now()
 
         session.commit()
@@ -288,7 +315,7 @@ def reopen_issue(issue_id):
         if not issue:
             return jsonify({'error': '问题不存在'}), 404
 
-        issue.status = IssueStatus.REOPENED
+        issue.status = 'reopened'  # 使用小写字符串
         issue.resolved_at = None
         issue.closed_at = None
 

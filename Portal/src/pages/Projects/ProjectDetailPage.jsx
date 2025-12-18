@@ -1,17 +1,19 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Spin, Tabs, Button, Tag, Progress, Row, Col, Statistic, Space } from 'antd'
-import { ArrowLeftOutlined, UserAddOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Card, Spin, Button, Tag, Progress, Row, Col, Space, Typography, Tooltip } from 'antd'
+import {
+  ArrowLeftOutlined,
+  PlusOutlined,
+  CalendarOutlined,
+  UserOutlined,
+  ShoppingOutlined,
+  FileTextOutlined
+} from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import { projectAPI } from '../../services/api'
-import FileUpload from '../../components/Files/FileUpload'
-import FileList from '../../components/Files/FileList'
-import MemberList from '../../components/Members/MemberList'
-import AddMemberModal from '../../components/Members/AddMemberModal'
-import TaskList from '../../components/Tasks/TaskList'
-import TaskFormModal from '../../components/Tasks/TaskFormModal'
-import IssueList from '../../components/Issues/IssueList'
-import IssueFormModal from '../../components/Issues/IssueFormModal'
 import ProjectTimeline from '../../components/Timeline/ProjectTimeline'
+import TaskFormModal from '../../components/Tasks/TaskFormModal'
+
+const { Text, Title } = Typography
 
 const statusColors = {
   planning: 'blue',
@@ -29,21 +31,28 @@ const statusLabels = {
   cancelled: '已取消',
 }
 
+const priorityColors = {
+  urgent: 'red',
+  high: 'orange',
+  normal: 'blue',
+  low: 'default',
+}
+
+const priorityLabels = {
+  urgent: '紧急',
+  high: '高',
+  normal: '普通',
+  low: '低',
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('overview')
-  const [refreshFiles, setRefreshFiles] = useState(0)
-  const [refreshMembers, setRefreshMembers] = useState(0)
-  const [refreshTasks, setRefreshTasks] = useState(0)
-  const [refreshIssues, setRefreshIssues] = useState(0)
-  const [addMemberModalVisible, setAddMemberModalVisible] = useState(false)
   const [taskModalVisible, setTaskModalVisible] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
-  const [issueModalVisible, setIssueModalVisible] = useState(false)
-  const [editingIssue, setEditingIssue] = useState(null)
+  const [refreshTimeline, setRefreshTimeline] = useState(0)
 
   useEffect(() => {
     fetchProject()
@@ -66,19 +75,8 @@ export default function ProjectDetailPage() {
     setTaskModalVisible(true)
   }
 
-  const handleEditTask = (task) => {
-    setEditingTask(task)
-    setTaskModalVisible(true)
-  }
-
-  const handleAddIssue = () => {
-    setEditingIssue(null)
-    setIssueModalVisible(true)
-  }
-
-  const handleEditIssue = (issue) => {
-    setEditingIssue(issue)
-    setIssueModalVisible(true)
+  const handleTaskSuccess = () => {
+    setRefreshTimeline(prev => prev + 1)
   }
 
   if (loading) {
@@ -89,90 +87,80 @@ export default function ProjectDetailPage() {
     return <Card>项目不存在</Card>
   }
 
-  const tabItems = [
-    {
-      key: 'overview',
-      label: '概览',
-      children: (
-        <Card>
-          <Row gutter={[16, 16]}>
-            <Col span={24}>
-              <h2>{project.name}</h2>
-              <Space size="large">
-                <Tag color={statusColors[project.status]}>
-                  {statusLabels[project.status]}
-                </Tag>
-                <span>项目编号: {project.project_no}</span>
-              </Space>
-            </Col>
-          </Row>
-          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-            <Col xs={24} sm={12} lg={6}>
-              <Statistic title="客户" value={project.customer || '-'} />
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Statistic title="订单号" value={project.order_no || '-'} />
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Statistic title="优先级" value={project.priority} />
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Statistic
-                title="进度"
-                value={project.progress_percentage || 0}
-                suffix="%"
-              />
-            </Col>
-          </Row>
-          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-            <Col span={24}>
-              <h3>项目进度</h3>
-              <Progress
-                percent={project.progress_percentage || 0}
-                status={project.status === 'completed' ? 'success' : 'active'}
-              />
-            </Col>
-          </Row>
-          {project.description && (
-            <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-              <Col span={24}>
-                <h3>项目描述</h3>
-                <p>{project.description}</p>
-              </Col>
-            </Row>
-          )}
-        </Card>
-      ),
-    },
-    {
-      key: 'files',
-      label: '文件',
-      children: (
-        <div>
-          <Card title="上传文件" style={{ marginBottom: 16 }}>
-            <FileUpload
-              projectId={id}
-              onSuccess={() => setRefreshFiles(prev => prev + 1)}
-            />
-          </Card>
-          <Card title="文件列表">
-            <FileList
-              projectId={id}
-              key={refreshFiles}
-              onRefresh={() => setRefreshFiles(prev => prev + 1)}
-            />
-          </Card>
-        </div>
-      ),
-    },
-    {
-      key: 'tasks',
-      label: '任务',
-      children: (
-        <div>
-          <Card
-            title="任务列表"
-            extra={
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 顶部信息栏 */}
+      <Card
+        bodyStyle={{ padding: '12px 24px' }}
+        style={{
+          marginBottom: 16,
+          background: 'linear-gradient(135deg, #667eea08 0%, #764ba208 100%)',
+          borderRadius: 12
+        }}
+      >
+        <Row justify="space-between" align="middle" gutter={[16, 12]}>
+          {/* 左侧：返回按钮 + 项目信息 */}
+          <Col>
+            <Space size="large" align="center">
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={() => navigate('/projects')}
+              >
+                返回
+              </Button>
+
+              <div>
+                <Space align="center" size="middle">
+                  <Title level={4} style={{ margin: 0 }}>{project.name}</Title>
+                  <Tag color={statusColors[project.status]}>
+                    {statusLabels[project.status]}
+                  </Tag>
+                  <Tag color={priorityColors[project.priority]}>
+                    {priorityLabels[project.priority]}
+                  </Tag>
+                </Space>
+                <div style={{ marginTop: 4 }}>
+                  <Space size="large">
+                    <Text type="secondary">
+                      <FileTextOutlined style={{ marginRight: 4 }} />
+                      {project.project_no}
+                    </Text>
+                    {project.customer && (
+                      <Text type="secondary">
+                        <UserOutlined style={{ marginRight: 4 }} />
+                        {project.customer}
+                      </Text>
+                    )}
+                    {project.order_no && (
+                      <Text type="secondary">
+                        <ShoppingOutlined style={{ marginRight: 4 }} />
+                        {project.order_no}
+                      </Text>
+                    )}
+                  </Space>
+                </div>
+              </div>
+            </Space>
+          </Col>
+
+          {/* 右侧：进度 + 操作按钮 */}
+          <Col>
+            <Space size="large" align="center">
+              {/* 进度条 */}
+              <div style={{ width: 150 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>进度</Text>
+                  <Text strong>{project.progress_percentage || 0}%</Text>
+                </div>
+                <Progress
+                  percent={project.progress_percentage || 0}
+                  showInfo={false}
+                  size="small"
+                  status={project.status === 'completed' ? 'success' : 'active'}
+                />
+              </div>
+
+              {/* 创建任务按钮 */}
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -180,123 +168,33 @@ export default function ProjectDetailPage() {
               >
                 创建任务
               </Button>
-            }
-          >
-            <TaskList
-              projectId={id}
-              key={refreshTasks}
-              onRefresh={() => setRefreshTasks(prev => prev + 1)}
-              onEditTask={handleEditTask}
-            />
-          </Card>
-        </div>
-      ),
-    },
-    {
-      key: 'timeline',
-      label: '时间轴',
-      children: <ProjectTimeline projectId={id} />,
-    },
-    {
-      key: 'members',
-      label: '成员',
-      children: (
-        <div>
-          <Card
-            title="项目成员"
-            extra={
-              <Button
-                type="primary"
-                icon={<UserAddOutlined />}
-                onClick={() => setAddMemberModalVisible(true)}
-              >
-                添加成员
-              </Button>
-            }
-          >
-            <MemberList
-              projectId={id}
-              key={refreshMembers}
-              onRefresh={() => setRefreshMembers(prev => prev + 1)}
-            />
-          </Card>
-        </div>
-      ),
-    },
-    {
-      key: 'issues',
-      label: '问题/改善',
-      children: (
-        <div>
-          <Card
-            title="问题跟踪"
-            extra={
-              <Button
-                type="primary"
-                icon={<ExclamationCircleOutlined />}
-                onClick={handleAddIssue}
-              >
-                报告问题
-              </Button>
-            }
-          >
-            <IssueList
-              projectId={id}
-              key={refreshIssues}
-              onRefresh={() => setRefreshIssues(prev => prev + 1)}
-              onEditIssue={handleEditIssue}
-            />
-          </Card>
-        </div>
-      ),
-    },
-  ]
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
-  return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/projects')}
-        >
-          返回项目列表
-        </Button>
+      {/* 时间轴主视图 */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ProjectTimeline
+          key={refreshTimeline}
+          projectId={id}
+          onEditTask={(task) => {
+            setEditingTask(task)
+            setTaskModalVisible(true)
+          }}
+        />
       </div>
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        size="large"
-      />
-
-      <AddMemberModal
-        open={addMemberModalVisible}
-        onClose={() => setAddMemberModalVisible(false)}
-        onSuccess={() => setRefreshMembers(prev => prev + 1)}
-        projectId={id}
-      />
-
+      {/* 任务表单模态框 */}
       <TaskFormModal
         open={taskModalVisible}
         onClose={() => {
           setTaskModalVisible(false)
           setEditingTask(null)
         }}
-        onSuccess={() => setRefreshTasks(prev => prev + 1)}
+        onSuccess={handleTaskSuccess}
         projectId={id}
         task={editingTask}
-      />
-
-      <IssueFormModal
-        open={issueModalVisible}
-        onClose={() => {
-          setIssueModalVisible(false)
-          setEditingIssue(null)
-        }}
-        onSuccess={() => setRefreshIssues(prev => prev + 1)}
-        projectId={id}
-        issue={editingIssue}
       />
     </div>
   )

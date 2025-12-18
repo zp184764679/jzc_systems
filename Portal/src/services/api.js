@@ -122,7 +122,7 @@ export const phaseAPI = {
 export const fileAPI = {
   // Get files for a project
   getProjectFiles: (projectId, params) =>
-    api.get(`/projects/${projectId}/files`, { params }),
+    api.get(`/files/project/${projectId}`, { params }),
 
   // Upload file
   uploadFile: (formData, onProgress) =>

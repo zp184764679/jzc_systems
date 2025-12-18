@@ -7,6 +7,9 @@ from models.project import Project
 from models.task import Task
 from models.project_file import ProjectFile
 from models.project_member import ProjectMember
+from models.project_phase import ProjectPhase
+from models.issue import Issue
+from models.project_notification import ProjectNotification
 import sys
 import os
 
@@ -15,6 +18,59 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from shared.auth import verify_token
 
 projects_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
+
+
+def is_admin(user):
+    """检查用户是否为管理员"""
+    role = user.get('role', '')
+    return role in ['admin', 'super_admin']
+
+
+def check_project_permission(session, project_id, user, required_role=None):
+    """
+    检查用户是否有项目权限
+
+    Args:
+        session: 数据库会话
+        project_id: 项目ID
+        user: 当前用户信息
+        required_role: 需要的角色（'owner', 'manager', 'member', None表示任意成员）
+
+    Returns:
+        (has_permission, member_role): 是否有权限，以及用户在项目中的角色
+    """
+    # 管理员有所有权限
+    if is_admin(user):
+        return True, 'admin'
+
+    user_id = user.get('user_id') or user.get('id')
+
+    # 检查是否为项目创建者
+    project = session.query(Project).filter_by(id=project_id).first()
+    if project and project.created_by_id == user_id:
+        return True, 'owner'
+
+    # 检查是否为项目成员
+    member = session.query(ProjectMember).filter_by(
+        project_id=project_id,
+        user_id=user_id
+    ).first()
+
+    if not member:
+        return False, None
+
+    member_role = member.role if member else None
+
+    # 如果没有特定角色要求，只要是成员就有权限
+    if required_role is None:
+        return True, member_role
+
+    # 角色等级: owner > manager > member
+    role_levels = {'owner': 3, 'manager': 2, 'member': 1}
+    required_level = role_levels.get(required_role, 0)
+    user_level = role_levels.get(member_role, 0)
+
+    return user_level >= required_level, member_role
 
 
 def get_current_user():
@@ -33,18 +89,55 @@ def get_current_user():
 
 @projects_bp.route('', methods=['GET'])
 def get_projects():
-    """获取项目列表"""
+    """获取项目列表（支持分页和筛选）"""
     user = get_current_user()
     if not user:
         return jsonify({'error': '未授权'}), 401
 
     session = SessionLocal()
     try:
-        # TODO: 根据用户权限过滤项目
-        projects = session.query(Project).all()
+        # 分页参数
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 20, type=int)
+        page_size = min(page_size, 100)  # 最大每页100条
+
+        # 筛选参数
+        status = request.args.get('status')
+        priority = request.args.get('priority')
+        search = request.args.get('search', '')
+
+        # 构建查询
+        query = session.query(Project)
+
+        # 应用筛选
+        if status:
+            query = query.filter(Project.status == status)
+        if priority:
+            query = query.filter(Project.priority == priority)
+        if search:
+            search_pattern = f'%{search}%'
+            query = query.filter(
+                (Project.name.ilike(search_pattern)) |
+                (Project.customer.ilike(search_pattern)) |
+                (Project.order_no.ilike(search_pattern))
+            )
+
+        # 获取总数
+        total = query.count()
+
+        # 排序（最新创建的在前）
+        query = query.order_by(Project.created_at.desc())
+
+        # 分页
+        offset = (page - 1) * page_size
+        projects = query.offset(offset).limit(page_size).all()
+
         return jsonify({
             'projects': [p.to_dict() for p in projects],
-            'total': len(projects)
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -137,7 +230,10 @@ def update_project(project_id):
         if not project:
             return jsonify({'error': '项目不存在'}), 404
 
-        # TODO: 检查用户是否有编辑权限
+        # 检查编辑权限（需要 member 以上角色）
+        has_permission, role = check_project_permission(session, project_id, user)
+        if not has_permission:
+            return jsonify({'error': '没有编辑权限'}), 403
 
         # Update fields
         updatable_fields = [
@@ -175,7 +271,7 @@ def update_project(project_id):
 
 @projects_bp.route('/<int:project_id>', methods=['DELETE'])
 def delete_project(project_id):
-    """删除项目"""
+    """删除项目（包含级联删除）"""
     user = get_current_user()
     if not user:
         return jsonify({'error': '未授权'}), 401
@@ -186,13 +282,65 @@ def delete_project(project_id):
         if not project:
             return jsonify({'error': '项目不存在'}), 404
 
-        # TODO: 检查用户是否有删除权限
-        # TODO: 删除关联的任务、文件、成员等
+        # 检查删除权限（需要 owner 或 manager 角色）
+        has_permission, role = check_project_permission(session, project_id, user, 'manager')
+        if not has_permission:
+            return jsonify({'error': '没有删除权限'}), 403
 
+        # 级联删除关联数据
+        deleted_counts = {
+            'tasks': 0,
+            'phases': 0,
+            'files': 0,
+            'members': 0,
+            'issues': 0,
+            'notifications': 0
+        }
+
+        # 删除任务
+        tasks = session.query(Task).filter_by(project_id=project_id).all()
+        for task in tasks:
+            session.delete(task)
+            deleted_counts['tasks'] += 1
+
+        # 删除阶段
+        phases = session.query(ProjectPhase).filter_by(project_id=project_id).all()
+        for phase in phases:
+            session.delete(phase)
+            deleted_counts['phases'] += 1
+
+        # 删除文件记录（物理文件保留，可手动清理）
+        files = session.query(ProjectFile).filter_by(project_id=project_id).all()
+        for file in files:
+            session.delete(file)
+            deleted_counts['files'] += 1
+
+        # 删除成员
+        members = session.query(ProjectMember).filter_by(project_id=project_id).all()
+        for member in members:
+            session.delete(member)
+            deleted_counts['members'] += 1
+
+        # 删除问题
+        issues = session.query(Issue).filter_by(project_id=project_id).all()
+        for issue in issues:
+            session.delete(issue)
+            deleted_counts['issues'] += 1
+
+        # 删除通知
+        notifications = session.query(ProjectNotification).filter_by(project_id=project_id).all()
+        for notification in notifications:
+            session.delete(notification)
+            deleted_counts['notifications'] += 1
+
+        # 最后删除项目
         session.delete(project)
         session.commit()
 
-        return jsonify({'message': '项目已删除'}), 200
+        return jsonify({
+            'message': '项目已删除',
+            'deleted': deleted_counts
+        }), 200
     except Exception as e:
         session.rollback()
         return jsonify({'error': str(e)}), 500

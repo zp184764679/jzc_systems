@@ -30,6 +30,19 @@ def get_current_user():
     return payload if payload else None
 
 
+def safe_parse_date(date_str):
+    """安全解析日期字符串"""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        try:
+            return datetime.fromisoformat(date_str).date()
+        except ValueError:
+            return None
+
+
 @phases_bp.route('/api/projects/<int:project_id>/phases', methods=['GET'])
 def get_project_phases(project_id):
     """获取项目的所有阶段"""
@@ -82,16 +95,8 @@ def create_phase(project_id):
             project_id=project_id
         ).count()
 
-        # 解析阶段类型
-        phase_type = data.get('phase_type', 'customer_order')
-        if phase_type in PhaseType.__members__:
-            phase_type = PhaseType[phase_type]
-        else:
-            # 尝试从值匹配
-            for pt in PhaseType:
-                if pt.value == phase_type:
-                    phase_type = pt
-                    break
+        # 解析阶段类型（使用小写字符串）
+        phase_type = data.get('phase_type', 'customer_order').lower()
 
         phase = ProjectPhase(
             project_id=project_id,
@@ -99,8 +104,8 @@ def create_phase(project_id):
             phase_order=data.get('phase_order', max_order + 1),
             name=data.get('name', '新阶段'),
             description=data.get('description'),
-            planned_start_date=datetime.strptime(data['planned_start_date'], '%Y-%m-%d').date() if data.get('planned_start_date') else None,
-            planned_end_date=datetime.strptime(data['planned_end_date'], '%Y-%m-%d').date() if data.get('planned_end_date') else None,
+            planned_start_date=safe_parse_date(data.get('planned_start_date')),
+            planned_end_date=safe_parse_date(data.get('planned_end_date')),
             responsible_user_id=data.get('responsible_user_id'),
             department=data.get('department'),
         )
@@ -207,19 +212,16 @@ def update_phase(phase_id):
         if 'description' in data:
             phase.description = data['description']
         if 'planned_start_date' in data:
-            phase.planned_start_date = datetime.strptime(data['planned_start_date'], '%Y-%m-%d').date() if data['planned_start_date'] else None
+            phase.planned_start_date = safe_parse_date(data['planned_start_date'])
         if 'planned_end_date' in data:
-            phase.planned_end_date = datetime.strptime(data['planned_end_date'], '%Y-%m-%d').date() if data['planned_end_date'] else None
+            phase.planned_end_date = safe_parse_date(data['planned_end_date'])
         if 'actual_start_date' in data:
-            phase.actual_start_date = datetime.strptime(data['actual_start_date'], '%Y-%m-%d').date() if data['actual_start_date'] else None
+            phase.actual_start_date = safe_parse_date(data['actual_start_date'])
         if 'actual_end_date' in data:
-            phase.actual_end_date = datetime.strptime(data['actual_end_date'], '%Y-%m-%d').date() if data['actual_end_date'] else None
+            phase.actual_end_date = safe_parse_date(data['actual_end_date'])
         if 'status' in data:
-            status_value = data['status']
-            for ps in PhaseStatus:
-                if ps.value == status_value:
-                    phase.status = ps
-                    break
+            # 使用小写字符串
+            phase.status = data['status'].lower() if data['status'] else 'pending'
         if 'completion_percentage' in data:
             phase.completion_percentage = max(0, min(100, int(data['completion_percentage'])))
         if 'responsible_user_id' in data:
@@ -251,7 +253,7 @@ def complete_phase(phase_id):
         if not phase:
             return jsonify({'error': '阶段不存在'}), 404
 
-        phase.status = PhaseStatus.COMPLETED
+        phase.status = 'completed'  # 使用小写字符串
         phase.completion_percentage = 100
         phase.actual_end_date = datetime.now().date()
 
@@ -282,7 +284,7 @@ def start_phase(phase_id):
         if not phase:
             return jsonify({'error': '阶段不存在'}), 404
 
-        phase.status = PhaseStatus.IN_PROGRESS
+        phase.status = 'in_progress'  # 使用小写字符串
         phase.actual_start_date = datetime.now().date()
 
         session.commit()

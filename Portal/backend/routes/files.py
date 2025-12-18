@@ -22,6 +22,9 @@ files_bp = Blueprint('files', __name__, url_prefix='/api/files')
 # Initialize file storage
 storage = FileStorage()
 
+# 文件大小限制 (50MB)
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+
 
 def get_current_user():
     """从请求头获取当前用户"""
@@ -40,6 +43,28 @@ def get_current_user():
 def calculate_md5(file_bytes):
     """计算文件MD5"""
     return hashlib.md5(file_bytes).hexdigest()
+
+
+def format_file_size(size_bytes):
+    """格式化文件大小为人类可读格式"""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def check_file_size(file):
+    """检查文件大小是否超过限制"""
+    # 获取文件大小（移动到末尾获取大小，然后移回开头）
+    file.seek(0, 2)  # 移到文件末尾
+    size = file.tell()
+    file.seek(0)  # 移回开头
+
+    if size > MAX_FILE_SIZE:
+        return False, size
+    return True, size
 
 
 @files_bp.route('/project/<int:project_id>', methods=['GET'])
@@ -94,6 +119,13 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': '文件名为空'}), 400
+
+    # 检查文件大小
+    is_valid, file_size = check_file_size(file)
+    if not is_valid:
+        return jsonify({
+            'error': f'文件过大，最大允许 {format_file_size(MAX_FILE_SIZE)}，当前文件 {format_file_size(file_size)}'
+        }), 413
 
     project_id = request.form.get('project_id')
     if not project_id:
@@ -167,6 +199,13 @@ def upload_file_version(file_id):
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': '文件名为空'}), 400
+
+    # 检查文件大小
+    is_valid, file_size = check_file_size(file)
+    if not is_valid:
+        return jsonify({
+            'error': f'文件过大，最大允许 {format_file_size(MAX_FILE_SIZE)}，当前文件 {format_file_size(file_size)}'
+        }), 413
 
     session = SessionLocal()
     try:

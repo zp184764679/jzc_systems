@@ -12,13 +12,19 @@ import {
   Select,
   Space,
   message,
-  Spin
+  Spin,
+  Alert,
+  Result,
+  Pagination
 } from 'antd'
 import {
   PlusOutlined,
   SearchOutlined,
   AppstoreOutlined,
-  BarsOutlined
+  BarsOutlined,
+  ReloadOutlined,
+  WifiOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons'
 import { projectAPI } from '../../services/api'
 import ProjectFormModal from '../../components/Projects/ProjectFormModal'
@@ -65,18 +71,77 @@ export default function ProjectListPage() {
   const [searchText, setSearchText] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const [priorityFilter, setPriorityFilter] = useState(null)
+  const [error, setError] = useState(null) // 错误状态
+
+  // 分页状态
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0
+  })
 
   useEffect(() => {
     fetchProjects()
-  }, [])
+  }, [pagination.page, pagination.pageSize, statusFilter, priorityFilter])
 
   const fetchProjects = async () => {
     setLoading(true)
+    setError(null)
     try {
-      const response = await projectAPI.getProjects()
+      // 构建查询参数
+      const params = {
+        page: pagination.page,
+        page_size: pagination.pageSize,
+      }
+      if (statusFilter) params.status = statusFilter
+      if (priorityFilter) params.priority = priorityFilter
+      if (searchText) params.search = searchText
+
+      const response = await projectAPI.getProjects(params)
       setProjects(response.data.projects || [])
-    } catch (error) {
-      message.error('获取项目列表失败')
+
+      // 更新分页信息
+      setPagination(prev => ({
+        ...prev,
+        total: response.data.total || 0,
+        totalPages: response.data.total_pages || 0
+      }))
+    } catch (err) {
+      console.error('获取项目列表失败:', err)
+
+      // 检测错误类型
+      if (!err.response) {
+        // 网络错误（无响应）
+        setError({
+          type: 'network',
+          message: '网络连接失败，请检查网络后重试'
+        })
+      } else if (err.response.status === 401) {
+        // 认证错误
+        setError({
+          type: 'auth',
+          message: '登录已过期，请重新登录'
+        })
+        // 跳转登录页
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      } else if (err.response.status >= 500) {
+        // 服务器错误
+        setError({
+          type: 'server',
+          message: `服务器错误 (${err.response.status})，请稍后重试`
+        })
+      } else {
+        // 其他错误
+        const errorMsg = err.response?.data?.error || err.message || '未知错误'
+        setError({
+          type: 'other',
+          message: `获取项目失败: ${errorMsg}`
+        })
+      }
+      message.error(error?.message || '获取项目列表失败')
     } finally {
       setLoading(false)
     }
@@ -86,21 +151,32 @@ export default function ProjectListPage() {
     navigate(`/projects/${projectId}`)
   }
 
-  // Filter projects
-  const filteredProjects = projects.filter(project => {
-    if (searchText && !project.name.toLowerCase().includes(searchText.toLowerCase()) &&
-        !project.customer?.toLowerCase().includes(searchText.toLowerCase()) &&
-        !project.order_no?.toLowerCase().includes(searchText.toLowerCase())) {
-      return false
-    }
-    if (statusFilter && project.status !== statusFilter) {
-      return false
-    }
-    if (priorityFilter && project.priority !== priorityFilter) {
-      return false
-    }
-    return true
-  })
+  // 搜索处理（触发服务端查询）
+  const handleSearch = () => {
+    setPagination(prev => ({ ...prev, page: 1 })) // 重置到第一页
+    fetchProjects()
+  }
+
+  // 分页变化处理
+  const handlePageChange = (page, pageSize) => {
+    setPagination(prev => ({
+      ...prev,
+      page,
+      pageSize
+    }))
+  }
+
+  // 状态筛选变化
+  const handleStatusChange = (value) => {
+    setStatusFilter(value)
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  // 优先级筛选变化
+  const handlePriorityChange = (value) => {
+    setPriorityFilter(value)
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
 
   return (
     <div>
@@ -120,13 +196,17 @@ export default function ProjectListPage() {
             allowClear
             style={{ width: 300 }}
             prefix={<SearchOutlined />}
+            value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            onSearch={handleSearch}
+            enterButton
           />
           <Select
             placeholder="状态筛选"
             allowClear
             style={{ width: 150 }}
-            onChange={setStatusFilter}
+            value={statusFilter}
+            onChange={handleStatusChange}
           >
             <Option value="planning">规划中</Option>
             <Option value="in_progress">进行中</Option>
@@ -138,7 +218,8 @@ export default function ProjectListPage() {
             placeholder="优先级筛选"
             allowClear
             style={{ width: 150 }}
-            onChange={setPriorityFilter}
+            value={priorityFilter}
+            onChange={handlePriorityChange}
           >
             <Option value="low">低</Option>
             <Option value="normal">普通</Option>
@@ -160,22 +241,48 @@ export default function ProjectListPage() {
         </Space>
       </Card>
 
+      {/* Error State */}
+      {error && !loading && (
+        <Card style={{ marginBottom: 24 }}>
+          <Result
+            status={error.type === 'network' ? 'warning' : 'error'}
+            icon={error.type === 'network' ? <WifiOutlined /> : <ExclamationCircleOutlined />}
+            title={error.type === 'network' ? '网络连接失败' : '加载失败'}
+            subTitle={error.message}
+            extra={
+              error.type !== 'auth' && (
+                <Button
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchProjects}
+                  loading={loading}
+                >
+                  重试
+                </Button>
+              )
+            }
+          />
+        </Card>
+      )}
+
       {/* Projects */}
       <Spin spinning={loading}>
-        {filteredProjects.length === 0 ? (
+        {!error && projects.length === 0 ? (
           <Card>
             <Empty
-              description="暂无项目"
+              description={searchText || statusFilter || priorityFilter ? "没有匹配的项目" : "暂无项目"}
               style={{ padding: '60px 0' }}
             >
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateModal(true)}>
-                创建第一个项目
-              </Button>
+              {!searchText && !statusFilter && !priorityFilter && (
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateModal(true)}>
+                  创建第一个项目
+                </Button>
+              )}
             </Empty>
           </Card>
-        ) : (
+        ) : !error && (
           <Row gutter={[16, 16]}>
-            {filteredProjects.map(project => (
+            {projects.map(project => (
               <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
                 <Card
                   hoverable
@@ -223,6 +330,22 @@ export default function ProjectListPage() {
           </Row>
         )}
       </Spin>
+
+      {/* Pagination */}
+      {!error && pagination.total > 0 && (
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <Pagination
+            current={pagination.page}
+            pageSize={pagination.pageSize}
+            total={pagination.total}
+            onChange={handlePageChange}
+            showSizeChanger
+            showQuickJumper
+            showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 个项目`}
+            pageSizeOptions={['12', '20', '40', '60']}
+          />
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       <ProjectFormModal

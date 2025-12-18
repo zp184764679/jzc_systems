@@ -30,6 +30,21 @@ def get_current_user():
     return payload if payload else None
 
 
+def safe_parse_date(date_str):
+    """安全解析日期字符串，支持多种格式"""
+    if not date_str:
+        return None
+    try:
+        # 尝试 ISO 格式 (YYYY-MM-DDTHH:MM:SS)
+        return datetime.fromisoformat(date_str)
+    except ValueError:
+        try:
+            # 尝试简单日期格式 (YYYY-MM-DD)
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+
 @tasks_bp.route('/project/<int:project_id>', methods=['GET'])
 def get_project_tasks(project_id):
     """获取项目的所有任务"""
@@ -113,16 +128,21 @@ def create_task():
         # Generate task number
         task_no = f"TASK{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
+        # 获取枚举值（保持小写，与数据库枚举匹配）
+        task_type = data.get('task_type', 'general').lower()
+        status = data.get('status', 'pending').lower()
+        priority = data.get('priority', 'normal').lower()
+
         task = Task(
             project_id=data['project_id'],
             task_no=task_no,
             title=data['title'],
             description=data.get('description'),
-            task_type=data.get('task_type', 'other'),
-            start_date=datetime.fromisoformat(data['start_date']) if data.get('start_date') else None,
-            due_date=datetime.fromisoformat(data['due_date']) if data.get('due_date') else None,
-            status=data.get('status', 'pending'),
-            priority=data.get('priority', 'normal'),
+            task_type=task_type,
+            start_date=safe_parse_date(data.get('start_date')),
+            due_date=safe_parse_date(data.get('due_date')),
+            status=status,
+            priority=priority,
             assigned_to_id=data.get('assigned_to_id'),
             created_by_id=user.get('user_id') or user.get('id'),
             depends_on_task_id=data.get('depends_on_task_id'),
@@ -157,20 +177,27 @@ def update_task(task_id):
 
         # Update fields
         updateable_fields = [
-            'title', 'description', 'task_type', 'status', 'priority',
-            'assigned_to_id', 'depends_on_task_id', 'is_milestone',
-            'reminder_enabled', 'reminder_days_before'
+            'title', 'description', 'assigned_to_id', 'depends_on_task_id',
+            'is_milestone', 'reminder_enabled', 'reminder_days_before'
         ]
 
         for key in updateable_fields:
             if key in data:
                 setattr(task, key, data[key])
 
-        # Handle dates
+        # 处理枚举字段（保持小写）
+        if 'task_type' in data:
+            task.task_type = data['task_type'].lower() if data['task_type'] else 'general'
+        if 'status' in data:
+            task.status = data['status'].lower() if data['status'] else 'pending'
+        if 'priority' in data:
+            task.priority = data['priority'].lower() if data['priority'] else 'normal'
+
+        # 处理日期字段（使用安全解析）
         if 'start_date' in data:
-            task.start_date = datetime.fromisoformat(data['start_date']) if data['start_date'] else None
+            task.start_date = safe_parse_date(data['start_date'])
         if 'due_date' in data:
-            task.due_date = datetime.fromisoformat(data['due_date']) if data['due_date'] else None
+            task.due_date = safe_parse_date(data['due_date'])
 
         session.commit()
         session.refresh(task)
@@ -228,11 +255,25 @@ def complete_task(task_id):
         if not task:
             return jsonify({'error': '任务不存在'}), 404
 
-        task.status = TaskStatus.COMPLETED
+        task.status = 'completed'  # 使用小写字符串
         task.completed_at = datetime.now()
 
-        # TODO: 发送任务完成通知
-        # TODO: 更新项目进度
+        # 更新项目进度
+        project = session.query(Project).filter_by(id=task.project_id).first()
+        if project:
+            # 计算项目下所有任务的完成比例
+            total_tasks = session.query(Task).filter_by(project_id=project.id).count()
+            completed_tasks = session.query(Task).filter_by(
+                project_id=project.id,
+                status='completed'
+            ).count()
+
+            if total_tasks > 0:
+                project.progress = int((completed_tasks / total_tasks) * 100)
+
+                # 如果所有任务完成，自动更新项目状态
+                if project.progress == 100:
+                    project.status = 'completed'
 
         session.commit()
         session.refresh(task)

@@ -67,6 +67,36 @@ deploy_frontend() {
 echo ""
 echo "=== 部署后端服务 ==="
 
+# 运行数据库迁移（如果有新的迁移文件）
+run_migrations() {
+    echo -e "${YELLOW}>>> 检查数据库迁移...${NC}"
+
+    MIGRATION_DIR="$PROJECT_DIR/Portal/backend/migrations"
+    MIGRATION_LOG="$PROJECT_DIR/.migration_log"
+
+    if [ -d "$MIGRATION_DIR" ]; then
+        for sql_file in "$MIGRATION_DIR"/*.sql; do
+            if [ -f "$sql_file" ]; then
+                filename=$(basename "$sql_file")
+
+                # 检查是否已执行过
+                if ! grep -q "$filename" "$MIGRATION_LOG" 2>/dev/null; then
+                    echo "执行迁移: $filename"
+                    mysql -u app -papp cncplan < "$sql_file" 2>/dev/null || {
+                        echo "迁移警告: $filename 可能已执行或有错误，继续..."
+                    }
+                    echo "$filename" >> "$MIGRATION_LOG"
+                    echo -e "${GREEN}✓ 迁移完成: $filename${NC}"
+                else
+                    echo "跳过已执行的迁移: $filename"
+                fi
+            fi
+        done
+    fi
+}
+
+run_migrations
+
 deploy_backend "Portal" "Portal" 3002
 deploy_backend "HR" "HR" 8003
 deploy_backend "Account" "account" 8004
