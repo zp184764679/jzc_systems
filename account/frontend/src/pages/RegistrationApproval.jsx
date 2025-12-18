@@ -72,6 +72,7 @@ const RegistrationApproval = () => {
     { value: 'scm', label: 'SCM - 仓库管理' },
     { value: 'eam', label: 'EAM - 设备资产管理' },
     { value: 'mes', label: 'MES - 生产执行系统' },
+    { value: 'project', label: 'Project - 项目管理' },
     { value: 'dashboard', label: 'Dashboard - 数据可视化' },
   ];
 
