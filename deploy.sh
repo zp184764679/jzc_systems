@@ -116,18 +116,55 @@ deploy_backend "Quotation" "报价" 8001
 deploy_backend "Caigou" "采购" 5001
 
 echo ""
-echo "=== 构建前端 ==="
+echo "=== 并行构建前端 ==="
 
-deploy_frontend "Portal" "Portal"
-deploy_frontend "HR" "HR"
-deploy_frontend "Account" "account"
-deploy_frontend "CRM" "CRM"
-deploy_frontend "SCM" "SCM"
-deploy_frontend "SHM" "SHM"
-deploy_frontend "EAM" "EAM"
-deploy_frontend "MES" "MES"
-deploy_frontend "Quotation" "报价"
-deploy_frontend "Caigou" "采购"
+# 并行构建函数
+build_frontend_parallel() {
+    local name=$1
+    local dir=$2
+    local log_file="/tmp/build_${name}.log"
+
+    if [ -d "$PROJECT_DIR/$dir/frontend" ]; then
+        cd "$PROJECT_DIR/$dir/frontend"
+        rm -rf dist
+        npm install --silent 2>/dev/null
+        npm run build > "$log_file" 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ $name 完成${NC}"
+        else
+            echo -e "${YELLOW}✗ $name 失败，查看 $log_file${NC}"
+        fi
+    elif [ -d "$PROJECT_DIR/$dir" ] && [ -f "$PROJECT_DIR/$dir/package.json" ]; then
+        # Portal 等没有 frontend 子目录的情况
+        cd "$PROJECT_DIR/$dir"
+        rm -rf dist
+        npm install --silent 2>/dev/null
+        npm run build > "$log_file" 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ $name 完成${NC}"
+        else
+            echo -e "${YELLOW}✗ $name 失败，查看 $log_file${NC}"
+        fi
+    fi
+    cd "$PROJECT_DIR"
+}
+
+START_TIME=$(date +%s)
+
+# 并行执行所有前端构建
+build_frontend_parallel "Portal" "Portal" &
+build_frontend_parallel "HR" "HR" &
+build_frontend_parallel "Account" "account" &
+build_frontend_parallel "CRM" "CRM" &
+build_frontend_parallel "SHM" "SHM" &
+build_frontend_parallel "Quotation" "报价" &
+build_frontend_parallel "Caigou" "采购" &
+
+# 等待所有构建完成
+wait
+
+END_TIME=$(date +%s)
+echo -e "${GREEN}✓ 并行构建完成，耗时: $((END_TIME - START_TIME)) 秒${NC}"
 
 echo ""
 echo "=== 重启服务 ==="

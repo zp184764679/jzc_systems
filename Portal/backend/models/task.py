@@ -53,7 +53,7 @@ class Task(Base):
     title = Column(String(200), nullable=False, comment='任务标题')
     description = Column(Text, comment='任务描述')
     task_type = Column(
-        Enum(TaskType),
+        Enum(TaskType, values_callable=lambda x: [e.value for e in x]),
         default=TaskType.GENERAL,
         nullable=False,
         comment='任务类型'
@@ -66,13 +66,13 @@ class Task(Base):
 
     # 状态和优先级
     status = Column(
-        Enum(TaskStatus),
+        Enum(TaskStatus, values_callable=lambda x: [e.value for e in x]),
         default=TaskStatus.PENDING,
         nullable=False,
         comment='任务状态'
     )
     priority = Column(
-        Enum(TaskPriority),
+        Enum(TaskPriority, values_callable=lambda x: [e.value for e in x]),
         default=TaskPriority.NORMAL,
         nullable=False,
         comment='优先级'
