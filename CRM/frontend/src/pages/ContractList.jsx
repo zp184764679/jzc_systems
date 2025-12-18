@@ -888,7 +888,7 @@ export default function ContractList() {
           showIcon
           icon={<ExclamationCircleOutlined />}
           message="终止合同是不可逆操作"
-          description="请确认要终止此合同，终止后合同状态将变更为"已终止"。"
+          description="请确认要终止此合同，终止后合同状态将变更为【已终止】。"
           style={{ marginBottom: 16 }}
         />
         <Form form={terminateForm} layout="vertical">
