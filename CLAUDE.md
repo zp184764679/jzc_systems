@@ -41,6 +41,30 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 - **代码目录**: `/www/jzc_systems/`
 - **访问地址**: `https://jzchardware.cn`
 
+### SSH 连接方式
+
+```bash
+# 1. 创建私钥文件 (如果不存在)
+mkdir -p ~/.ssh
+cat > ~/.ssh/jzc_server << 'EOF'
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACDQqwuFosEJVw+xIxkf0TKiLJ1oci5an62QJalVL2vghwAAAJgIKJGUCCiR
+lAAAAAtzc2gtZWQyNTUxOQAAACDQqwuFosEJVw+xIxkf0TKiLJ1oci5an62QJalVL2vghw
+AAAEAJrVmyHBSmuZlIKpQtbH0fvH8Z0bigTEpNSuzd8mlvaNCrC4WiwQlXD7EjGR/RMqIs
+nWhyLlqfrZAlqVUva+CHAAAAEmRldi1tYWNoaW5lLWFjY2VzcwECAw==
+-----END OPENSSH PRIVATE KEY-----
+EOF
+chmod 600 ~/.ssh/jzc_server
+
+# 2. 连接服务器
+ssh -i ~/.ssh/jzc_server aaa@61.145.212.28
+
+# 3. 常用命令
+ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 list"
+ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
+```
+
 ---
 
 ## 子系统配置 (生产环境)
