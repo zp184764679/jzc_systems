@@ -84,7 +84,6 @@ CORS(
         "http://61.145.212.28:3000",  # 生产服务器
         "http://61.145.212.28:9000",  # 生产服务器
         "http://61.145.212.28",  # 生产服务器
-        "https://jzchardware.cn:8888",  # 生产域名
         "https://jzchardware.cn",  # 生产域名
     ],
     supports_credentials=True,

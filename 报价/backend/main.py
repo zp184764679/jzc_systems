@@ -18,7 +18,7 @@ app = FastAPI(
 )
 
 # 配置CORS - 安全修复：限制允许的方法和头
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'https://jzchardware.cn:8888,https://jzchardware.cn,http://localhost:3000,http://localhost:6001').split(',')
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'https://jzchardware.cn,http://localhost:3000,http://localhost:6001').split(',')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,

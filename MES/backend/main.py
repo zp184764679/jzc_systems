@@ -8,9 +8,29 @@ from database import db
 load_dotenv()
 
 app = Flask(__name__)
-# CORS配置 - 从环境变量读取允许的域名
-allowed_origins = os.getenv('ALLOWED_ORIGINS', '*').split(',')
-CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+
+# CORS配置 - 安全修复：使用白名单替代通配符
+cors_origins_env = os.getenv('CORS_ORIGINS', '')
+if cors_origins_env:
+    cors_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip() and o.strip() != '*']
+else:
+    cors_origins = []
+
+if not cors_origins:
+    # 默认允许的域名（本地开发 + 生产环境）
+    cors_origins = [
+        'http://localhost:7800',   # MES 前端
+        'http://127.0.0.1:7800',
+        'http://localhost:3001',   # Portal
+        'http://127.0.0.1:3001',
+        'https://jzchardware.cn',
+    ]
+
+CORS(app,
+     resources={r"/api/*": {"origins": cors_origins}},
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization", "User-ID", "User-Role"])
 
 # 数据库配置
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(

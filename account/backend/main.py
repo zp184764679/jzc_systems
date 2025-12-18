@@ -62,7 +62,6 @@ else:
         'http://127.0.0.1:5173',
         'http://61.145.212.28:3000',
         'http://61.145.212.28',
-        'https://jzchardware.cn:8888',
         'https://jzchardware.cn',
     ]
 

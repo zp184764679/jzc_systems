@@ -296,7 +296,7 @@ SQLALCHEMY_DATABASE_URI=mysql+pymysql://user:pass@host/hr_system
 PORT=8003
 
 # CORS
-CORS_ORIGINS=https://jzchardware.cn,https://jzchardware.cn:8888
+CORS_ORIGINS=https://jzchardware.cn
 ```
 
 ### 前端环境变量 (.env)

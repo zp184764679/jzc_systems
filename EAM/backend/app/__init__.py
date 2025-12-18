@@ -57,8 +57,23 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # CORS configuration - use environment variable or defaults
-    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+    # CORS configuration - 安全修复：使用白名单替代通配符
+    cors_origins_env = os.getenv('CORS_ORIGINS', '')
+    if cors_origins_env:
+        cors_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip() and o.strip() != '*']
+    else:
+        cors_origins = []
+
+    if not cors_origins:
+        # 默认允许的域名（本地开发 + 生产环境）
+        cors_origins = [
+            'http://localhost:7200',   # EAM 前端
+            'http://127.0.0.1:7200',
+            'http://localhost:3001',   # Portal
+            'http://127.0.0.1:3001',
+            'https://jzchardware.cn',
+        ]
+
     CORS(app,
          resources={r"/api/*": {"origins": cors_origins}},
          supports_credentials=True,

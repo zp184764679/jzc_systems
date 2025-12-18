@@ -57,8 +57,24 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # CORS configuration - allow all origins in development
-    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+    # CORS configuration - 安全修复：使用明确的域名白名单，不允许通配符
+    # P1-11: 添加环境变量二次验证，过滤掉通配符
+    cors_origins_env = os.getenv('CORS_ORIGINS', '')
+    if cors_origins_env:
+        cors_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip() and o.strip() != '*']
+    else:
+        cors_origins = []
+
+    # 如果环境变量为空或被过滤后为空，使用默认白名单
+    if not cors_origins:
+        cors_origins = [
+            'http://localhost:7000',   # SCM 前端
+            'http://127.0.0.1:7000',
+            'http://localhost:3001',   # Portal
+            'http://127.0.0.1:3001',
+            'https://jzchardware.cn',
+        ]
+
     CORS(app,
          resources={
              r"/api/*": {"origins": cors_origins},

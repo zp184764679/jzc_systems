@@ -12,7 +12,7 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 
 ### 项目仓库
 - **GitHub**: https://github.com/zp184764679/jzc_systems
-- **生产环境**: https://jzchardware.cn:8888
+- **生产环境**: https://jzchardware.cn
 
 ---
 
@@ -39,7 +39,7 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 - **服务器地址**: 61.145.212.28 (jzchardware.cn)
 - **用户**: aaa
 - **代码目录**: `/www/jzc_systems/`
-- **访问地址**: `https://jzchardware.cn:8888`
+- **访问地址**: `https://jzchardware.cn`
 
 ---
 
@@ -283,6 +283,27 @@ Stop-Process -Id 12345,12346,12347 -Force
 
 ## 环境变量配置
 
+### SSO 认证配置（重要）
+
+**所有 11 个子系统必须使用统一的 JWT 密钥和认证数据库配置：**
+
+```bash
+# 认证数据库 - 所有子系统统一使用 cncplan
+AUTH_DB_USER=app
+AUTH_DB_PASSWORD=app
+AUTH_DB_HOST=localhost
+AUTH_DB_NAME=cncplan        # 重要：必须是 cncplan，不是 account
+
+# JWT配置 - 所有子系统必须相同
+SECRET_KEY=jzc-dev-shared-secret-key-2025
+JWT_SECRET_KEY=jzc-dev-shared-secret-key-2025
+ALGORITHM=HS256
+```
+
+⚠️ **警告**：如果 JWT_SECRET_KEY 或 AUTH_DB_NAME 配置不一致，会导致：
+- Token 验证失败（用户从 Portal 登录后无法访问子系统）
+- 用户数据不一致（不同系统读取不同数据库的用户信息）
+
 ### 后端 .env.production
 ```bash
 # 数据库
@@ -291,14 +312,21 @@ MYSQL_USER=app
 MYSQL_PASSWORD=your_password
 MYSQL_DATABASE=cncplan
 
-# JWT
-SECRET_KEY=your_super_secret_key
+# 认证数据库 (shared/auth)
+AUTH_DB_USER=app
+AUTH_DB_PASSWORD=app
+AUTH_DB_HOST=localhost
+AUTH_DB_NAME=cncplan
+
+# JWT - 统一密钥
+SECRET_KEY=jzc-dev-shared-secret-key-2025
+JWT_SECRET_KEY=jzc-dev-shared-secret-key-2025
 
 # Flask
 FLASK_ENV=production
 
 # CORS
-CORS_ORIGINS=https://jzchardware.cn,https://jzchardware.cn:8888
+CORS_ORIGINS=https://jzchardware.cn
 ```
 
 ### 前端 .env
@@ -319,6 +347,8 @@ VITE_PORTAL_URL=/
 6. **SSO 认证**: 所有子系统使用统一的 JWT Token，由 Portal 签发
 7. **端口检查**: Windows 下 `netstat` 不可靠，必须用 PowerShell `Get-NetTCPConnection` 检查端口
 8. **进程管理**: 后端必须用 PM2 管理，避免僵尸进程；前端 dev server 同时只运行一个
+9. **配置统一**: 所有 11 个子系统的 `JWT_SECRET_KEY` 和 `AUTH_DB_NAME` 必须相同（见上方 SSO 认证配置）
+10. **数据库迁移**: CRM 系统新增字段时需同步更新数据库表结构（如 `grade`、`is_key_account` 等客户分级字段）
 
 ---
 

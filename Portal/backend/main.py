@@ -23,8 +23,6 @@ from shared.auth import (
 )
 import shared.auth.models as auth_models
 from routes.system import system_bp
-from routes.translate import translate_bp
-from routes.doc_translate import doc_translate_bp
 from routes.projects import projects_bp
 from routes.tasks import tasks_bp
 from routes.files import files_bp
@@ -74,7 +72,6 @@ else:
         # 生产环境
         'http://61.145.212.28:3000',
         'http://61.145.212.28',
-        'https://jzchardware.cn:8888',
         'https://jzchardware.cn',
     ]
 
@@ -93,8 +90,6 @@ init_db()
 
 # Register blueprints
 app.register_blueprint(system_bp)
-app.register_blueprint(translate_bp)
-app.register_blueprint(doc_translate_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(files_bp)
@@ -139,6 +134,7 @@ def login():
             return jsonify({'error': '用户名或密码错误'}), 401
 
         # Check if account is locked
+        # P2-17: is_account_locked() 会自动重置过期的锁定状态
         if user.is_account_locked():
             AuditService.log_login(
                 user_id=user.id,
@@ -150,7 +146,10 @@ def login():
             return jsonify({
                 'error': '账户已被锁定，请稍后重试或联系管理员',
                 'locked_until': user.locked_until.isoformat() if user.locked_until else None
-            }), 403
+            }), 423  # P3-27: 使用 423 Locked 状态码
+        else:
+            # P2-17: 如果锁定刚过期，保存重置的状态
+            session.commit()
 
         # Check if user is active
         if not user.is_active:
@@ -277,6 +276,7 @@ def supplier_login():
             return jsonify({'error': '用户名或密码错误'}), 401
 
         # Check if account is locked
+        # P2-17: is_account_locked() 会自动重置过期的锁定状态
         if user.is_account_locked():
             AuditService.log_login(
                 user_id=user.id,
@@ -288,7 +288,10 @@ def supplier_login():
             return jsonify({
                 'error': '账户已被锁定，请稍后重试或联系管理员',
                 'locked_until': user.locked_until.isoformat() if user.locked_until else None
-            }), 403
+            }), 423  # P3-27: 使用 423 Locked 状态码
+        else:
+            # P2-17: 如果锁定刚过期，保存重置的状态
+            session.commit()
 
         # Check if user is active
         if not user.is_active:
