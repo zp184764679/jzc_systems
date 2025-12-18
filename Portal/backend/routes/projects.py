@@ -105,6 +105,8 @@ def get_projects():
         status = request.args.get('status')
         priority = request.args.get('priority')
         search = request.args.get('search', '')
+        customer = request.args.get('customer')  # 客户筛选
+        order_no = request.args.get('order_no')  # 部件番号/订单号筛选
 
         # 构建查询
         query = session.query(Project)
@@ -114,6 +116,21 @@ def get_projects():
             query = query.filter(Project.status == status)
         if priority:
             query = query.filter(Project.priority == priority)
+        if customer:
+            # 客户筛选 - 支持精确匹配或模糊匹配
+            if customer == '未分类':
+                query = query.filter((Project.customer == None) | (Project.customer == ''))
+            else:
+                query = query.filter(
+                    (Project.customer == customer) |
+                    (Project.customer_name == customer)
+                )
+        if order_no:
+            # 订单号/部件番号筛选
+            if order_no == '无订单号':
+                query = query.filter((Project.order_no == None) | (Project.order_no == ''))
+            else:
+                query = query.filter(Project.order_no == order_no)
         if search:
             search_pattern = f'%{search}%'
             query = query.filter(

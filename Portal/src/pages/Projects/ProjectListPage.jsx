@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Card,
@@ -15,7 +15,8 @@ import {
   Spin,
   Alert,
   Result,
-  Pagination
+  Pagination,
+  Cascader
 } from 'antd'
 import {
   PlusOutlined,
@@ -24,10 +25,13 @@ import {
   BarsOutlined,
   ReloadOutlined,
   WifiOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  FilterOutlined,
+  ClearOutlined
 } from '@ant-design/icons'
 import { projectAPI } from '../../services/api'
 import ProjectFormModal from '../../components/Projects/ProjectFormModal'
+import ProjectsTimeline from '../../components/Timeline/ProjectsTimeline'
 
 const { Search } = Input
 const { Option } = Select
@@ -65,12 +69,14 @@ const priorityLabels = {
 export default function ProjectListPage() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState([])
+  const [allProjects, setAllProjects] = useState([]) // 用于时间轴和级联筛选
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState('grid') // 'grid' or 'list'
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const [priorityFilter, setPriorityFilter] = useState(null)
+  const [customerPartFilter, setCustomerPartFilter] = useState([]) // 客户+部件番号级联筛选
   const [error, setError] = useState(null) // 错误状态
 
   // 分页状态
@@ -81,9 +87,47 @@ export default function ProjectListPage() {
     totalPages: 0
   })
 
+  // 构建客户-部件番号级联选项
+  const cascaderOptions = useMemo(() => {
+    const customerMap = new Map()
+
+    allProjects.forEach(project => {
+      const customer = project.customer || '未分类'
+      const orderNo = project.order_no || '无订单号'
+
+      if (!customerMap.has(customer)) {
+        customerMap.set(customer, new Set())
+      }
+      customerMap.get(customer).add(orderNo)
+    })
+
+    return Array.from(customerMap.entries()).map(([customer, orderNos]) => ({
+      value: customer,
+      label: customer,
+      children: Array.from(orderNos).map(orderNo => ({
+        value: orderNo,
+        label: orderNo
+      }))
+    }))
+  }, [allProjects])
+
   useEffect(() => {
     fetchProjects()
-  }, [pagination.page, pagination.pageSize, statusFilter, priorityFilter])
+  }, [pagination.page, pagination.pageSize, statusFilter, priorityFilter, customerPartFilter])
+
+  // 获取所有项目（用于时间轴和级联选项）
+  useEffect(() => {
+    fetchAllProjects()
+  }, [])
+
+  const fetchAllProjects = async () => {
+    try {
+      const response = await projectAPI.getProjects({ page_size: 1000 })
+      setAllProjects(response.data.projects || [])
+    } catch (err) {
+      console.error('获取所有项目失败:', err)
+    }
+  }
 
   const fetchProjects = async () => {
     setLoading(true)
@@ -97,6 +141,14 @@ export default function ProjectListPage() {
       if (statusFilter) params.status = statusFilter
       if (priorityFilter) params.priority = priorityFilter
       if (searchText) params.search = searchText
+      // 客户筛选
+      if (customerPartFilter.length >= 1) {
+        params.customer = customerPartFilter[0]
+      }
+      // 部件番号（订单号）筛选
+      if (customerPartFilter.length >= 2) {
+        params.order_no = customerPartFilter[1]
+      }
 
       const response = await projectAPI.getProjects(params)
       setProjects(response.data.projects || [])
@@ -178,6 +230,24 @@ export default function ProjectListPage() {
     setPagination(prev => ({ ...prev, page: 1 }))
   }
 
+  // 客户-部件番号级联筛选变化
+  const handleCascaderChange = (value) => {
+    setCustomerPartFilter(value || [])
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  // 清除所有筛选
+  const handleClearFilters = () => {
+    setSearchText('')
+    setStatusFilter(null)
+    setPriorityFilter(null)
+    setCustomerPartFilter([])
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  // 判断是否有筛选条件
+  const hasFilters = searchText || statusFilter || priorityFilter || customerPartFilter.length > 0
+
   return (
     <div>
       {/* Header */}
@@ -188,23 +258,41 @@ export default function ProjectListPage() {
         </Button>
       </div>
 
+      {/* Timeline - 时间轴 */}
+      <ProjectsTimeline projects={allProjects} loading={loading && allProjects.length === 0} />
+
       {/* Filters */}
       <Card style={{ marginBottom: 24 }}>
         <Space wrap size="middle">
           <Search
             placeholder="搜索项目名称、客户、订单号"
             allowClear
-            style={{ width: 300 }}
+            style={{ width: 280 }}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onSearch={handleSearch}
             enterButton
           />
+          <Cascader
+            options={cascaderOptions}
+            value={customerPartFilter}
+            onChange={handleCascaderChange}
+            placeholder="客户 / 部件番号"
+            style={{ width: 220 }}
+            allowClear
+            showSearch={{
+              filter: (inputValue, path) =>
+                path.some(option =>
+                  option.label.toLowerCase().includes(inputValue.toLowerCase())
+                )
+            }}
+            changeOnSelect
+          />
           <Select
             placeholder="状态筛选"
             allowClear
-            style={{ width: 150 }}
+            style={{ width: 130 }}
             value={statusFilter}
             onChange={handleStatusChange}
           >
@@ -215,9 +303,9 @@ export default function ProjectListPage() {
             <Option value="cancelled">已取消</Option>
           </Select>
           <Select
-            placeholder="优先级筛选"
+            placeholder="优先级"
             allowClear
-            style={{ width: 150 }}
+            style={{ width: 100 }}
             value={priorityFilter}
             onChange={handlePriorityChange}
           >
@@ -226,6 +314,11 @@ export default function ProjectListPage() {
             <Option value="high">高</Option>
             <Option value="urgent">紧急</Option>
           </Select>
+          {hasFilters && (
+            <Button icon={<ClearOutlined />} onClick={handleClearFilters}>
+              清除筛选
+            </Button>
+          )}
           <Button.Group>
             <Button
               icon={<AppstoreOutlined />}
