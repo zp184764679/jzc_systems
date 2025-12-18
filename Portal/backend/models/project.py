@@ -40,6 +40,7 @@ class Project(Base):
     customer_id = Column(Integer, index=True, comment='CRM 客户 ID')
     customer_name = Column(String(200), comment='客户名称（从 CRM 同步）')
     order_no = Column(String(100), index=True, comment='订单号')
+    part_number = Column(String(100), index=True, comment='部件番号')
 
     # 时间字段
     planned_start_date = Column(Date, comment='计划开始日期')
@@ -91,6 +92,7 @@ class Project(Base):
             'customer_id': self.customer_id,
             'customer_name': self.customer_name,
             'order_no': self.order_no,
+            'part_number': self.part_number,
             'planned_start_date': self.planned_start_date.isoformat() if self.planned_start_date else None,
             'planned_end_date': self.planned_end_date.isoformat() if self.planned_end_date else None,
             'actual_start_date': self.actual_start_date.isoformat() if self.actual_start_date else None,

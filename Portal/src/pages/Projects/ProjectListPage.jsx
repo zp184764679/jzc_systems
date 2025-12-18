@@ -93,20 +93,20 @@ export default function ProjectListPage() {
 
     allProjects.forEach(project => {
       const customer = project.customer || '未分类'
-      const orderNo = project.order_no || '无订单号'
+      const partNumber = project.part_number || '无部件番号'
 
       if (!customerMap.has(customer)) {
         customerMap.set(customer, new Set())
       }
-      customerMap.get(customer).add(orderNo)
+      customerMap.get(customer).add(partNumber)
     })
 
-    return Array.from(customerMap.entries()).map(([customer, orderNos]) => ({
+    return Array.from(customerMap.entries()).map(([customer, partNumbers]) => ({
       value: customer,
       label: customer,
-      children: Array.from(orderNos).map(orderNo => ({
-        value: orderNo,
-        label: orderNo
+      children: Array.from(partNumbers).map(partNumber => ({
+        value: partNumber,
+        label: partNumber
       }))
     }))
   }, [allProjects])
@@ -145,9 +145,9 @@ export default function ProjectListPage() {
       if (customerPartFilter.length >= 1) {
         params.customer = customerPartFilter[0]
       }
-      // 部件番号（订单号）筛选
+      // 部件番号筛选
       if (customerPartFilter.length >= 2) {
-        params.order_no = customerPartFilter[1]
+        params.part_number = customerPartFilter[1]
       }
 
       const response = await projectAPI.getProjects(params)

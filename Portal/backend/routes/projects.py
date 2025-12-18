@@ -106,7 +106,7 @@ def get_projects():
         priority = request.args.get('priority')
         search = request.args.get('search', '')
         customer = request.args.get('customer')  # 客户筛选
-        order_no = request.args.get('order_no')  # 部件番号/订单号筛选
+        part_number = request.args.get('part_number')  # 部件番号筛选
 
         # 构建查询
         query = session.query(Project)
@@ -125,18 +125,19 @@ def get_projects():
                     (Project.customer == customer) |
                     (Project.customer_name == customer)
                 )
-        if order_no:
-            # 订单号/部件番号筛选
-            if order_no == '无订单号':
-                query = query.filter((Project.order_no == None) | (Project.order_no == ''))
+        if part_number:
+            # 部件番号筛选
+            if part_number == '无部件番号':
+                query = query.filter((Project.part_number == None) | (Project.part_number == ''))
             else:
-                query = query.filter(Project.order_no == order_no)
+                query = query.filter(Project.part_number == part_number)
         if search:
             search_pattern = f'%{search}%'
             query = query.filter(
                 (Project.name.ilike(search_pattern)) |
                 (Project.customer.ilike(search_pattern)) |
-                (Project.order_no.ilike(search_pattern))
+                (Project.order_no.ilike(search_pattern)) |
+                (Project.part_number.ilike(search_pattern))
             )
 
         # 获取总数
@@ -207,6 +208,7 @@ def create_project():
             customer_id=data.get('customer_id'),  # CRM 客户 ID
             customer_name=data.get('customer_name'),  # CRM 客户名称
             order_no=data.get('order_no'),
+            part_number=data.get('part_number'),  # 部件番号
             created_by_id=user.get('user_id') or user.get('id'),
             manager_id=data.get('manager_id'),
             priority=data.get('priority', 'normal'),
@@ -255,7 +257,7 @@ def update_project(project_id):
         # Update fields
         updatable_fields = [
             'name', 'description', 'customer', 'customer_id', 'customer_name',
-            'order_no', 'status', 'priority', 'progress_percentage', 'manager_id'
+            'order_no', 'part_number', 'status', 'priority', 'progress_percentage', 'manager_id'
         ]
         for key in updatable_fields:
             if key in data:
