@@ -4,6 +4,7 @@ import { ArrowLeftOutlined, ProjectOutlined, CalendarOutlined } from '@ant-desig
 import { useState, useEffect, useMemo } from 'react'
 import { projectAPI, taskAPI } from '../../services/api'
 import UnifiedTimeline from '../../components/Timeline/UnifiedTimeline'
+import TaskDetailDrawer from '../../components/Timeline/TaskDetailDrawer'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
@@ -23,6 +24,8 @@ export default function PartNumberDetailPage() {
   const [projects, setProjects] = useState([])
   const [allTasks, setAllTasks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedTask, setSelectedTask] = useState(null)
+  const [drawerVisible, setDrawerVisible] = useState(false)
 
   const decodedPartNumber = decodeURIComponent(partNumber)
 
@@ -167,8 +170,8 @@ export default function PartNumberDetailPage() {
         projects={projects}
         tasks={allTasks}
         onTaskClick={(task) => {
-          // 可选：点击任务的处理
-          console.log('Task clicked:', task)
+          setSelectedTask(task)
+          setDrawerVisible(true)
         }}
       />
 
@@ -242,6 +245,19 @@ export default function PartNumberDetailPage() {
           })}
         </Row>
       </Card>
+
+      {/* 任务详情抽屉 */}
+      <TaskDetailDrawer
+        visible={drawerVisible}
+        task={selectedTask}
+        onClose={() => {
+          setDrawerVisible(false)
+          setSelectedTask(null)
+        }}
+        onUpdate={() => {
+          fetchProjectsByPartNumber()
+        }}
+      />
     </div>
   )
 }
