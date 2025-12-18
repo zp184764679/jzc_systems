@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useAuth } from './contexts/AuthContext'
 import TwoFactorVerify from './TwoFactorVerify'
 
-const ACCOUNT_URL = import.meta.env.VITE_ACCOUNT_URL || '/account'
+// 移除尾部斜杠，避免拼接时产生双斜杠
+const ACCOUNT_URL = (import.meta.env.VITE_ACCOUNT_URL || '/account').replace(/\/$/, '')
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 function Login() {

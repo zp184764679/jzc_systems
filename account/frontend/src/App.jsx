@@ -64,12 +64,16 @@ const LayoutWrapper = ({ children, user }) => {
 };
 
 function AppContent() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);  // 新增：认证错误状态
-  const isRedirecting = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 提前判断是否是注册页面（不需要认证）
+  const isRegisterPage = location.pathname === '/register';
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(!isRegisterPage);  // 注册页面初始不加载
+  const [authError, setAuthError] = useState(null);
+  const isRedirecting = useRef(false);
 
   // 检查是否存在跳转循环
   const checkRedirectLoop = () => {
@@ -139,11 +143,21 @@ function AppContent() {
     }
   };
 
-  // 初始化认证 - 只执行一次
+  // 初始化认证
   useEffect(() => {
     let authTimeout = null;
 
     const initAuth = async () => {
+      // 注册页面完全跳过认证，清除可能存在的错误状态
+      if (isRegisterPage) {
+        setLoading(false);
+        setAuthError(null);
+        // 清除可能存在的循环检测数据
+        sessionStorage.removeItem(REDIRECT_LOOP_KEY);
+        sessionStorage.removeItem(REDIRECT_TIME_KEY);
+        return;
+      }
+
       // 设置认证超时
       authTimeout = setTimeout(() => {
         if (loading && !user) {
@@ -160,6 +174,8 @@ function AppContent() {
       if (urlToken) {
         const validatedUser = await validateUrlToken(urlToken);
         if (validatedUser) {
+          // 验证成功，立即清除超时定时器
+          if (authTimeout) clearTimeout(authTimeout);
           localStorage.setItem('token', urlToken);
           localStorage.setItem('user', JSON.stringify(validatedUser));
           if (validatedUser.user_id || validatedUser.id) {
@@ -189,6 +205,8 @@ function AppContent() {
       if (storedToken && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
+          // localStorage 验证成功，清除超时定时器
+          if (authTimeout) clearTimeout(authTimeout);
           setUser(parsedUser);
           setLoading(false);
           clearRedirectCount();  // 成功认证，清除跳转计数
@@ -212,7 +230,7 @@ function AppContent() {
     return () => {
       if (authTimeout) clearTimeout(authTimeout);
     };
-  }, []);
+  }, [isRegisterPage]);  // 添加 isRegisterPage 依赖，路由变化时重新执行
 
   // 订阅 401 事件
   useEffect(() => {
@@ -224,8 +242,8 @@ function AppContent() {
     return () => unsubscribe();
   }, []);
 
-  // 显示认证错误
-  if (authError) {
+  // 显示认证错误（注册页面跳过）
+  if (authError && !isRegisterPage) {
     return (
       <div style={{
         display: 'flex',
@@ -266,7 +284,8 @@ function AppContent() {
     );
   }
 
-  if (loading) {
+  // 加载状态（注册页面跳过）
+  if (loading && !isRegisterPage) {
     return (
       <div style={{
         display: 'flex',
