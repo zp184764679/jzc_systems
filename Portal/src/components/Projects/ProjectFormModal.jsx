@@ -22,7 +22,7 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
         description: project.description,
         customer_id: project.customer_id,
         order_no: project.order_no,
-        part_number: project.part_number,
+        part_number: project.part_number ? project.part_number.split(',').map(s => s.trim()) : [],
         dateRange: project.planned_start_date && project.planned_end_date
           ? [dayjs(project.planned_start_date), dayjs(project.planned_end_date)]
           : null,
@@ -52,7 +52,7 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
         customer_id: values.customer_id,
         customer_name: selectedCustomer?.short_name || selectedCustomer?.name,
         order_no: values.order_no,
-        part_number: values.part_number,
+        part_number: Array.isArray(values.part_number) ? values.part_number.join(',') : values.part_number,
         priority: values.priority || 'normal',
         status: values.status || 'planning',
         manager_id: values.manager_id,
@@ -145,8 +145,14 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
         <Form.Item
           name="part_number"
           label="部件番号"
+          tooltip="可输入多个部件番号，按回车确认"
         >
-          <Input placeholder="请输入部件番号" />
+          <Select
+            mode="tags"
+            placeholder="输入部件番号后按回车（支持多个）"
+            tokenSeparators={[',', '，', ' ']}
+            style={{ width: '100%' }}
+          />
         </Form.Item>
 
         <Divider />
