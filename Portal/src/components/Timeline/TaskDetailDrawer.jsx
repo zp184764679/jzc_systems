@@ -9,7 +9,8 @@ import {
   Progress,
   Typography,
   Divider,
-  message
+  message,
+  List
 } from 'antd'
 import {
   CalendarOutlined,
@@ -17,7 +18,9 @@ import {
   ClockCircleOutlined,
   CheckCircleOutlined,
   EditOutlined,
-  FlagOutlined
+  FlagOutlined,
+  PaperClipOutlined,
+  DownloadOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { taskAPI } from '../../services/api'
@@ -52,6 +55,86 @@ const taskTypeConfig = {
   deployment: '部署',
   documentation: '文档',
   meeting: '会议'
+}
+
+// 格式化文件大小
+const formatFileSize = (bytes) => {
+  if (!bytes) return '-'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+// 富文本内容渲染组件
+function RichContent({ html }) {
+  if (!html) return null
+
+  // 检查是否是HTML内容（包含标签）
+  const isHtml = /<[^>]+>/.test(html)
+
+  if (!isHtml) {
+    // 纯文本，保留换行
+    return <Text style={{ whiteSpace: 'pre-wrap' }}>{html}</Text>
+  }
+
+  return (
+    <div
+      className="rich-content"
+      dangerouslySetInnerHTML={{ __html: html }}
+      style={{
+        lineHeight: 1.8,
+        wordBreak: 'break-word'
+      }}
+    />
+  )
+}
+
+// 附件列表组件
+function AttachmentList({ attachments }) {
+  if (!attachments || attachments.length === 0) return null
+
+  // 解析附件（可能是JSON字符串）
+  let parsedAttachments = attachments
+  if (typeof attachments === 'string') {
+    try {
+      parsedAttachments = JSON.parse(attachments)
+    } catch {
+      return null
+    }
+  }
+
+  if (!Array.isArray(parsedAttachments) || parsedAttachments.length === 0) return null
+
+  return (
+    <Card title="附件" size="small" style={{ marginBottom: 16 }}>
+      <List
+        size="small"
+        dataSource={parsedAttachments}
+        renderItem={(item) => (
+          <List.Item
+            actions={[
+              <Button
+                key="download"
+                type="link"
+                size="small"
+                icon={<DownloadOutlined />}
+                href={item.url}
+                target="_blank"
+              >
+                下载
+              </Button>
+            ]}
+          >
+            <List.Item.Meta
+              avatar={<PaperClipOutlined style={{ color: '#1890ff', fontSize: 20 }} />}
+              title={<a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a>}
+              description={formatFileSize(item.size)}
+            />
+          </List.Item>
+        )}
+      />
+    </Card>
+  )
 }
 
 export default function TaskDetailDrawer({ visible, task, projectId, onClose, onTaskUpdate, onEditTask }) {
@@ -99,7 +182,7 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
         </Space>
       }
       placement="right"
-      width={600}
+      width={650}
       open={visible}
       onClose={onClose}
       extra={
@@ -188,14 +271,58 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
       {/* 任务描述 */}
       {task.description && (
         <Card title="任务描述" size="small" style={{ marginBottom: 16 }}>
-          <Text style={{ whiteSpace: 'pre-wrap' }}>{task.description}</Text>
+          <RichContent html={task.description} />
         </Card>
       )}
+
+      {/* 附件 */}
+      <AttachmentList attachments={task.attachments} />
 
       <Divider />
 
       {/* 三个文件框 */}
       <TaskFilesPanel taskId={task.id} projectId={projectId} />
+
+      {/* 富文本内容样式 */}
+      <style>{`
+        .rich-content img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 4px;
+          margin: 8px 0;
+        }
+        .rich-content h1, .rich-content h2, .rich-content h3 {
+          margin: 16px 0 8px;
+        }
+        .rich-content p {
+          margin: 8px 0;
+        }
+        .rich-content ul, .rich-content ol {
+          padding-left: 24px;
+          margin: 8px 0;
+        }
+        .rich-content a {
+          color: #1890ff;
+        }
+        .rich-content blockquote {
+          border-left: 4px solid #d9d9d9;
+          margin: 8px 0;
+          padding-left: 16px;
+          color: #666;
+        }
+        .rich-content pre {
+          background: #f5f5f5;
+          padding: 12px;
+          border-radius: 4px;
+          overflow-x: auto;
+        }
+        .rich-content code {
+          background: #f5f5f5;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+      `}</style>
     </Drawer>
   )
 }

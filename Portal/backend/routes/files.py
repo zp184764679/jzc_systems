@@ -368,6 +368,141 @@ def upload_file():
         session.close()
 
 
+@files_bp.route('/upload-inline', methods=['POST'])
+def upload_inline_file():
+    """上传内联文件（用于富文本编辑器中的图片和附件）
+
+    不关联到特定项目，存储到临时/内联目录。
+    支持类型:
+    - description_image: 任务描述中的图片
+    - task_attachment: 任务附件
+
+    返回:
+        - url: 文件访问URL
+        - file_id: 文件ID（用于后续管理）
+    """
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    if 'file' not in request.files:
+        return jsonify({'error': '没有上传文件'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '文件名为空'}), 400
+
+    # 检查文件大小
+    is_valid, file_size = check_file_size(file)
+    if not is_valid:
+        return jsonify({
+            'error': f'文件过大，最大允许 {format_file_size(MAX_FILE_SIZE)}，当前文件 {format_file_size(file_size)}'
+        }), 413
+
+    file_type = request.form.get('type', 'description_image')
+
+    # 验证图片类型
+    if file_type == 'description_image':
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
+        if file.content_type not in allowed_types:
+            return jsonify({'error': '只允许上传图片文件 (jpg, png, gif, webp, bmp)'}), 400
+
+    try:
+        # Read file
+        file_bytes = file.read()
+
+        # Get user info
+        user_id = user.get('user_id') or user.get('id')
+        username = user.get('username', 'unknown')
+
+        # Generate unique filename
+        import uuid
+        file_ext = os.path.splitext(secure_filename(file.filename))[1]
+        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+
+        # Save file using enterprise storage
+        result = storage.save_file(
+            file_bytes=file_bytes,
+            original_filename=unique_filename,
+            system='portal',
+            entity_type='inline',
+            entity_id=f"user-{user_id}",
+            category=file_type,
+            version='1.0',
+            owner_id=user_id,
+            tags=[file_type, 'inline'],
+            description=f"Inline {file_type} uploaded by {username}"
+        )
+
+        if not result.get('success', True):
+            return jsonify({'error': result.get('error', '文件保存失败')}), 500
+
+        # Generate access URL
+        # Use a static URL pattern that nginx can serve
+        access_url = f"/api/files/inline/{result['md5']}{file_ext}"
+
+        # Store mapping in a simple way (or you can create a separate table)
+        # For simplicity, we'll use the file path directly
+        inline_file_path = result['path']
+
+        logger.info(f"Inline file uploaded: {inline_file_path} by user {username}")
+
+        return jsonify({
+            'success': True,
+            'url': access_url,
+            'file_id': result.get('file_id', result['md5']),
+            'file_name': file.filename,
+            'file_size': file_size,
+            'md5': result['md5'],
+            'path': inline_file_path
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Inline file upload failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@files_bp.route('/inline/<path:file_path>', methods=['GET'])
+def get_inline_file(file_path):
+    """获取内联文件（用于富文本编辑器显示图片）
+
+    支持通过 MD5+扩展名 或完整路径访问
+    """
+    try:
+        # 尝试在内联存储目录中查找文件
+        import glob
+
+        # 构建搜索路径
+        base_path = storage.base_path
+        search_patterns = [
+            os.path.join(base_path, 'active', 'portal', '*', '*', 'inline', '*', '*', file_path),
+            os.path.join(base_path, 'active', 'portal', '*', '*', 'inline', '*', file_path),
+        ]
+
+        found_path = None
+        for pattern in search_patterns:
+            matches = glob.glob(pattern)
+            if matches:
+                found_path = matches[0]
+                break
+
+        if not found_path or not os.path.exists(found_path):
+            return jsonify({'error': '文件不存在'}), 404
+
+        # 获取 MIME 类型
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(found_path)
+
+        return send_file(
+            found_path,
+            mimetype=mime_type or 'application/octet-stream'
+        )
+
+    except Exception as e:
+        logger.error(f"Get inline file failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @files_bp.route('/<int:file_id>/upload-version', methods=['POST'])
 def upload_file_version(file_id):
     """上传文件新版本

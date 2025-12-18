@@ -138,6 +138,7 @@ def create_task():
             task_no=task_no,
             title=data['title'],
             description=data.get('description'),
+            attachments=data.get('attachments'),
             task_type=task_type,
             start_date=safe_parse_date(data.get('start_date')),
             due_date=safe_parse_date(data.get('due_date')),
@@ -179,7 +180,7 @@ def update_task(task_id):
 
         # Update fields
         updateable_fields = [
-            'title', 'description', 'assigned_to_id', 'depends_on_task_id',
+            'title', 'description', 'attachments', 'assigned_to_id', 'depends_on_task_id',
             'is_milestone', 'reminder_enabled', 'reminder_days_before'
         ]
 

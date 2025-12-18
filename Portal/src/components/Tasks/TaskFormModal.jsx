@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, DatePicker, Checkbox, InputNumber, message } from 'antd'
+import { Modal, Form, Input, Select, DatePicker, Checkbox, InputNumber, message, Tabs } from 'antd'
+import { FileTextOutlined, SettingOutlined } from '@ant-design/icons'
 import { taskAPI } from '../../services/api'
 import { EmployeeSelect } from '../Selectors'
+import RichTextEditor from '../Editor/RichTextEditor'
 import dayjs from 'dayjs'
 
 const { Option } = Select
-const { TextArea } = Input
 
 export default function TaskFormModal({ open, onClose, onSuccess, projectId, task }) {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
+  const [description, setDescription] = useState('')
+  const [attachments, setAttachments] = useState([])
   const isEdit = !!task
 
   useEffect(() => {
@@ -17,7 +20,6 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       // Populate form with task data when editing
       form.setFieldsValue({
         title: task.title,
-        description: task.description,
         task_type: task.task_type,
         status: task.status,
         priority: task.priority,
@@ -29,9 +31,20 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
         weight: task.weight || 1,
         completion_percentage: task.completion_percentage || 0,
       })
+      // Set description separately for rich text editor
+      setDescription(task.description || '')
+      // Parse attachments if stored as JSON string
+      try {
+        const parsedAttachments = task.attachments ? JSON.parse(task.attachments) : []
+        setAttachments(Array.isArray(parsedAttachments) ? parsedAttachments : [])
+      } catch {
+        setAttachments([])
+      }
     } else if (open) {
       // Reset form when creating new task
       form.resetFields()
+      setDescription('')
+      setAttachments([])
     }
   }, [open, task, form])
 
@@ -43,7 +56,8 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       const data = {
         project_id: projectId,
         title: values.title,
-        description: values.description,
+        description: description, // Use rich text content
+        attachments: JSON.stringify(attachments), // Store attachments as JSON
         task_type: values.task_type || 'general',
         status: values.status || 'pending',
         priority: values.priority || 'normal',
@@ -65,6 +79,8 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       }
 
       form.resetFields()
+      setDescription('')
+      setAttachments([])
       if (onSuccess) onSuccess()
       onClose()
     } catch (error) {
@@ -80,8 +96,184 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
 
   const handleCancel = () => {
     form.resetFields()
+    setDescription('')
+    setAttachments([])
     onClose()
   }
+
+  const tabItems = [
+    {
+      key: 'basic',
+      label: (
+        <span>
+          <FileTextOutlined />
+          基本信息
+        </span>
+      ),
+      children: (
+        <>
+          <Form.Item
+            name="title"
+            label="任务标题"
+            rules={[{ required: true, message: '请输入任务标题' }]}
+          >
+            <Input placeholder="例如: 完成产品设计稿" />
+          </Form.Item>
+
+          <Form.Item label="任务描述">
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="详细描述任务内容和要求...支持粘贴截图"
+              height={200}
+              showAttachments={true}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="task_type"
+            label="任务类型"
+            initialValue="general"
+          >
+            <Select>
+              <Option value="general">常规任务</Option>
+              <Option value="design">设计</Option>
+              <Option value="development">开发</Option>
+              <Option value="testing">测试</Option>
+              <Option value="review">评审</Option>
+              <Option value="deployment">部署</Option>
+              <Option value="documentation">文档</Option>
+              <Option value="meeting">会议</Option>
+            </Select>
+          </Form.Item>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <Form.Item
+              name="status"
+              label="状态"
+              initialValue="pending"
+              style={{ flex: 1 }}
+            >
+              <Select>
+                <Option value="pending">待开始</Option>
+                <Option value="in_progress">进行中</Option>
+                <Option value="completed">已完成</Option>
+                <Option value="cancelled">已取消</Option>
+                <Option value="blocked">受阻</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="priority"
+              label="优先级"
+              initialValue="normal"
+              style={{ flex: 1 }}
+            >
+              <Select>
+                <Option value="low">低</Option>
+                <Option value="normal">普通</Option>
+                <Option value="high">高</Option>
+                <Option value="urgent">紧急</Option>
+              </Select>
+            </Form.Item>
+          </div>
+
+          <Form.Item
+            name="assigned_to_id"
+            label="负责人"
+          >
+            <EmployeeSelect placeholder="搜索并选择负责人" />
+          </Form.Item>
+        </>
+      )
+    },
+    {
+      key: 'advanced',
+      label: (
+        <span>
+          <SettingOutlined />
+          高级设置
+        </span>
+      ),
+      children: (
+        <>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <Form.Item
+              name="start_date"
+              label="开始日期"
+              style={{ flex: 1 }}
+            >
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
+              name="due_date"
+              label="截止日期"
+              style={{ flex: 1 }}
+            >
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <Form.Item
+              name="estimated_hours"
+              label="预计工时（小时）"
+              style={{ flex: 1 }}
+            >
+              <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
+              name="weight"
+              label="任务权重"
+              initialValue={1}
+              style={{ flex: 1 }}
+              tooltip="权重越高，对项目进度影响越大（1-10）"
+            >
+              <InputNumber min={1} max={10} style={{ width: '100%' }} />
+            </Form.Item>
+          </div>
+
+          {isEdit && (
+            <Form.Item
+              name="completion_percentage"
+              label="完成进度"
+              tooltip="任务完成百分比（0-100%）"
+            >
+              <InputNumber
+                min={0}
+                max={100}
+                formatter={value => `${value}%`}
+                parser={value => value.replace('%', '')}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          )}
+
+          <Form.Item
+            name="is_milestone"
+            valuePropName="checked"
+          >
+            <Checkbox>标记为里程碑任务</Checkbox>
+          </Form.Item>
+
+          <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 4, marginTop: 16 }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              提示：
+              <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                <li>里程碑任务通常是项目的关键节点</li>
+                <li>建议为任务设置合理的截止日期，便于进度跟踪</li>
+                <li>优先级高的任务会在列表中优先显示</li>
+              </ul>
+            </div>
+          </div>
+        </>
+      )
+    }
+  ]
 
   return (
     <Modal
@@ -92,150 +284,11 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       confirmLoading={loading}
       okText={isEdit ? '更新' : '创建'}
       cancelText="取消"
-      width={600}
+      width={720}
+      styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
     >
       <Form form={form} layout="vertical">
-        <Form.Item
-          name="title"
-          label="任务标题"
-          rules={[{ required: true, message: '请输入任务标题' }]}
-        >
-          <Input placeholder="例如: 完成产品设计稿" />
-        </Form.Item>
-
-        <Form.Item
-          name="description"
-          label="任务描述"
-        >
-          <TextArea rows={3} placeholder="详细描述任务内容和要求" />
-        </Form.Item>
-
-        <Form.Item
-          name="task_type"
-          label="任务类型"
-          initialValue="general"
-        >
-          <Select>
-            <Option value="general">常规任务</Option>
-            <Option value="design">设计</Option>
-            <Option value="development">开发</Option>
-            <Option value="testing">测试</Option>
-            <Option value="review">评审</Option>
-            <Option value="deployment">部署</Option>
-            <Option value="documentation">文档</Option>
-            <Option value="meeting">会议</Option>
-          </Select>
-        </Form.Item>
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item
-            name="status"
-            label="状态"
-            initialValue="pending"
-            style={{ flex: 1 }}
-          >
-            <Select>
-              <Option value="pending">待开始</Option>
-              <Option value="in_progress">进行中</Option>
-              <Option value="completed">已完成</Option>
-              <Option value="cancelled">已取消</Option>
-              <Option value="blocked">受阻</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="priority"
-            label="优先级"
-            initialValue="normal"
-            style={{ flex: 1 }}
-          >
-            <Select>
-              <Option value="low">低</Option>
-              <Option value="normal">普通</Option>
-              <Option value="high">高</Option>
-              <Option value="urgent">紧急</Option>
-            </Select>
-          </Form.Item>
-        </div>
-
-        <Form.Item
-          name="assigned_to_id"
-          label="负责人"
-        >
-          <EmployeeSelect placeholder="搜索并选择负责人" />
-        </Form.Item>
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item
-            name="start_date"
-            label="开始日期"
-            style={{ flex: 1 }}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="due_date"
-            label="截止日期"
-            style={{ flex: 1 }}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-        </div>
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item
-            name="estimated_hours"
-            label="预计工时（小时）"
-            style={{ flex: 1 }}
-          >
-            <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="weight"
-            label="任务权重"
-            initialValue={1}
-            style={{ flex: 1 }}
-            tooltip="权重越高，对项目进度影响越大（1-10）"
-          >
-            <InputNumber min={1} max={10} style={{ width: '100%' }} />
-          </Form.Item>
-        </div>
-
-        {isEdit && (
-          <Form.Item
-            name="completion_percentage"
-            label="完成进度"
-            tooltip="任务完成百分比（0-100%）"
-          >
-            <InputNumber
-              min={0}
-              max={100}
-              formatter={value => `${value}%`}
-              parser={value => value.replace('%', '')}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-        )}
-
-        <Form.Item
-          name="is_milestone"
-          valuePropName="checked"
-        >
-          <Checkbox>标记为里程碑任务</Checkbox>
-        </Form.Item>
-
-        <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 4, marginTop: 16 }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            提示：
-            <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
-              <li>里程碑任务通常是项目的关键节点</li>
-              <li>建议为任务设置合理的截止日期，便于进度跟踪</li>
-              <li>优先级高的任务会在列表中优先显示</li>
-            </ul>
-          </div>
-        </div>
+        <Tabs items={tabItems} defaultActiveKey="basic" />
       </Form>
     </Modal>
   )

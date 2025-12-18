@@ -51,7 +51,8 @@ class Task(Base):
     # 任务信息
     task_no = Column(String(50), unique=True, nullable=False, index=True, comment='任务编号')
     title = Column(String(200), nullable=False, comment='任务标题')
-    description = Column(Text, comment='任务描述')
+    description = Column(Text, comment='任务描述(支持富文本HTML)')
+    attachments = Column(Text, comment='附件列表(JSON格式)')
     task_type = Column(
         Enum(TaskType, values_callable=lambda x: [e.value for e in x]),
         default=TaskType.GENERAL,
@@ -139,6 +140,7 @@ class Task(Base):
             'task_no': self.task_no,
             'title': self.title,
             'description': self.description,
+            'attachments': self.attachments,
             'task_type': task_type_val,
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
