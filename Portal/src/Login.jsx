@@ -477,11 +477,7 @@ function Login() {
             color: '#666'
           }}>
             <a
-              href="/register"
-              onClick={(e) => {
-                e.preventDefault()
-                window.open(`${ACCOUNT_URL}/register`, '_blank')
-              }}
+              href={`${ACCOUNT_URL}/register`}
               style={{
                 color: '#2a5298',
                 textDecoration: 'none',
