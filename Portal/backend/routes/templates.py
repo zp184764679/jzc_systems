@@ -330,12 +330,13 @@ def copy_to_project(template_id):
         db.execute(
             text("""
                 INSERT INTO project_files
-                (project_id, file_name, file_path, file_size, file_type, category, uploaded_by_id, remark)
-                VALUES (:pid, :fname, :fpath, :fsize, :ftype, :cat, :uid, :remark)
+                (project_id, file_name, original_filename, file_path, file_size, file_type, category, uploaded_by_id, remark)
+                VALUES (:pid, :fname, :orig_fname, :fpath, :fsize, :ftype, :cat, :uid, :remark)
             """),
             {
                 'pid': project_id,
-                'fname': template_dict['file_name'],
+                'fname': new_filename,
+                'orig_fname': template_dict['file_name'],
                 'fpath': new_path,
                 'fsize': template_dict['file_size'],
                 'ftype': template_dict['file_type'],
