@@ -66,7 +66,7 @@ ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
 | Quotation | 报价/ | 8001 | 6001 | `/quotation/` | `/quotation/api/` | quotation-backend | cncplan | 已部署 |
 | Caigou | 采购/ | 5001 | 5000 | `/caigou/` | `/caigou/api/` | caigou-backend | caigou | 已部署 |
 | SHM | SHM/ | 8006 | 7500 | `/shm/` | `/shm/api/` | shm-backend | cncplan | 已部署 |
-| CRM | CRM/ | 8002 | 6004 | `/crm/` | `/crm/api/` | crm-backend | cncplan | 未部署 |
+| CRM | CRM/ | 8002 | 6004 | `/crm/` | `/crm/api/` | crm-backend | crm | 已部署 |
 | SCM | SCM/ | 8005 | 7000 | `/scm/` | `/scm/api/` | scm-backend | cncplan | 未部署 |
 | EAM | EAM/ | 8008 | 7200 | `/eam/` | `/eam/api/` | eam-backend | cncplan | 未部署 |
 | MES | MES/ | 8007 | 7800 | `/mes/` | `/mes/api/` | mes-backend | cncplan | 未部署 |
@@ -79,15 +79,44 @@ ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
 
 每个子系统的 nginx 配置模式：
 - 静态文件: `/{system}/` -> `{system}/frontend/dist/`
-- API代理: `/{system}/api/` -> `http://localhost:{port}/`
+- API代理: `/{system}/api/` -> `http://localhost:{port}/api/`
 
-**重要**: nginx 代理时会去掉 `/{system}/api/` 前缀，后端路由不需要包含 `/api`
+### 后端路由前缀规则（重要）
 
-示例：
+不同系统的后端路由前缀设计不同，nginx 配置必须匹配：
+
+| 系统 | 后端 url_prefix | nginx rewrite | 示例请求 |
+|------|-----------------|---------------|----------|
+| Portal | `/api/xxx` | 不 rewrite | `/api/auth/me` → `/api/auth/me` |
+| HR | `/api` | `/api/$1` | `/hr/api/employees` → `/api/employees` |
+| Account | 无前缀 | `/$1` | `/account/api/users` → `/users` |
+| SHM | `/api/xxx` | `/api/$1` | `/shm/api/base/warehouses` → `/api/base/warehouses` |
+| CRM | `/api/xxx` | `/api/$1` | `/crm/api/customers` → `/api/customers` |
+| 报价 | `/api/xxx` | `/api/$1` | `/quotation/api/quotes` → `/api/quotes` |
+| 采购 | `/api/v1/xxx` | `/api/$1` | `/caigou/api/v1/pr` → `/api/v1/pr` |
+
+**nginx rewrite 规则示例**：
+```nginx
+# HR/SHM/CRM/报价/采购 - 保留 /api 前缀
+location /hr/api/ {
+    rewrite ^/hr/api/(.*)$ /api/$1 break;
+    proxy_pass http://hr-backend;
+}
+
+# Account - 去掉 /api 前缀
+location /account/api/ {
+    rewrite ^/account/api/(.*)$ /$1 break;
+    proxy_pass http://account-backend;
+}
 ```
-浏览器请求: /account/api/hr-sync/org-options
-nginx 转发: http://localhost:8004/hr-sync/org-options
-后端路由:   /hr-sync/org-options
+
+**SSO Token 验证路由**：
+5 个子系统 (HR, Account, SHM, 报价, 采购) 使用 `/portal-api/auth/verify` 进行 SSO Token 验证：
+```nginx
+location /portal-api/ {
+    rewrite ^/portal-api/(.*)$ /api/$1 break;
+    proxy_pass http://portal-backend;
+}
 ```
 
 **DocPublisher 特殊路由**:
@@ -380,7 +409,7 @@ VITE_PORTAL_URL=/
 
 ## 注意事项
 
-1. **API路径**: nginx 会去掉 `/{system}/api/` 前缀，后端路由不要包含 `/api`
+1. **API路径**: 不同系统的后端路由前缀不同，详见上方「Nginx 路由规则」章节。大多数系统需要保留 `/api` 前缀，仅 Account 系统例外
 2. **共享模块**: 各后端通过 symlink 引用 `shared/`，修改会影响所有系统
 3. **环境变量**: `.env` 不在 Git 中，需手动维护
 4. **中文目录**: `报价/` 和 `采购/` 命令行操作时注意引号
@@ -563,9 +592,10 @@ python shared/storage_utils.py report --output report.json
 - JWT Token 认证机制
 - 跨系统用户身份验证
 - GitHub Actions 自动部署
-- 6 个子系统已部署上线 (Portal, HR, Account, Quotation, Caigou, SHM)
+- 7 个子系统已部署上线 (Portal, HR, Account, Quotation, Caigou, SHM, CRM)
 - DocPublisher 文档发布系统开发中
 - 企业级文件存储系统 (v2.0)
+- Portal 项目管理功能 (P2: 回收站、看板视图、项目聊天)
 
 ### 待完成
 - 完善各系统权限控制
