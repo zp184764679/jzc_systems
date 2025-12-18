@@ -12,7 +12,8 @@ import {
   KeyOutlined,
   LockOutlined,
   DesktopOutlined,
-  SoundOutlined
+  SoundOutlined,
+  DeleteOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -54,6 +55,11 @@ export default function AppLayout() {
       key: '/announcements',
       icon: <SoundOutlined />,
       label: '系统公告',
+    },
+    {
+      key: '/recycle-bin',
+      icon: <DeleteOutlined />,
+      label: '回收站',
     },
     // User security settings - available to all users
     {
@@ -117,6 +123,9 @@ export default function AppLayout() {
     }
     if (location.pathname.startsWith('/announcements')) {
       return '/announcements'
+    }
+    if (location.pathname.startsWith('/recycle-bin')) {
+      return '/recycle-bin'
     }
     if (location.pathname.startsWith('/security/password')) {
       return '/security/password'
