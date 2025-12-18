@@ -389,4 +389,33 @@ export const rbacAPI = {
   getModules: () => api.get('/rbac/modules'),
 }
 
+// ========== Template Library APIs ==========
+
+export const templateAPI = {
+  // 获取模板列表
+  getTemplates: (params) => api.get('/templates', { params }),
+
+  // 上传模板
+  uploadTemplate: (formData) => api.post('/templates', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
+  // 获取单个模板
+  getTemplate: (id) => api.get(`/templates/${id}`),
+
+  // 下载模板
+  downloadTemplate: (id) => api.get(`/templates/${id}/download`, {
+    responseType: 'blob'
+  }),
+
+  // 更新模板
+  updateTemplate: (id, data) => api.put(`/templates/${id}`, data),
+
+  // 删除模板
+  deleteTemplate: (id) => api.delete(`/templates/${id}`),
+
+  // 复制模板到项目
+  copyToProject: (templateId, projectId) => api.post(`/templates/${templateId}/copy-to-project`, { project_id: projectId }),
+}
+
 export default api

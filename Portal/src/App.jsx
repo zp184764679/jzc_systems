@@ -14,6 +14,7 @@ import PasswordSettingsPage from './pages/Security/PasswordSettingsPage'
 import SessionManagement from './pages/Security/SessionManagement'
 import AnnouncementsPage from './pages/Announcements/AnnouncementsPage'
 import RecycleBinPage from './pages/RecycleBin/RecycleBinPage'
+import TemplateLibraryPage from './pages/Templates/TemplateLibraryPage'
 
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
@@ -61,6 +62,7 @@ function AppContent() {
         <Route path="/security/sessions" element={<SessionManagement />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/recycle-bin" element={<RecycleBinPage />} />
+        <Route path="/templates" element={<TemplateLibraryPage />} />
       </Route>
 
       {/* Fallback route */}

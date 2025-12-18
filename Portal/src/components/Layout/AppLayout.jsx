@@ -13,7 +13,8 @@ import {
   LockOutlined,
   DesktopOutlined,
   SoundOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -60,6 +61,11 @@ export default function AppLayout() {
       key: '/recycle-bin',
       icon: <DeleteOutlined />,
       label: '回收站',
+    },
+    {
+      key: '/templates',
+      icon: <FolderOpenOutlined />,
+      label: '文件模板库',
     },
     // User security settings - available to all users
     {
@@ -126,6 +132,9 @@ export default function AppLayout() {
     }
     if (location.pathname.startsWith('/recycle-bin')) {
       return '/recycle-bin'
+    }
+    if (location.pathname.startsWith('/templates')) {
+      return '/templates'
     }
     if (location.pathname.startsWith('/security/password')) {
       return '/security/password'
