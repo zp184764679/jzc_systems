@@ -5,77 +5,77 @@ module.exports = {
       name: 'portal-backend',
       cwd: './Portal/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 3002 }
     },
     {
       name: 'hr-backend',
       cwd: './HR/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8003 }
     },
     {
       name: 'account-backend',
       cwd: './account/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8004 }
     },
     {
       name: 'quotation-backend',
       cwd: './报价/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8001 }
     },
     {
       name: 'caigou-backend',
       cwd: './采购/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 5001 }
     },
     {
       name: 'crm-backend',
       cwd: './CRM/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8002 }
     },
     {
       name: 'scm-backend',
       cwd: './SCM/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8005 }
     },
     {
       name: 'shm-backend',
       cwd: './SHM/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8006 }
     },
     {
       name: 'eam-backend',
       cwd: './EAM/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8008 }
     },
     {
       name: 'mes-backend',
       cwd: './MES/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8007 }
     },
     {
       name: 'dashboard-backend',
       cwd: './Dashboard/backend',
       script: 'main.py',
-      interpreter: 'python',
+      interpreter: './venv/bin/python3',
       env: { PORT: 8100 }
     },
     {
