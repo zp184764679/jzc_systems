@@ -76,14 +76,28 @@ class ProjectFile(Base):
     created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
+    # 软删除字段
+    deleted_at = Column(DateTime, nullable=True, comment='删除时间（软删除）')
+    delete_reason = Column(String(500), nullable=True, comment='删除原因')
+    deleted_by_id = Column(Integer, nullable=True, comment='删除者ID')
+
     # 关系
     # project = relationship('Project', back_populates='files')
     # related_file = relationship('ProjectFile', remote_side=[id], foreign_keys=[related_file_id])
     # parent_file = relationship('ProjectFile', remote_side=[id], foreign_keys=[parent_file_id])
 
-    def to_dict(self):
-        """Convert to dictionary"""
-        return {
+    @property
+    def is_deleted(self):
+        """检查文件是否已删除"""
+        return self.deleted_at is not None
+
+    def to_dict(self, include_deleted_info=False):
+        """Convert to dictionary
+
+        Args:
+            include_deleted_info: 是否包含删除相关信息
+        """
+        result = {
             'id': self.id,
             'project_id': self.project_id,
             'file_name': self.file_name,
@@ -103,7 +117,15 @@ class ProjectFile(Base):
             'remark': self.remark,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_deleted': self.is_deleted,
         }
+
+        if include_deleted_info or self.is_deleted:
+            result['deleted_at'] = self.deleted_at.isoformat() if self.deleted_at else None
+            result['delete_reason'] = self.delete_reason
+            result['deleted_by_id'] = self.deleted_by_id
+
+        return result
 
     def __repr__(self):
         return f"<ProjectFile {self.file_name} (v{self.version})>"

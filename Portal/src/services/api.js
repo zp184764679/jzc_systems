@@ -87,6 +87,22 @@ export const taskAPI = {
 
   // Delete task
   deleteTask: (id) => api.delete(`/tasks/${id}`),
+
+  // 任务导向管理 API
+  // Get kanban data
+  getKanbanTasks: (projectId) => api.get(`/tasks/project/${projectId}/kanban`),
+
+  // Update task progress
+  updateTaskProgress: (taskId, progress) =>
+    api.put(`/tasks/${taskId}/progress`, { completion_percentage: progress }),
+
+  // Move task to phase
+  moveToPhase: (taskId, phaseId) =>
+    api.post(`/tasks/${taskId}/move-to-phase`, { phase_id: phaseId }),
+
+  // Update task status (for kanban drag)
+  updateTaskStatus: (taskId, status) =>
+    api.put(`/tasks/${taskId}/status`, { status }),
 }
 
 // ========== Phase APIs ==========
@@ -278,6 +294,70 @@ export const passwordAPI = {
 
   // Unlock account (admin)
   unlockAccount: (data) => api.post('/auth/unlock-account', data),
+}
+
+// ========== Recycle Bin APIs ==========
+
+export const recycleBinAPI = {
+  // Get all deleted items
+  getItems: (params) => api.get('/recycle-bin/items', { params }),
+
+  // Get recycle bin stats
+  getStats: () => api.get('/recycle-bin/stats'),
+
+  // Batch restore
+  batchRestore: (items) => api.post('/recycle-bin/batch-restore', { items }),
+
+  // Batch permanent delete (admin only)
+  batchDelete: (items) => api.post('/recycle-bin/batch-delete', { items, confirm: 'PERMANENT-DELETE' }),
+
+  // Restore single file
+  restoreFile: (fileId) => api.post(`/recycle-bin/files/${fileId}/restore`),
+
+  // Permanent delete project (admin only)
+  deleteProject: (projectId) => api.delete(`/recycle-bin/projects/${projectId}`),
+
+  // Permanent delete file (admin only)
+  deleteFile: (fileId) => api.delete(`/recycle-bin/files/${fileId}`),
+
+  // Purge all expired (super admin only)
+  purgeExpired: () => api.delete('/recycle-bin/purge'),
+}
+
+// ========== Chat APIs ==========
+
+export const chatAPI = {
+  // Project chat
+  getProjectMessages: (projectId, params) =>
+    api.get(`/chat/project/${projectId}/messages`, { params }),
+
+  sendProjectMessage: (projectId, data) =>
+    api.post(`/chat/project/${projectId}/messages`, data),
+
+  // Task comments
+  getTaskComments: (taskId, params) =>
+    api.get(`/chat/task/${taskId}/comments`, { params }),
+
+  addTaskComment: (taskId, data) =>
+    api.post(`/chat/task/${taskId}/comments`, data),
+
+  // Message management
+  editMessage: (messageId, data) =>
+    api.put(`/chat/messages/${messageId}`, data),
+
+  deleteMessage: (messageId) =>
+    api.delete(`/chat/messages/${messageId}`),
+
+  // Read status
+  markAsRead: (projectId) =>
+    api.post(`/chat/project/${projectId}/read`),
+
+  getUnreadSummary: () =>
+    api.get('/chat/unread-summary'),
+
+  // Members for mentions
+  getChatMembers: (projectId) =>
+    api.get(`/chat/project/${projectId}/members`),
 }
 
 // ========== RBAC APIs ==========

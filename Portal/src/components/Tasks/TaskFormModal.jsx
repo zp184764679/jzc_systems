@@ -26,6 +26,8 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
         due_date: task.due_date ? dayjs(task.due_date) : null,
         estimated_hours: task.estimated_hours,
         is_milestone: task.is_milestone,
+        weight: task.weight || 1,
+        completion_percentage: task.completion_percentage || 0,
       })
     } else if (open) {
       // Reset form when creating new task
@@ -50,6 +52,8 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
         due_date: values.due_date ? values.due_date.format('YYYY-MM-DD') : null,
         estimated_hours: values.estimated_hours,
         is_milestone: values.is_milestone || false,
+        weight: values.weight || 1,
+        completion_percentage: values.completion_percentage || 0,
       }
 
       if (isEdit) {
@@ -179,12 +183,41 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
           </Form.Item>
         </div>
 
-        <Form.Item
-          name="estimated_hours"
-          label="预计工时（小时）"
-        >
-          <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
-        </Form.Item>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Form.Item
+            name="estimated_hours"
+            label="预计工时（小时）"
+            style={{ flex: 1 }}
+          >
+            <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item
+            name="weight"
+            label="任务权重"
+            initialValue={1}
+            style={{ flex: 1 }}
+            tooltip="权重越高，对项目进度影响越大（1-10）"
+          >
+            <InputNumber min={1} max={10} style={{ width: '100%' }} />
+          </Form.Item>
+        </div>
+
+        {isEdit && (
+          <Form.Item
+            name="completion_percentage"
+            label="完成进度"
+            tooltip="任务完成百分比（0-100%）"
+          >
+            <InputNumber
+              min={0}
+              max={100}
+              formatter={value => `${value}%`}
+              parser={value => value.replace('%', '')}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        )}
 
         <Form.Item
           name="is_milestone"

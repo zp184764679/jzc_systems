@@ -94,6 +94,87 @@ class Roles:
 
 提供 `@require_auth` 装饰器用于保护 API 路由。
 
+### file_storage_v2.py - 企业级文件存储 (NEW)
+
+**存储结构**:
+```
+storage/
+├── active/                           # 活跃文件
+│   └── {system}/{YYYY}/{MM}/{entity_type}/{entity_id}/
+│       ├── _meta.json                # 元数据索引
+│       ├── documents/                # 文档
+│       ├── drawings/                 # 图纸
+│       ├── contracts/                # 合同
+│       └── versions/{file_id}/v1.0/  # 历史版本
+├── archive/                          # 归档文件
+│   └── {YYYY}/{system}/{entity_type}/{entity_id}.tar.gz
+├── temp/                             # 临时文件（7天后清理）
+└── quarantine/                       # 隔离区（30天后清理）
+```
+
+**核心类**:
+
+| 类 | 说明 |
+|-----|------|
+| `EnterpriseFileStorage` | 主存储管理器 |
+| `FileInfo` | 文件信息数据类 |
+| `EntityMeta` | 实体元数据 |
+
+**主要方法**:
+
+| 方法 | 说明 |
+|------|------|
+| `save_file(file_bytes, system, entity_type, entity_id, category, ...)` | 保存文件 |
+| `get_file(file_id)` | 获取文件信息 |
+| `soft_delete(file_path, reason)` | 软删除（移到隔离区） |
+| `archive_entity(system, entity_type, entity_id)` | 归档实体所有文件 |
+| `cleanup_temp_files(days)` | 清理临时文件 |
+| `cleanup_quarantine(days)` | 清理隔离文件 |
+| `get_storage_stats()` | 获取存储统计 |
+
+**使用示例**:
+```python
+from shared.file_storage_v2 import EnterpriseFileStorage
+
+storage = EnterpriseFileStorage()
+
+# 保存文件
+result = storage.save_file(
+    file_bytes=content,
+    original_filename="contract.pdf",
+    system='portal',
+    entity_type='projects',
+    entity_id='PRJ-2025-0001',
+    category='contracts',
+    version='1.0',
+    owner_id=user_id
+)
+
+# 软删除
+storage.soft_delete(file_path, reason='用户删除')
+
+# 获取统计
+stats = storage.get_storage_stats()
+```
+
+### storage_utils.py - 存储管理工具
+
+命令行工具用于初始化和维护存储系统：
+
+```bash
+# 初始化存储目录结构
+python shared/storage_utils.py init
+
+# 清理临时和隔离文件
+python shared/storage_utils.py cleanup
+
+# 查看存储统计
+python shared/storage_utils.py stats
+
+# 生成存储报告
+python shared/storage_utils.py report --output report.json
+```
+
 ### config.py - 统一配置管理 (P3-42)
 
 **配置类**:

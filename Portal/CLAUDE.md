@@ -184,6 +184,38 @@ Portal/
 | POST | `/api/sessions/revoke-all/<user_id>` | 强制下线用户所有会话（管理员） |
 | GET | `/api/sessions/statistics` | 获取会话统计（管理员） |
 
+### 文件管理 API (routes/files.py)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/files/project/<id>` | 获取项目文件列表 |
+| POST | `/api/files/upload` | 上传文件 |
+| GET | `/api/files/<id>` | 获取文件详情 |
+| GET | `/api/files/<id>/download` | 下载文件 |
+| DELETE | `/api/files/<id>` | 删除文件（软删除） |
+| POST | `/api/files/<id>/upload-version` | 上传文件新版本 |
+| GET | `/api/files/<id>/versions` | 获取文件版本历史 |
+| PUT | `/api/files/<id>/set-latest` | 设置为最新版本 |
+| GET | `/api/files/<id>/version-tree` | 获取版本树 |
+| GET | `/api/files/<id>/history` | 获取文件操作历史 |
+| GET | `/api/files/<id>/preview` | 预览文件 |
+| GET | `/api/files/<id>/preview-info` | 获取预览信息 |
+| GET | `/api/files/search` | 搜索文件 |
+| POST | `/api/files/batch/delete` | 批量删除文件 |
+| POST | `/api/files/batch/download` | 批量下载（ZIP） |
+| POST | `/api/files/<id>/share` | 创建分享链接 |
+| GET | `/api/files/<id>/shares` | 获取文件的分享链接列表 |
+| DELETE | `/api/files/<id>/share/<code>` | 停用分享链接 |
+
+### 文件分享公开访问 API (routes/files.py - share_bp)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/share/<code>` | 获取分享信息（公开） |
+| POST | `/api/share/<code>/verify` | 验证分享密码（公开） |
+| GET | `/api/share/<code>/download` | 下载分享文件（公开） |
+| GET | `/api/share/<code>/preview` | 预览分享文件（公开） |
+
 ---
 
 ## 数据模型

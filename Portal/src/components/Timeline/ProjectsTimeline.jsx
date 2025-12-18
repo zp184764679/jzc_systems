@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { Card, Spin, Tag, Space, Button, Empty, Typography, Tooltip } from 'antd'
 import {
   ZoomInOutlined,
@@ -37,7 +37,44 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
   const navigate = useNavigate()
   const containerRef = useRef(null)
   const [dayWidth, setDayWidth] = useState(30) // 每天的像素宽度
-  const [viewStart, setViewStart] = useState(dayjs().subtract(14, 'day'))
+
+  // 过滤过期超过1个月的项目
+  const filteredProjects = useMemo(() => {
+    const oneMonthAgo = dayjs().subtract(1, 'month')
+    return projects.filter(project => {
+      // 没有结束日期的项目不过滤
+      if (!project.planned_end_date) return true
+      // 过期超过1个月的不显示
+      return dayjs(project.planned_end_date).isAfter(oneMonthAgo)
+    })
+  }, [projects])
+
+  // 自动计算初始视图起点
+  const autoViewStart = useMemo(() => {
+    if (filteredProjects.length === 0) return dayjs().subtract(7, 'day')
+
+    const oneMonthAgo = dayjs().subtract(1, 'month')
+
+    // 收集所有有效项目的开始日期
+    const startDates = filteredProjects
+      .map(p => p.planned_start_date ? dayjs(p.planned_start_date) : dayjs())
+      .filter(d => d.isValid())
+
+    if (startDates.length === 0) return dayjs().subtract(7, 'day')
+
+    const earliestStart = dayjs.min(startDates)
+    // 视图起点为最早日期前7天，但不早于1个月前
+    return dayjs.max(earliestStart.subtract(7, 'day'), oneMonthAgo)
+  }, [filteredProjects])
+
+  const [viewStart, setViewStart] = useState(() => dayjs().subtract(7, 'day'))
+
+  // 初始化时使用自动计算的视图起点
+  useEffect(() => {
+    if (filteredProjects.length > 0) {
+      setViewStart(autoViewStart)
+    }
+  }, [filteredProjects.length > 0]) // 只在项目加载完成后设置一次
 
   // 计算时间范围
   const timeRange = useMemo(() => {
@@ -97,9 +134,13 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
   const handleNextWeek = () => setViewStart(prev => prev.add(14, 'day'))
   const handleToday = () => setViewStart(dayjs().subtract(7, 'day'))
 
-  // 点击项目
+  // 点击项目 - 有部件番号则跳转到部件番号详情页，否则跳转到项目详情页
   const handleProjectClick = (project) => {
-    navigate(`/projects/${project.id}`)
+    if (project.part_number) {
+      navigate(`/projects/part/${encodeURIComponent(project.part_number)}`)
+    } else {
+      navigate(`/projects/${project.id}`)
+    }
   }
 
   if (loading) {
@@ -112,7 +153,7 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
     )
   }
 
-  if (!projects.length) {
+  if (!filteredProjects.length) {
     return null
   }
 
@@ -120,102 +161,186 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
     <Card
       title={
         <Space>
-          <span>项目时间轴</span>
-          <Tag color="blue">{projects.length} 个项目</Tag>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
+            项目时间轴
+          </span>
+          <Tag style={{
+            background: 'rgba(0,122,255,0.1)',
+            color: '#007aff',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 11,
+            fontWeight: 500,
+            padding: '2px 8px'
+          }}>
+            {filteredProjects.length} 个项目
+          </Tag>
         </Space>
       }
       extra={
-        <Space>
-          <Space.Compact>
-            <Button icon={<LeftOutlined />} onClick={handlePrevWeek} title="向前2周" />
-            <Button onClick={handleToday}>今天</Button>
-            <Button icon={<RightOutlined />} onClick={handleNextWeek} title="向后2周" />
+        <Space size={8}>
+          <Space.Compact style={{ background: '#f5f5f7', borderRadius: 8, padding: 2 }}>
+            <Button
+              icon={<LeftOutlined style={{ fontSize: 12 }} />}
+              onClick={handlePrevWeek}
+              title="向前2周"
+              style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}
+            />
+            <Button
+              onClick={handleToday}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                boxShadow: 'none',
+                fontSize: 12,
+                fontWeight: 500
+              }}
+            >
+              今天
+            </Button>
+            <Button
+              icon={<RightOutlined style={{ fontSize: 12 }} />}
+              onClick={handleNextWeek}
+              title="向后2周"
+              style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}
+            />
           </Space.Compact>
-          <Space.Compact>
-            <Button icon={<ZoomOutOutlined />} onClick={handleZoomOut} title="缩小" />
-            <Button icon={<ZoomInOutlined />} onClick={handleZoomIn} title="放大" />
+          <Space.Compact style={{ background: '#f5f5f7', borderRadius: 8, padding: 2 }}>
+            <Button
+              icon={<ZoomOutOutlined style={{ fontSize: 12 }} />}
+              onClick={handleZoomOut}
+              title="缩小"
+              style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}
+            />
+            <Button
+              icon={<ZoomInOutlined style={{ fontSize: 12 }} />}
+              onClick={handleZoomIn}
+              title="放大"
+              style={{ border: 'none', background: 'transparent', boxShadow: 'none' }}
+            />
           </Space.Compact>
         </Space>
       }
       styles={{ body: { padding: 0, overflow: 'hidden' } }}
-      style={{ marginBottom: 24, borderRadius: 12 }}
+      style={{
+        marginBottom: 24,
+        borderRadius: 16,
+        border: '1px solid rgba(0,0,0,0.08)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
+      }}
     >
-      {/* 图例 */}
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
-        <Space size="large" wrap>
-          <Text strong>图例:</Text>
+      {/* 图例 - Apple 风格 */}
+      <div style={{
+        padding: '12px 20px',
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        background: 'rgba(255,255,255,0.8)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <Space size="middle" wrap>
+          <Text style={{ color: '#86868b', fontSize: 12, fontWeight: 500 }}>状态</Text>
           {Object.entries(statusColors).map(([key, value]) => (
-            <Space key={key} size="small">
+            <Space key={key} size={6}>
               <span style={{
                 display: 'inline-block',
-                width: 16,
-                height: 16,
+                width: 10,
+                height: 10,
                 background: value.barBg,
-                borderRadius: 4
+                borderRadius: '50%',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
               }} />
-              <Text>{value.label}</Text>
+              <Text style={{ fontSize: 12, color: '#1d1d1f' }}>{value.label}</Text>
             </Space>
           ))}
         </Space>
       </div>
 
-      {/* 时间轴主体 */}
-      <div style={{ display: 'flex', maxHeight: 300, overflow: 'hidden' }}>
+      {/* 时间轴主体 - Apple 风格 */}
+      <div style={{ display: 'flex', maxHeight: 420, overflow: 'hidden' }}>
         {/* 左侧项目列表 */}
         <div style={{
-          width: 200,
+          width: 240,
           flexShrink: 0,
-          borderRight: '2px solid #f0f0f0',
-          background: '#fafafa',
+          borderRight: '1px solid rgba(0,0,0,0.08)',
+          background: 'linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%)',
           overflow: 'auto'
         }}>
           {/* 表头 */}
           <div style={{
-            height: 50,
-            padding: '0 12px',
+            height: 44,
+            padding: '0 16px',
             display: 'flex',
             alignItems: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(180deg, #1d1d1f 0%, #2c2c2e 100%)',
             color: '#fff',
+            fontSize: 13,
             fontWeight: 600,
+            letterSpacing: '-0.01em',
             position: 'sticky',
             top: 0,
             zIndex: 10
           }}>
-            项目名称
+            项目
           </div>
 
-          {/* 项目行 */}
-          {projects.slice(0, 10).map(project => {
+          {/* 项目行 - Apple 风格 */}
+          {filteredProjects.map(project => {
             const priority = priorityConfig[project.priority] || priorityConfig.normal
+            const statusColor = statusColors[project.status] || statusColors.planning
             return (
               <div
                 key={project.id}
                 style={{
-                  height: 50,
-                  padding: '8px 12px',
-                  borderBottom: '1px solid #f0f0f0',
+                  height: 56,
+                  padding: '10px 16px',
+                  borderBottom: '1px solid rgba(0,0,0,0.04)',
                   cursor: 'pointer',
-                  transition: 'background 0.2s',
+                  transition: 'all 0.2s ease',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  gap: 4
                 }}
                 onClick={() => handleProjectClick(project)}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0,0,0,0.03)'
+                  e.currentTarget.style.transform = 'translateX(2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.transform = 'translateX(0)'
+                }}
               >
                 <div style={{
                   fontSize: 13,
                   fontWeight: 500,
+                  color: '#1d1d1f',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1.3,
+                  letterSpacing: '-0.01em'
                 }}>
                   {project.name}
                 </div>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
-                  {project.customer || '无客户'}
+                <div style={{
+                  fontSize: 11,
+                  color: '#86868b',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1.2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <span style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: statusColor.border,
+                    flexShrink: 0
+                  }} />
+                  {project.part_number || project.customer || '-'}
                 </div>
               </div>
             )
@@ -231,14 +356,14 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
             position: 'relative'
           }}
         >
-          {/* 月份表头 */}
+          {/* 月份表头 - Apple 风格 */}
           <div style={{
             display: 'flex',
-            height: 25,
+            height: 22,
             position: 'sticky',
             top: 0,
             zIndex: 10,
-            background: '#667eea',
+            background: 'linear-gradient(180deg, #1d1d1f 0%, #2c2c2e 100%)',
             color: '#fff'
           }}>
             {timeRange.months.map((m, idx) => {
@@ -264,15 +389,15 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
             })}
           </div>
 
-          {/* 日期表头 */}
+          {/* 日期表头 - Apple 风格 */}
           <div style={{
             display: 'flex',
-            height: 25,
+            height: 22,
             position: 'sticky',
-            top: 25,
+            top: 22,
             zIndex: 10,
-            background: '#fff',
-            borderBottom: '2px solid #f0f0f0'
+            background: '#f5f5f7',
+            borderBottom: '1px solid rgba(0,0,0,0.08)'
           }}>
             {timeRange.dates.map((date, index) => {
               const isToday = date.isSame(dayjs(), 'day')
@@ -299,13 +424,13 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
             })}
           </div>
 
-          {/* 项目条 */}
+          {/* 项目条 - Apple 风格 */}
           <div style={{ position: 'relative' }}>
-            {projects.slice(0, 10).map((project) => {
+            {filteredProjects.map((project) => {
               const barStyle = getProjectBarStyle(project)
               if (!barStyle.visible) {
                 return (
-                  <div key={project.id} style={{ height: 50, borderBottom: '1px solid #f0f0f0' }} />
+                  <div key={project.id} style={{ height: 56, borderBottom: '1px solid rgba(0,0,0,0.04)' }} />
                 )
               }
 
@@ -313,9 +438,9 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
                 <div
                   key={project.id}
                   style={{
-                    height: 50,
+                    height: 56,
                     position: 'relative',
-                    borderBottom: '1px solid #f0f0f0'
+                    borderBottom: '1px solid rgba(0,0,0,0.04)'
                   }}
                 >
                   {/* 网格背景 */}
@@ -336,23 +461,24 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
                           style={{
                             width: dayWidth,
                             flexShrink: 0,
-                            borderRight: '1px solid #f5f5f5',
-                            background: isToday ? '#e6f7ff20' : isWeekend ? '#fafafa50' : 'transparent'
+                            borderRight: '1px solid rgba(0,0,0,0.03)',
+                            background: isToday ? 'rgba(0,122,255,0.06)' : isWeekend ? 'rgba(0,0,0,0.02)' : 'transparent'
                           }}
                         />
                       )
                     })}
                   </div>
 
-                  {/* 项目条 */}
+                  {/* 项目条 - Apple 风格 */}
                   <Tooltip
                     title={
-                      <div>
-                        <div><strong>{project.name}</strong></div>
-                        <div>客户: {project.customer || '无'}</div>
+                      <div style={{ fontSize: 12 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{project.name}</div>
+                        {project.part_number && <div>部件番号: {project.part_number}</div>}
+                        <div>客户: {project.customer || '-'}</div>
                         <div>状态: {statusColors[project.status]?.label || project.status}</div>
                         <div>进度: {project.progress_percentage || 0}%</div>
-                        <div>时间: {project.planned_start_date || '未设置'} ~ {project.planned_end_date || '未设置'}</div>
+                        <div>周期: {project.planned_start_date || '未设置'} ~ {project.planned_end_date || '未设置'}</div>
                       </div>
                     }
                   >
@@ -360,41 +486,42 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
                       onClick={() => handleProjectClick(project)}
                       style={{
                         position: 'absolute',
-                        top: 8,
+                        top: 10,
                         left: barStyle.left,
                         width: barStyle.width,
-                        height: 34,
+                        height: 36,
                         background: barStyle.background,
-                        border: `2px solid ${barStyle.borderColor}`,
-                        borderRadius: 6,
+                        border: 'none',
+                        borderRadius: 8,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        padding: '0 8px',
+                        padding: '0 10px',
                         overflow: 'hidden',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)',
+                        transition: 'all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)',
                         zIndex: 5
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                        e.currentTarget.style.transform = 'translateY(-1px) scale(1.01)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.08)'
                         e.currentTarget.style.zIndex = '20'
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)'
-                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)'
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)'
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)'
                         e.currentTarget.style.zIndex = '5'
                       }}
                     >
                       <span style={{
                         color: '#fff',
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: 500,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+                        textShadow: '0 0.5px 1px rgba(0,0,0,0.2)',
+                        letterSpacing: '-0.01em'
                       }}>
                         {project.name}
                       </span>
@@ -407,11 +534,6 @@ export default function ProjectsTimeline({ projects = [], loading = false }) {
         </div>
       </div>
 
-      {projects.length > 10 && (
-        <div style={{ padding: '8px 16px', textAlign: 'center', color: '#999', borderTop: '1px solid #f0f0f0' }}>
-          仅显示前 10 个项目，查看更多请点击项目卡片
-        </div>
-      )}
     </Card>
   )
 }

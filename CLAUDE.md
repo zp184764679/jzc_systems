@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，采用微服务架构，包含 11 个独立但互联的子系统，覆盖企业运营的各个核心环节。
+JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，采用微服务架构，包含 12 个独立但互联的子系统，覆盖企业运营的各个核心环节。
 
 ### 项目目标
 - 实现企业内部各业务系统的统一管理
@@ -23,7 +23,7 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 | **前端框架** | React 18/19 + Vite |
 | **UI 组件库** | Ant Design 5/6, Tailwind CSS (采购) |
 | **状态管理** | Zustand (报价), Context API |
-| **后端框架** | Flask (大多数), FastAPI (报价) |
+| **后端框架** | Flask (大多数), FastAPI (报价), Strapi (DocPublisher) |
 | **ORM** | SQLAlchemy 2.0+ |
 | **数据库** | MySQL 8.0 |
 | **认证** | JWT (PyJWT) - 统一 SSO |
@@ -53,11 +53,12 @@ JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，
 | Quotation | 报价/ | 8001 | 6001 | `/quotation/` | `/quotation/api/` | quotation-backend | cncplan | 已部署 |
 | Caigou | 采购/ | 5001 | 5000 | `/caigou/` | `/caigou/api/` | caigou-backend | caigou | 已部署 |
 | SHM | SHM/ | 8006 | 7500 | `/shm/` | `/shm/api/` | shm-backend | cncplan | 已部署 |
-| CRM | CRM/ | 8002 | 6004 | `/crm/` | `/crm/api/` | - | cncplan | 未部署 |
-| SCM | SCM/ | 8005 | 7000 | `/scm/` | `/scm/api/` | - | cncplan | 未部署 |
-| EAM | EAM/ | 8008 | 7200 | `/eam/` | `/eam/api/` | - | cncplan | 未部署 |
-| MES | MES/ | 8007 | 7800 | `/mes/` | `/mes/api/` | - | cncplan | 未部署 |
+| CRM | CRM/ | 8002 | 6004 | `/crm/` | `/crm/api/` | crm-backend | cncplan | 未部署 |
+| SCM | SCM/ | 8005 | 7000 | `/scm/` | `/scm/api/` | scm-backend | cncplan | 未部署 |
+| EAM | EAM/ | 8008 | 7200 | `/eam/` | `/eam/api/` | eam-backend | cncplan | 未部署 |
+| MES | MES/ | 8007 | 7800 | `/mes/` | `/mes/api/` | mes-backend | cncplan | 未部署 |
 | Dashboard | Dashboard/ | 8100 | 6100 | `/dashboard/` | `/dashboard/api/` | dashboard-backend | cncplan | 未部署 |
+| DocPublisher | DocPublisher/ | 1337 | 6200 | `/docs/` | `/strapi-api/` | docs-strapi | SQLite/MySQL | 开发中 |
 
 ---
 
@@ -76,6 +77,11 @@ nginx 转发: http://localhost:8004/hr-sync/org-options
 后端路由:   /hr-sync/org-options
 ```
 
+**DocPublisher 特殊路由**:
+- 静态文件: `/docs/` -> `DocPublisher/frontend/dist/`
+- Strapi API: `/strapi-api/` -> `http://localhost:1337/api/`
+- Strapi Admin: `/strapi-admin/` -> `http://localhost:1337/admin/`
+
 ---
 
 ## 目录结构
@@ -93,6 +99,7 @@ nginx 转发: http://localhost:8004/hr-sync/org-options
 ├── EAM/                 # 设备资产管理 (未部署)
 ├── MES/                 # 制造执行系统 (未部署)
 ├── Dashboard/           # 可视化追踪系统 (未部署)
+├── DocPublisher/        # 文档发布系统 (开发中)
 ├── shared/              # 共享认证模块
 │   ├── auth/            # JWT认证、用户模型、权限
 │   └── frontend/        # 前端共享工具
@@ -200,9 +207,10 @@ curl http://127.0.0.1:8005/health   # SCM
 curl http://127.0.0.1:8008/health   # EAM
 curl http://127.0.0.1:8007/health   # MES
 curl http://127.0.0.1:8100/health   # Dashboard
+curl http://127.0.0.1:1337/_health  # DocPublisher (Strapi)
 ```
 
-**规范**: 所有系统健康检查统一使用 `/health` 路径（不带 `/api` 前缀）
+**规范**: 所有系统健康检查统一使用 `/health` 路径（不带 `/api` 前缀），DocPublisher (Strapi) 使用 `/_health`
 
 ### 数据库备份
 ```bash
@@ -256,6 +264,7 @@ Stop-Process -Id 12345,12346,12347 -Force
 | EAM | 8008 | 7200 | main.py |
 | MES | 8007 | 7800 | main.py |
 | Dashboard | 8100 | 6100 | main.py |
+| DocPublisher | 1337 | 6200 | Strapi |
 
 **最佳实践**:
 1. 后端服务使用 PM2 管理，避免僵尸进程: `pm2 start main.py --name xxx-backend --interpreter python`
@@ -281,11 +290,28 @@ Stop-Process -Id 12345,12346,12347 -Force
 
 ---
 
+## PM2 WSL 服务
+
+以下服务运行在 WSL Ubuntu-22.04 环境中，由 PM2 管理：
+
+| 服务 | 说明 |
+|------|------|
+| ollama | AI 模型服务 (本地 LLM) |
+| celery-worker | 采购系统异步任务队列 |
+
+启动 WSL 服务：
+```bash
+pm2 start ollama
+pm2 start celery-worker
+```
+
+---
+
 ## 环境变量配置
 
 ### SSO 认证配置（重要）
 
-**所有 11 个子系统必须使用统一的 JWT 密钥和认证数据库配置：**
+**所有 12 个子系统必须使用统一的 JWT 密钥和认证数据库配置：**
 
 ```bash
 # 认证数据库 - 所有子系统统一使用 cncplan
@@ -347,7 +373,7 @@ VITE_PORTAL_URL=/
 6. **SSO 认证**: 所有子系统使用统一的 JWT Token，由 Portal 签发
 7. **端口检查**: Windows 下 `netstat` 不可靠，必须用 PowerShell `Get-NetTCPConnection` 检查端口
 8. **进程管理**: 后端必须用 PM2 管理，避免僵尸进程；前端 dev server 同时只运行一个
-9. **配置统一**: 所有 11 个子系统的 `JWT_SECRET_KEY` 和 `AUTH_DB_NAME` 必须相同（见上方 SSO 认证配置）
+9. **配置统一**: 所有 12 个子系统的 `JWT_SECRET_KEY` 和 `AUTH_DB_NAME` 必须相同（见上方 SSO 认证配置）
 10. **数据库迁移**: CRM 系统新增字段时需同步更新数据库表结构（如 `grade`、`is_key_account` 等客户分级字段）
 
 ---
@@ -452,6 +478,69 @@ Portal 内新增功能模块（如项目管理）也必须遵循上述规范：
 
 ---
 
+## 企业级文件存储系统
+
+所有子系统共享统一的文件存储架构，位于 `storage/` 目录。
+
+### 存储结构
+
+```
+storage/
+├── active/                           # 活跃文件
+│   └── {system}/{YYYY}/{MM}/{entity_type}/{entity_id}/
+│       ├── _meta.json                # 元数据索引
+│       ├── documents/                # 文档
+│       ├── drawings/                 # 图纸
+│       ├── contracts/                # 合同
+│       └── versions/{file_id}/v1.0/  # 历史版本
+├── archive/                          # 归档文件
+│   └── {YYYY}/{system}/{entity_type}/{entity_id}.tar.gz
+├── temp/                             # 临时文件（7天后清理）
+└── quarantine/                       # 隔离区（30天后清理）
+```
+
+### 系统代码映射
+
+| 代码 | 系统 | 实体类型示例 |
+|------|------|-------------|
+| portal | 门户系统 | projects, announcements |
+| caigou | 采购系统 | suppliers, purchase_orders, contracts |
+| quotation | 报价系统 | quotes, drawings |
+| hr | 人事系统 | employees, contracts |
+| crm | CRM系统 | customers, contacts |
+| scm | 仓库系统 | inventory, warehouses |
+| shm | 出货系统 | shipments, deliveries |
+| eam | 设备系统 | equipment, maintenance |
+| mes | 生产系统 | work_orders, production |
+
+### 管理命令
+
+```bash
+# 初始化存储目录结构
+python shared/storage_utils.py init
+
+# 清理临时和隔离文件
+python shared/storage_utils.py cleanup
+
+# 查看存储统计
+python shared/storage_utils.py stats
+
+# 生成存储报告
+python shared/storage_utils.py report --output report.json
+```
+
+### 核心模块
+
+| 文件 | 说明 |
+|------|------|
+| `shared/file_storage_v2.py` | 企业级存储管理器 |
+| `shared/storage_utils.py` | 存储管理工具 |
+| `shared/migrations/create_file_storage_table.sql` | 数据库表结构 |
+
+详细文档参见 `shared/CLAUDE.md` 和 `storage/README.md`。
+
+---
+
 ## 项目进展
 
 ### 已完成
@@ -459,7 +548,9 @@ Portal 内新增功能模块（如项目管理）也必须遵循上述规范：
 - JWT Token 认证机制
 - 跨系统用户身份验证
 - GitHub Actions 自动部署
-- 6 个子系统已部署上线
+- 6 个子系统已部署上线 (Portal, HR, Account, Quotation, Caigou, SHM)
+- DocPublisher 文档发布系统开发中
+- 企业级文件存储系统 (v2.0)
 
 ### 待完成
 - 完善各系统权限控制

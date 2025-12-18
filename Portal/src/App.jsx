@@ -5,6 +5,7 @@ import AppLayout from './components/Layout/AppLayout'
 import HomePage from './pages/HomePage'
 import ProjectListPage from './pages/Projects/ProjectListPage'
 import ProjectDetailPage from './pages/Projects/ProjectDetailPage'
+import PartNumberDetailPage from './pages/Projects/PartNumberDetailPage'
 import NotificationsPage from './pages/NotificationsPage'
 import AuditLogsPage from './pages/Security/AuditLogsPage'
 import LoginHistoryPage from './pages/Security/LoginHistoryPage'
@@ -12,6 +13,7 @@ import TwoFactorSettingsPage from './pages/Security/TwoFactorSettingsPage'
 import PasswordSettingsPage from './pages/Security/PasswordSettingsPage'
 import SessionManagement from './pages/Security/SessionManagement'
 import AnnouncementsPage from './pages/Announcements/AnnouncementsPage'
+import RecycleBinPage from './pages/RecycleBin/RecycleBinPage'
 
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
@@ -49,6 +51,7 @@ function AppContent() {
       }>
         <Route path="/" element={<HomePage />} />
         <Route path="/projects" element={<ProjectListPage />} />
+        <Route path="/projects/part/:partNumber" element={<PartNumberDetailPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/security/audit-logs" element={<AuditLogsPage />} />
@@ -57,6 +60,7 @@ function AppContent() {
         <Route path="/security/password" element={<PasswordSettingsPage />} />
         <Route path="/security/sessions" element={<SessionManagement />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
+        <Route path="/recycle-bin" element={<RecycleBinPage />} />
       </Route>
 
       {/* Fallback route */}

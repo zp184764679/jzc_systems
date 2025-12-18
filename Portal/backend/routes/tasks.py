@@ -147,6 +147,8 @@ def create_task():
             created_by_id=user.get('user_id') or user.get('id'),
             depends_on_task_id=data.get('depends_on_task_id'),
             is_milestone=data.get('is_milestone', False),
+            weight=max(1, min(10, int(data.get('weight', 1)))),
+            completion_percentage=max(0, min(100, int(data.get('completion_percentage', 0)))),
         )
 
         session.add(task)
@@ -198,6 +200,16 @@ def update_task(task_id):
             task.start_date = safe_parse_date(data['start_date'])
         if 'due_date' in data:
             task.due_date = safe_parse_date(data['due_date'])
+
+        # 处理任务权重和完成度
+        if 'weight' in data:
+            task.weight = max(1, min(10, int(data.get('weight', 1))))
+        if 'completion_percentage' in data:
+            task.completion_percentage = max(0, min(100, int(data.get('completion_percentage', 0))))
+            # 如果完成度100%，自动设置为完成状态
+            if task.completion_percentage == 100 and task.status != 'completed':
+                task.status = 'completed'
+                task.completed_at = datetime.now()
 
         session.commit()
         session.refresh(task)
@@ -341,6 +353,203 @@ def delete_task(task_id):
         session.commit()
 
         return jsonify({'message': '任务已删除'}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+# ============================================================
+# 任务导向项目管理 API
+# ============================================================
+
+@tasks_bp.route('/project/<int:project_id>/kanban', methods=['GET'])
+def get_kanban_tasks(project_id):
+    """获取看板视图数据（按状态分组）"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        # Check project exists
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return jsonify({'error': '项目不存在'}), 404
+
+        tasks = session.query(Task).filter_by(project_id=project_id).all()
+
+        # 按状态分组
+        kanban_data = {
+            'pending': [],
+            'in_progress': [],
+            'blocked': [],
+            'completed': [],
+            'cancelled': []
+        }
+
+        for task in tasks:
+            # 获取状态值
+            if hasattr(task.status, 'value'):
+                status = task.status.value
+            else:
+                status = str(task.status).lower()
+
+            if status in kanban_data:
+                kanban_data[status].append(task.to_dict())
+
+        return jsonify({
+            'columns': [
+                {'key': 'pending', 'title': '待开始', 'tasks': kanban_data['pending'], 'count': len(kanban_data['pending'])},
+                {'key': 'in_progress', 'title': '进行中', 'tasks': kanban_data['in_progress'], 'count': len(kanban_data['in_progress'])},
+                {'key': 'blocked', 'title': '受阻', 'tasks': kanban_data['blocked'], 'count': len(kanban_data['blocked'])},
+                {'key': 'completed', 'title': '已完成', 'tasks': kanban_data['completed'], 'count': len(kanban_data['completed'])},
+            ],
+            'total': len(tasks)
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/progress', methods=['PUT'])
+def update_task_progress(task_id):
+    """更新任务完成百分比"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    data = request.get_json()
+    if not data or 'completion_percentage' not in data:
+        return jsonify({'error': '缺少完成百分比'}), 400
+
+    progress = max(0, min(100, int(data.get('completion_percentage', 0))))
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        task.completion_percentage = progress
+
+        # 如果达到100%，自动设置为完成状态
+        if progress == 100:
+            task.status = 'completed'
+            task.completed_at = datetime.now()
+        elif progress > 0 and task.status.value == 'pending':
+            task.status = 'in_progress'
+
+        # 更新阶段和项目进度
+        from services.progress_calculator import ProgressCalculator
+        ProgressCalculator.update_all_progress(session, task.project_id)
+
+        session.commit()
+        session.refresh(task)
+
+        return jsonify(task.to_dict()), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/move-to-phase', methods=['POST'])
+def move_task_to_phase(task_id):
+    """移动任务到指定阶段"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    data = request.get_json()
+    phase_id = data.get('phase_id')  # None 表示移出阶段
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        # 验证阶段是否属于同一项目
+        if phase_id:
+            from models.project_phase import ProjectPhase
+            phase = session.query(ProjectPhase).filter_by(id=phase_id).first()
+            if not phase:
+                return jsonify({'error': '阶段不存在'}), 404
+            if phase.project_id != task.project_id:
+                return jsonify({'error': '阶段不属于当前项目'}), 400
+
+        old_phase_id = task.phase_id
+        task.phase_id = phase_id
+
+        # 更新进度
+        from services.progress_calculator import ProgressCalculator
+        ProgressCalculator.update_all_progress(session, task.project_id)
+
+        session.commit()
+        session.refresh(task)
+
+        return jsonify({
+            'message': '任务已移动',
+            'task': task.to_dict(),
+            'old_phase_id': old_phase_id,
+            'new_phase_id': phase_id
+        }), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/status', methods=['PUT'])
+def update_task_status(task_id):
+    """更新任务状态（看板拖拽）"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    data = request.get_json()
+    if not data or 'status' not in data:
+        return jsonify({'error': '缺少状态'}), 400
+
+    new_status = data.get('status', '').lower()
+    valid_statuses = ['pending', 'in_progress', 'completed', 'cancelled', 'blocked']
+    if new_status not in valid_statuses:
+        return jsonify({'error': f'无效状态，有效值: {valid_statuses}'}), 400
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        old_status = task.status.value if hasattr(task.status, 'value') else str(task.status)
+        task.status = new_status
+
+        # 状态变化逻辑
+        if new_status == 'completed':
+            task.completed_at = datetime.now()
+            task.completion_percentage = 100
+        elif new_status == 'in_progress' and (task.completion_percentage or 0) == 0:
+            task.completion_percentage = 10  # 开始时设置初始进度
+
+        # 更新进度
+        from services.progress_calculator import ProgressCalculator
+        ProgressCalculator.update_all_progress(session, task.project_id)
+
+        session.commit()
+        session.refresh(task)
+
+        return jsonify({
+            'message': '状态已更新',
+            'task': task.to_dict(),
+            'old_status': old_status,
+            'new_status': new_status
+        }), 200
     except Exception as e:
         session.rollback()
         return jsonify({'error': str(e)}), 500

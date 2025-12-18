@@ -1,32 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Button,
-  Empty,
-  Row,
-  Col,
-  Tag,
-  Progress,
   Input,
   Select,
-  Space,
   message,
-  Spin,
-  Alert,
   Result,
-  Pagination,
   Cascader
 } from 'antd'
 import {
   PlusOutlined,
   SearchOutlined,
-  AppstoreOutlined,
-  BarsOutlined,
   ReloadOutlined,
   WifiOutlined,
   ExclamationCircleOutlined,
-  FilterOutlined,
   ClearOutlined
 } from '@ant-design/icons'
 import { projectAPI } from '../../services/api'
@@ -36,42 +23,10 @@ import ProjectsTimeline from '../../components/Timeline/ProjectsTimeline'
 const { Search } = Input
 const { Option } = Select
 
-const statusColors = {
-  planning: 'blue',
-  in_progress: 'processing',
-  on_hold: 'warning',
-  completed: 'success',
-  cancelled: 'default',
-}
-
-const statusLabels = {
-  planning: '规划中',
-  in_progress: '进行中',
-  on_hold: '暂停',
-  completed: '已完成',
-  cancelled: '已取消',
-}
-
-const priorityColors = {
-  low: 'default',
-  normal: 'blue',
-  high: 'orange',
-  urgent: 'red',
-}
-
-const priorityLabels = {
-  low: '低',
-  normal: '普通',
-  high: '高',
-  urgent: '紧急',
-}
-
 export default function ProjectListPage() {
-  const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [allProjects, setAllProjects] = useState([]) // 用于时间轴和级联筛选
   const [loading, setLoading] = useState(false)
-  const [viewMode, setViewMode] = useState('grid') // 'grid' or 'list'
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
@@ -199,23 +154,10 @@ export default function ProjectListPage() {
     }
   }
 
-  const handleProjectClick = (projectId) => {
-    navigate(`/projects/${projectId}`)
-  }
-
   // 搜索处理（触发服务端查询）
   const handleSearch = () => {
     setPagination(prev => ({ ...prev, page: 1 })) // 重置到第一页
     fetchProjects()
-  }
-
-  // 分页变化处理
-  const handlePageChange = (page, pageSize) => {
-    setPagination(prev => ({
-      ...prev,
-      page,
-      pageSize
-    }))
   }
 
   // 状态筛选变化
@@ -258,81 +200,70 @@ export default function ProjectListPage() {
         </Button>
       </div>
 
-      {/* Timeline - 时间轴 */}
-      <ProjectsTimeline projects={allProjects} loading={loading && allProjects.length === 0} />
+      {/* Filters - 筛选栏 */}
+      <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+        <Search
+          placeholder="搜索项目名称、客户、订单号"
+          allowClear
+          style={{ width: 280 }}
+          prefix={<SearchOutlined />}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onSearch={handleSearch}
+          enterButton
+        />
+        <Cascader
+          options={cascaderOptions}
+          value={customerPartFilter}
+          onChange={handleCascaderChange}
+          placeholder="客户 / 部件番号"
+          style={{ width: 220 }}
+          allowClear
+          showSearch={{
+            filter: (inputValue, path) =>
+              path.some(option =>
+                option.label.toLowerCase().includes(inputValue.toLowerCase())
+              )
+          }}
+          changeOnSelect
+        />
+        <Select
+          placeholder="状态筛选"
+          allowClear
+          style={{ width: 130 }}
+          value={statusFilter}
+          onChange={handleStatusChange}
+        >
+          <Option value="planning">规划中</Option>
+          <Option value="in_progress">进行中</Option>
+          <Option value="on_hold">暂停</Option>
+          <Option value="completed">已完成</Option>
+          <Option value="cancelled">已取消</Option>
+        </Select>
+        <Select
+          placeholder="优先级"
+          allowClear
+          style={{ width: 100 }}
+          value={priorityFilter}
+          onChange={handlePriorityChange}
+        >
+          <Option value="low">低</Option>
+          <Option value="normal">普通</Option>
+          <Option value="high">高</Option>
+          <Option value="urgent">紧急</Option>
+        </Select>
+        {hasFilters && (
+          <Button icon={<ClearOutlined />} onClick={handleClearFilters}>
+            清除筛选
+          </Button>
+        )}
+      </div>
 
-      {/* Filters */}
-      <Card style={{ marginBottom: 24 }}>
-        <Space wrap size="middle">
-          <Search
-            placeholder="搜索项目名称、客户、订单号"
-            allowClear
-            style={{ width: 280 }}
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onSearch={handleSearch}
-            enterButton
-          />
-          <Cascader
-            options={cascaderOptions}
-            value={customerPartFilter}
-            onChange={handleCascaderChange}
-            placeholder="客户 / 部件番号"
-            style={{ width: 220 }}
-            allowClear
-            showSearch={{
-              filter: (inputValue, path) =>
-                path.some(option =>
-                  option.label.toLowerCase().includes(inputValue.toLowerCase())
-                )
-            }}
-            changeOnSelect
-          />
-          <Select
-            placeholder="状态筛选"
-            allowClear
-            style={{ width: 130 }}
-            value={statusFilter}
-            onChange={handleStatusChange}
-          >
-            <Option value="planning">规划中</Option>
-            <Option value="in_progress">进行中</Option>
-            <Option value="on_hold">暂停</Option>
-            <Option value="completed">已完成</Option>
-            <Option value="cancelled">已取消</Option>
-          </Select>
-          <Select
-            placeholder="优先级"
-            allowClear
-            style={{ width: 100 }}
-            value={priorityFilter}
-            onChange={handlePriorityChange}
-          >
-            <Option value="low">低</Option>
-            <Option value="normal">普通</Option>
-            <Option value="high">高</Option>
-            <Option value="urgent">紧急</Option>
-          </Select>
-          {hasFilters && (
-            <Button icon={<ClearOutlined />} onClick={handleClearFilters}>
-              清除筛选
-            </Button>
-          )}
-          <Button.Group>
-            <Button
-              icon={<AppstoreOutlined />}
-              type={viewMode === 'grid' ? 'primary' : 'default'}
-              onClick={() => setViewMode('grid')}
-            />
-            <Button
-              icon={<BarsOutlined />}
-              type={viewMode === 'list' ? 'primary' : 'default'}
-              onClick={() => setViewMode('list')}
-            />
-          </Button.Group>
-        </Space>
-      </Card>
+      {/* Timeline - 时间轴（自动过滤过期超过1个月的项目） */}
+      <ProjectsTimeline
+        projects={allProjects}
+        loading={loading && allProjects.length === 0}
+      />
 
       {/* Error State */}
       {error && !loading && (
@@ -358,87 +289,6 @@ export default function ProjectListPage() {
         </Card>
       )}
 
-      {/* Projects */}
-      <Spin spinning={loading}>
-        {!error && projects.length === 0 ? (
-          <Card>
-            <Empty
-              description={searchText || statusFilter || priorityFilter ? "没有匹配的项目" : "暂无项目"}
-              style={{ padding: '60px 0' }}
-            >
-              {!searchText && !statusFilter && !priorityFilter && (
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateModal(true)}>
-                  创建第一个项目
-                </Button>
-              )}
-            </Empty>
-          </Card>
-        ) : !error && (
-          <Row gutter={[16, 16]}>
-            {projects.map(project => (
-              <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
-                <Card
-                  hoverable
-                  onClick={() => handleProjectClick(project.id)}
-                  style={{ height: '100%' }}
-                >
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: 16 }}>{project.name}</h3>
-                      <Tag color={priorityColors[project.priority]}>
-                        {priorityLabels[project.priority]}
-                      </Tag>
-                    </div>
-                    <Tag color={statusColors[project.status]}>
-                      {statusLabels[project.status]}
-                    </Tag>
-                  </div>
-
-                  {project.customer && (
-                    <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
-                      客户: {project.customer}
-                    </div>
-                  )}
-
-                  {project.order_no && (
-                    <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
-                      订单: {project.order_no}
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
-                      <span>进度</span>
-                      <span>{project.progress_percentage || 0}%</span>
-                    </div>
-                    <Progress
-                      percent={project.progress_percentage || 0}
-                      size="small"
-                      strokeColor="#1890ff"
-                    />
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
-      </Spin>
-
-      {/* Pagination */}
-      {!error && pagination.total > 0 && (
-        <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <Pagination
-            current={pagination.page}
-            pageSize={pagination.pageSize}
-            total={pagination.total}
-            onChange={handlePageChange}
-            showSizeChanger
-            showQuickJumper
-            showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 个项目`}
-            pageSizeOptions={['12', '20', '40', '60']}
-          />
-        </div>
-      )}
 
       {/* Create/Edit Modal */}
       <ProjectFormModal

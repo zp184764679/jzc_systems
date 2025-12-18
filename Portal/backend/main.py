@@ -25,7 +25,7 @@ import shared.auth.models as auth_models
 from routes.system import system_bp
 from routes.projects import projects_bp
 from routes.tasks import tasks_bp
-from routes.files import files_bp
+from routes.files import files_bp, share_bp
 from routes.members import members_bp
 from routes.notifications import notifications_bp
 from routes.issues import issues_bp
@@ -37,6 +37,8 @@ from routes.rbac import rbac_bp
 from routes.two_factor import two_factor_bp
 from routes.sessions import sessions_bp
 from routes.announcements import announcements_bp
+from routes.recycle_bin import recycle_bin_bp
+from routes.chat import chat_bp
 from models import init_db
 
 app = Flask(__name__)
@@ -93,6 +95,7 @@ app.register_blueprint(system_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(files_bp)
+app.register_blueprint(share_bp)  # 公开分享链接访问 (无需认证)
 app.register_blueprint(members_bp)
 app.register_blueprint(notifications_bp)
 app.register_blueprint(issues_bp)
@@ -104,6 +107,8 @@ app.register_blueprint(rbac_bp)
 app.register_blueprint(two_factor_bp)
 app.register_blueprint(sessions_bp)
 app.register_blueprint(announcements_bp)
+app.register_blueprint(recycle_bin_bp)
+app.register_blueprint(chat_bp)
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -214,7 +219,37 @@ def login():
         user.update_last_login(ip_address=client_ip)
         session.commit()
 
-        # Generate JWT token
+        # 如果密码过期，强制要求修改密码
+        if password_change_required:
+            from datetime import timedelta
+            # 生成临时 token，仅允许修改密码，15分钟有效
+            temp_token = create_access_token({
+                'user_id': user.id,
+                'username': user.username,
+                'password_change_only': True  # 标记为仅限修改密码
+            }, expires_delta=timedelta(minutes=15))
+
+            # Log login with password change required
+            AuditService.log_login(
+                user_id=user.id,
+                username=username,
+                success=True,
+                token=temp_token,
+                module='portal'
+            )
+
+            return jsonify({
+                'message': '密码已过期，请修改密码',
+                'password_change_required': True,
+                'temp_token': temp_token,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'full_name': user.full_name
+                }
+            }), 200
+
+        # Generate JWT token (正常登录)
         user_dict = user.to_dict()
         token = create_token_from_user(user_dict)
 
@@ -232,11 +267,6 @@ def login():
             'token': token,
             'user': user_dict
         }
-
-        # Add password change warning if needed
-        if password_change_required:
-            response_data['password_change_required'] = True
-            response_data['password_warning'] = '您的密码已过期或需要修改，请尽快修改密码'
 
         return jsonify(response_data), 200
 

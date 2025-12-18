@@ -92,6 +92,13 @@ class Task(Base):
     # 里程碑标记
     is_milestone = Column(Boolean, default=False, comment='是否为里程碑')
 
+    # 阶段关联（任务导向管理）
+    phase_id = Column(Integer, ForeignKey('project_phases.id'), comment='所属阶段ID')
+
+    # 任务权重和完成度（用于进度计算）
+    weight = Column(Integer, default=1, comment='任务权重(1-10)')
+    completion_percentage = Column(Integer, default=0, comment='完成百分比(0-100)')
+
     # 时间戳
     created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
@@ -144,6 +151,9 @@ class Task(Base):
             'reminder_enabled': self.reminder_enabled,
             'reminder_days_before': self.reminder_days_before,
             'is_milestone': self.is_milestone,
+            'phase_id': self.phase_id,
+            'weight': self.weight or 1,
+            'completion_percentage': self.completion_percentage or 0,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -23,22 +23,22 @@ const { RangePicker } = DatePicker
 const { Search } = Input
 const { Text } = Typography
 
-// 状态颜色配置
+// Apple 风格状态颜色配置
 const statusColors = {
-  pending: { bg: '#f5f5f5', border: '#d9d9d9', text: '#8c8c8c', label: '待开始', barBg: 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)' },
-  in_progress: { bg: '#e6f7ff', border: '#1890ff', text: '#1890ff', label: '进行中', barBg: 'linear-gradient(135deg, #69c0ff 0%, #1890ff 100%)' },
-  completed: { bg: '#f6ffed', border: '#52c41a', text: '#52c41a', label: '已完成', barBg: 'linear-gradient(135deg, #95de64 0%, #52c41a 100%)' },
-  cancelled: { bg: '#fafafa', border: '#8c8c8c', text: '#8c8c8c', label: '已取消', barBg: 'linear-gradient(135deg, #bfbfbf 0%, #8c8c8c 100%)' },
-  blocked: { bg: '#fff2f0', border: '#ff4d4f', text: '#ff4d4f', label: '阻塞', barBg: 'linear-gradient(135deg, #ff7875 0%, #ff4d4f 100%)' },
-  delayed: { bg: '#fff2f0', border: '#ff4d4f', text: '#ff4d4f', label: '已逾期', barBg: 'linear-gradient(135deg, #ffa39e 0%, #ff4d4f 100%)' }
+  pending: { bg: '#f5f5f7', border: '#e5e5e7', text: '#8e8e93', label: '待开始', barBg: '#8e8e93' },
+  in_progress: { bg: '#e3f2fd', border: '#007aff', text: '#007aff', label: '进行中', barBg: '#007aff' },
+  completed: { bg: '#e8f5e9', border: '#34c759', text: '#34c759', label: '已完成', barBg: '#34c759' },
+  cancelled: { bg: '#f5f5f7', border: '#8e8e93', text: '#8e8e93', label: '已取消', barBg: '#8e8e93' },
+  blocked: { bg: '#ffebee', border: '#ff3b30', text: '#ff3b30', label: '阻塞', barBg: '#ff3b30' },
+  delayed: { bg: '#ffebee', border: '#ff3b30', text: '#ff3b30', label: '已逾期', barBg: '#ff9500' }
 }
 
-// 优先级配置
+// Apple 风格优先级配置
 const priorityConfig = {
-  urgent: { color: '#ff4d4f', label: '紧急' },
-  high: { color: '#fa8c16', label: '高' },
-  normal: { color: '#1890ff', label: '普通' },
-  low: { color: '#8c8c8c', label: '低' }
+  urgent: { color: '#ff3b30', label: '紧急' },
+  high: { color: '#ff9500', label: '高' },
+  normal: { color: '#007aff', label: '普通' },
+  low: { color: '#8e8e93', label: '低' }
 }
 
 // 日期格式化
@@ -167,15 +167,16 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 工具栏 */}
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f5f5f7' }}>
+      {/* 工具栏 - Apple 风格 */}
       <Card
         styles={{ body: { padding: 16 } }}
         style={{
           marginBottom: 16,
-          background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
-          border: '1px solid #667eea30',
-          borderRadius: 12
+          background: '#ffffff',
+          border: '1px solid #e5e5e7',
+          borderRadius: 12,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}
       >
         <Row justify="space-between" align="middle" gutter={[16, 12]}>
@@ -183,8 +184,8 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
             <Space wrap size="middle">
               {/* 状态筛选 */}
               <Space>
-                <ProjectOutlined style={{ color: '#667eea' }} />
-                <Text strong>状态:</Text>
+                <ProjectOutlined style={{ color: '#007aff' }} />
+                <Text style={{ color: '#1d1d1f', fontWeight: 500 }}>状态:</Text>
                 <Select
                   value={statusFilter}
                   onChange={setStatusFilter}
@@ -211,20 +212,72 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
 
           <Col>
             <Space>
-              {/* 导航按钮 */}
-              <Space.Compact>
-                <Button icon={<LeftOutlined />} onClick={handlePrevWeek} title="上一周" />
-                <Button onClick={handleToday}>今天</Button>
-                <Button icon={<RightOutlined />} onClick={handleNextWeek} title="下一周" />
-              </Space.Compact>
+              {/* 导航按钮 - Apple 风格圆角按钮组 */}
+              <div style={{
+                display: 'flex',
+                background: '#f5f5f7',
+                borderRadius: 8,
+                padding: 2
+              }}>
+                <Button
+                  icon={<LeftOutlined />}
+                  onClick={handlePrevWeek}
+                  title="上一周"
+                  style={{ border: 'none', background: 'transparent' }}
+                />
+                <Button
+                  onClick={handleToday}
+                  style={{
+                    border: 'none',
+                    background: '#ffffff',
+                    borderRadius: 6,
+                    fontWeight: 500,
+                    color: '#007aff',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.08)'
+                  }}
+                >
+                  今天
+                </Button>
+                <Button
+                  icon={<RightOutlined />}
+                  onClick={handleNextWeek}
+                  title="下一周"
+                  style={{ border: 'none', background: 'transparent' }}
+                />
+              </div>
 
-              {/* 缩放 */}
-              <Space.Compact>
-                <Button icon={<ZoomOutOutlined />} onClick={handleZoomOut} title="缩小" />
-                <Button icon={<ZoomInOutlined />} onClick={handleZoomIn} title="放大" />
-              </Space.Compact>
+              {/* 缩放 - Apple 风格 */}
+              <div style={{
+                display: 'flex',
+                background: '#f5f5f7',
+                borderRadius: 8,
+                padding: 2
+              }}>
+                <Button
+                  icon={<ZoomOutOutlined />}
+                  onClick={handleZoomOut}
+                  title="缩小"
+                  style={{ border: 'none', background: 'transparent' }}
+                />
+                <Button
+                  icon={<ZoomInOutlined />}
+                  onClick={handleZoomIn}
+                  title="放大"
+                  style={{ border: 'none', background: 'transparent' }}
+                />
+              </div>
 
-              <Button icon={<ReloadOutlined />} onClick={fetchTasks}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={fetchTasks}
+                style={{
+                  borderRadius: 8,
+                  border: '1px solid #e5e5e7',
+                  background: '#f5f5f7',
+                  color: '#1d1d1f',
+                  fontWeight: 500
+                }}
+              >
                 刷新
               </Button>
             </Space>
@@ -232,26 +285,34 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
         </Row>
       </Card>
 
-      {/* 图例 */}
-      <Card styles={{ body: { padding: '8px 16px' } }} style={{ marginBottom: 16, borderRadius: 8 }}>
+      {/* 图例 - Apple 风格 */}
+      <Card
+        styles={{ body: { padding: '10px 16px' } }}
+        style={{
+          marginBottom: 16,
+          borderRadius: 10,
+          background: '#ffffff',
+          border: '1px solid #e5e5e7'
+        }}
+      >
         <Space size="large" wrap>
-          <Text strong>图例:</Text>
+          <Text style={{ color: '#1d1d1f', fontWeight: 500 }}>图例:</Text>
           {Object.entries(statusColors).slice(0, 5).map(([key, value]) => (
             <Space key={key} size="small">
               <span style={{
                 display: 'inline-block',
-                width: 16,
-                height: 16,
+                width: 12,
+                height: 12,
                 background: value.barBg,
-                borderRadius: 4
+                borderRadius: 3
               }} />
-              <Text>{value.label}</Text>
+              <Text style={{ color: '#86868b', fontSize: 13 }}>{value.label}</Text>
             </Space>
           ))}
         </Space>
       </Card>
 
-      {/* 甘特图主体 */}
+      {/* 甘特图主体 - Apple 风格 */}
       <Card
         styles={{
           body: {
@@ -263,7 +324,9 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
         }}
         style={{
           borderRadius: 12,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e5e5e7',
+          background: '#ffffff',
           flex: 1
         }}
       >
@@ -279,68 +342,76 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
           </div>
         ) : (
           <div style={{ display: 'flex', height: '100%' }}>
-            {/* 左侧任务列表 */}
+            {/* 左侧任务列表 - Apple 风格 */}
             <div style={{
-              width: 220,
+              width: 240,
               flexShrink: 0,
-              borderRight: '2px solid #f0f0f0',
-              background: '#fafafa',
+              borderRight: '1px solid #e5e5e7',
+              background: '#ffffff',
               overflow: 'auto'
             }}>
-              {/* 表头 */}
+              {/* 表头 - Apple 风格 */}
               <div style={{
-                height: 50,
-                padding: '0 12px',
+                height: 56,
+                padding: '0 16px',
                 display: 'flex',
                 alignItems: 'center',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#fff',
+                background: '#f5f5f7',
+                color: '#1d1d1f',
                 fontWeight: 600,
+                fontSize: 14,
+                letterSpacing: '-0.01em',
                 position: 'sticky',
                 top: 0,
-                zIndex: 10
+                zIndex: 10,
+                borderBottom: '1px solid #e5e5e7'
               }}>
                 任务信息
               </div>
 
-              {/* 任务行 */}
+              {/* 任务行 - Apple 风格 */}
               {filteredTasks.map(task => {
                 const priority = priorityConfig[task.priority] || priorityConfig.normal
                 return (
                   <div
                     key={task.id}
                     style={{
-                      height: 60,
-                      padding: '8px 12px',
+                      height: 56,
+                      padding: '10px 16px',
                       borderBottom: '1px solid #f0f0f0',
                       cursor: 'pointer',
-                      transition: 'background 0.2s'
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center'
                     }}
                     onClick={() => handleTaskClick(task)}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f7'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{
                         display: 'inline-block',
-                        width: 8,
-                        height: 8,
+                        width: 6,
+                        height: 6,
                         borderRadius: '50%',
                         background: priority.color
                       }} />
-                      <Text strong style={{ fontSize: 12 }}>{task.task_no}</Text>
+                      <Text style={{ fontSize: 12, color: '#86868b', fontWeight: 500 }}>{task.task_no}</Text>
                     </div>
                     <div style={{
-                      fontSize: 13,
-                      color: '#262626',
+                      fontSize: 14,
+                      color: '#1d1d1f',
+                      fontWeight: 500,
                       marginTop: 2,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
+                      letterSpacing: '-0.01em'
                     }}>
                       {task.title}
                     </div>
-                    <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: '#86868b', marginTop: 2 }}>
                       {task.assigned_to_name || '未分配'}
                     </div>
                   </div>
@@ -357,15 +428,15 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                 position: 'relative'
               }}
             >
-              {/* 日期表头 */}
+              {/* 日期表头 - Apple 风格 */}
               <div style={{
                 display: 'flex',
-                height: 50,
+                height: 56,
                 position: 'sticky',
                 top: 0,
                 zIndex: 10,
-                background: '#fff',
-                borderBottom: '2px solid #f0f0f0'
+                background: '#f5f5f7',
+                borderBottom: '1px solid #e5e5e7'
               }}>
                 {timeRange.dates.map((date, index) => {
                   const isToday = date.isSame(dayjs(), 'day')
@@ -380,17 +451,18 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderRight: '1px solid #f0f0f0',
-                        background: isToday ? '#e6f7ff' : isWeekend ? '#fafafa' : '#fff',
+                        borderRight: '1px solid #e5e5e7',
+                        background: isToday ? '#e3f2fd' : isWeekend ? '#fafafa' : '#f5f5f7',
                         fontWeight: isToday ? 600 : 400
                       }}
                     >
-                      <div style={{ fontSize: 10, color: '#8c8c8c' }}>
+                      <div style={{ fontSize: 11, color: '#86868b', fontWeight: 500 }}>
                         {date.format('ddd')}
                       </div>
                       <div style={{
                         fontSize: 13,
-                        color: isToday ? '#1890ff' : '#262626'
+                        color: isToday ? '#007aff' : '#1d1d1f',
+                        fontWeight: isToday ? 600 : 500
                       }}>
                         {date.format('MM/DD')}
                       </div>
@@ -399,7 +471,7 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                 })}
               </div>
 
-              {/* 任务条 */}
+              {/* 任务条 - Apple 风格 */}
               <div style={{ position: 'relative' }}>
                 {filteredTasks.map((task, taskIndex) => {
                   const barStyle = getTaskBarStyle(task)
@@ -413,7 +485,7 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                     <div
                       key={task.id}
                       style={{
-                        height: 60,
+                        height: 56,
                         position: 'relative',
                         borderBottom: '1px solid #f0f0f0'
                       }}
@@ -437,21 +509,21 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                                 width: dayWidth,
                                 flexShrink: 0,
                                 borderRight: '1px solid #f5f5f5',
-                                background: isToday ? '#e6f7ff20' : isWeekend ? '#fafafa50' : 'transparent'
+                                background: isToday ? 'rgba(0,122,255,0.05)' : isWeekend ? 'rgba(0,0,0,0.02)' : 'transparent'
                               }}
                             />
                           )
                         })}
                       </div>
 
-                      {/* 任务条 */}
+                      {/* 任务条 - Apple 风格 */}
                       <Tooltip
                         title={
                           <div>
                             <div><strong>{task.title}</strong></div>
                             <div>状态: {statusColors[task.status]?.label || task.status}</div>
                             <div>时间: {task.start_date ? formatDate(task.start_date) : '未设置'} ~ {task.due_date ? formatDate(task.due_date) : '未设置'}</div>
-                            {isOverdue && <div style={{ color: '#ff4d4f' }}>已逾期!</div>}
+                            {isOverdue && <div style={{ color: '#ff3b30' }}>已逾期!</div>}
                           </div>
                         }
                       >
@@ -459,30 +531,29 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                           onClick={() => handleTaskClick(task)}
                           style={{
                             position: 'absolute',
-                            top: 12,
+                            top: 10,
                             left: barStyle.left,
                             width: barStyle.width,
                             height: 36,
                             background: barStyle.background,
-                            border: `2px solid ${barStyle.borderColor}`,
-                            borderRadius: 6,
+                            borderRadius: 8,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            padding: '0 8px',
+                            padding: '0 10px',
                             overflow: 'hidden',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-                            transition: 'transform 0.2s, box-shadow 0.2s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                            transition: 'all 0.15s ease',
                             zIndex: 5
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.02)'
-                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                            e.currentTarget.style.transform = 'translateY(-1px)'
+                            e.currentTarget.style.boxShadow = '0 3px 8px rgba(0,0,0,0.15)'
                             e.currentTarget.style.zIndex = '20'
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)'
-                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)'
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.12)'
                             e.currentTarget.style.zIndex = '5'
                           }}
                         >
@@ -493,7 +564,7 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+                            letterSpacing: '-0.01em'
                           }}>
                             {task.title}
                           </span>
@@ -508,14 +579,22 @@ export default function ProjectTimeline({ projectId, onEditTask }) {
         )}
       </Card>
 
-      {/* 统计信息 */}
-      <Card styles={{ body: { padding: '8px 16px' } }} style={{ marginTop: 16, borderRadius: 8 }}>
+      {/* 统计信息 - Apple 风格 */}
+      <Card
+        styles={{ body: { padding: '12px 20px' } }}
+        style={{
+          marginTop: 16,
+          borderRadius: 10,
+          background: '#ffffff',
+          border: '1px solid #e5e5e7'
+        }}
+      >
         <Space size="large">
-          <Text>总任务: {tasks.length} 个</Text>
-          <Text>待开始: {tasks.filter(t => t.status === 'pending').length} 个</Text>
-          <Text type="warning">进行中: {tasks.filter(t => t.status === 'in_progress').length} 个</Text>
-          <Text type="success">已完成: {tasks.filter(t => t.status === 'completed').length} 个</Text>
-          <Text type="danger">
+          <Text style={{ color: '#1d1d1f', fontWeight: 500 }}>总任务: {tasks.length} 个</Text>
+          <Text style={{ color: '#8e8e93' }}>待开始: {tasks.filter(t => t.status === 'pending').length} 个</Text>
+          <Text style={{ color: '#007aff' }}>进行中: {tasks.filter(t => t.status === 'in_progress').length} 个</Text>
+          <Text style={{ color: '#34c759' }}>已完成: {tasks.filter(t => t.status === 'completed').length} 个</Text>
+          <Text style={{ color: '#ff3b30' }}>
             逾期: {tasks.filter(t => {
               return t.due_date && dayjs(t.due_date).isBefore(dayjs()) && t.status !== 'completed'
             }).length} 个
