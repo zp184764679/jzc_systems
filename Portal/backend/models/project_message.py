@@ -25,7 +25,7 @@ class ProjectMessage(Base):
     sender_name = Column(String(100), nullable=False, comment='发送者姓名')
     content = Column(Text, nullable=False, comment='消息内容')
     message_type = Column(
-        Enum(MessageType),
+        Enum(MessageType, values_callable=lambda x: [e.value for e in x]),
         default=MessageType.TEXT,
         nullable=False,
         comment='消息类型'

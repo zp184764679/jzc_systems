@@ -47,7 +47,7 @@ class ProjectFile(Base):
 
     # 文件分类
     category = Column(
-        Enum(FileCategory),
+        Enum(FileCategory, values_callable=lambda x: [e.value for e in x]),
         default=FileCategory.OTHER,
         nullable=False,
         comment='文件分类'
@@ -56,7 +56,7 @@ class ProjectFile(Base):
     # === 原版/中文版管理 ===
     is_chinese_version = Column(Boolean, default=False, comment='是否为中文版')
     original_language = Column(
-        Enum(OriginalLanguage),
+        Enum(OriginalLanguage, values_callable=lambda x: [e.value for e in x]),
         default=OriginalLanguage.CHINESE,
         nullable=False,
         comment='原文语言'
