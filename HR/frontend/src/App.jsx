@@ -69,7 +69,7 @@ function App() {
   const validateUrlToken = async (token) => {
     try {
       // P1-12: 修正 Portal API 路径
-      const response = await fetch('/api/auth/verify', {
+      const response = await fetch('/portal-api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
