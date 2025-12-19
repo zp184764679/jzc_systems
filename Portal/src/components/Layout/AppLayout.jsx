@@ -15,7 +15,9 @@ import {
   SoundOutlined,
   DeleteOutlined,
   FolderOpenOutlined,
-  FolderOutlined
+  FolderOutlined,
+  UnorderedListOutlined,
+  FieldTimeOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -44,9 +46,21 @@ export default function AppLayout() {
       label: '主页',
     },
     {
-      key: '/projects',
+      key: '/projects-menu',
       icon: <ProjectOutlined />,
       label: '项目管理',
+      children: [
+        {
+          key: '/projects',
+          icon: <UnorderedListOutlined />,
+          label: '项目列表',
+        },
+        {
+          key: '/projects/timeline',
+          icon: <FieldTimeOutlined />,
+          label: '统一时间轴',
+        },
+      ],
     },
     {
       key: '/notifications',
@@ -127,6 +141,10 @@ export default function AppLayout() {
 
   // Determine selected key based on current path
   const getSelectedKey = () => {
+    // 项目管理子菜单
+    if (location.pathname === '/projects/timeline') {
+      return '/projects/timeline'
+    }
     if (location.pathname.startsWith('/projects')) {
       return '/projects'
     }
@@ -165,10 +183,14 @@ export default function AppLayout() {
 
   // Get open keys for submenu
   const getOpenKeys = () => {
-    if (location.pathname.startsWith('/security')) {
-      return ['/security']
+    const openKeys = []
+    if (location.pathname.startsWith('/projects')) {
+      openKeys.push('/projects-menu')
     }
-    return []
+    if (location.pathname.startsWith('/security')) {
+      openKeys.push('/security')
+    }
+    return openKeys
   }
 
   // 主页不显示顶部 Header，HomePage 自己有完整的 Header
