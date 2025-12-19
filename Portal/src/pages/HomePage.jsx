@@ -34,6 +34,16 @@ const allSystems = [
     isInternal: true
   },
   {
+    name: '文件中心',
+    description: 'File Hub',
+    path: '/file-hub',  // 内部路由
+    icon: '📁',
+    color: '#1890ff',
+    permission: null,  // 所有登录用户可见
+    minRole: 'user',
+    isInternal: true
+  },
+  {
     name: '采购管理系统',
     description: 'Procurement Management',
     url: SYSTEM_URLS.procurement,

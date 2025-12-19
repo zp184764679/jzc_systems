@@ -42,6 +42,7 @@ from routes.chat import chat_bp
 from routes.templates import templates_bp
 from routes.export import export_bp
 from routes.email_integration import email_integration_bp
+from routes.file_hub import file_hub_bp
 from models import init_db
 
 app = Flask(__name__)
@@ -115,6 +116,7 @@ app.register_blueprint(chat_bp)
 app.register_blueprint(templates_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(email_integration_bp)
+app.register_blueprint(file_hub_bp)
 
 
 @app.route('/api/auth/login', methods=['POST'])

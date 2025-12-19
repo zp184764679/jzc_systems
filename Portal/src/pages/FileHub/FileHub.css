@@ -1,0 +1,147 @@
+/* FileHub 页面样式 */
+
+.file-hub-layout {
+  min-height: 100vh;
+}
+
+.file-hub-header {
+  background: #fff;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.file-hub-header .header-left {
+  display: flex;
+  align-items: center;
+}
+
+.file-hub-header .header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.file-hub-header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-hub-sider {
+  background: #fff;
+  border-right: 1px solid #f0f0f0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.file-hub-content {
+  padding: 16px;
+  background: #f5f5f5;
+  min-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+
+/* 筛选面板 */
+.file-hub-filter-panel {
+  padding: 8px 0;
+}
+
+.file-hub-filter-panel .filter-section {
+  margin-bottom: 20px;
+}
+
+.file-hub-filter-panel .filter-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.file-hub-filter-panel .ant-checkbox-wrapper {
+  margin-left: 0 !important;
+  padding: 4px 0;
+}
+
+.file-hub-filter-panel .ant-checkbox-wrapper:hover {
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+/* 统计卡片 */
+.file-hub-content .ant-statistic-title {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.file-hub-content .ant-statistic-content {
+  font-size: 20px;
+}
+
+/* 表格样式 */
+.file-hub-content .ant-table-wrapper {
+  background: #fff;
+}
+
+.file-hub-content .ant-table-row:hover {
+  cursor: pointer;
+}
+
+/* 搜索栏 */
+.file-hub-content .ant-input-search {
+  max-width: 300px;
+}
+
+/* 上传区域 */
+.ant-upload-drag {
+  padding: 20px !important;
+}
+
+.ant-upload-drag-icon {
+  font-size: 48px;
+  color: #1890ff;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .file-hub-header {
+    padding: 0 12px;
+  }
+
+  .file-hub-header .header-title {
+    font-size: 16px;
+  }
+
+  .file-hub-content {
+    padding: 12px;
+  }
+
+  .file-hub-content .ant-input-search {
+    max-width: 100%;
+  }
+
+  .file-hub-content .ant-card-body {
+    padding: 12px;
+  }
+
+  /* 隐藏部分筛选输入框 */
+  .file-hub-content .ant-row .ant-col:nth-child(n+3):not(:last-child) {
+    display: none;
+  }
+}
+
+/* 响应式表格 */
+@media (max-width: 992px) {
+  .file-hub-content .ant-table {
+    font-size: 12px;
+  }
+}
+
+/* 暗色模式支持 (预留) */
+@media (prefers-color-scheme: dark) {
+  /* 暂不启用暗色模式 */
+}

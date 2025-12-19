@@ -1,11 +1,9 @@
 #!/bin/bash
-# JZC Systems 部署脚本
-# 在服务器上执行
-
-# set -e  # 不要遇到错误就退出，让所有系统都尝试构建
+# JZC Systems 智能增量部署脚本
+# 只重建有变化的子系统，不影响其他系统运行
 
 echo "========================================="
-echo "JZC Systems 部署开始: $(date)"
+echo "JZC Systems 智能部署开始: $(date)"
 echo "========================================="
 
 # 项目根目录
@@ -15,65 +13,116 @@ cd $PROJECT_DIR
 # 颜色输出
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 部署函数
-deploy_backend() {
-    local name=$1
-    local dir=$2
-    local port=$3
+# 获取上次部署的 commit hash
+LAST_DEPLOY_FILE="$PROJECT_DIR/.last_deploy_commit"
+if [ -f "$LAST_DEPLOY_FILE" ]; then
+    LAST_COMMIT=$(cat "$LAST_DEPLOY_FILE")
+else
+    # 首次部署，使用空树作为对比
+    LAST_COMMIT="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+fi
 
-    echo -e "${YELLOW}>>> 部署 $name 后端...${NC}"
+CURRENT_COMMIT=$(git rev-parse HEAD)
+echo -e "${BLUE}上次部署: ${LAST_COMMIT:0:8}${NC}"
+echo -e "${BLUE}当前版本: ${CURRENT_COMMIT:0:8}${NC}"
 
-    if [ -d "$dir/backend" ]; then
-        cd "$dir/backend"
-
-        # 安装依赖（如果 requirements.txt 有变化）
-        if [ -f "requirements.txt" ]; then
-            pip install -r requirements.txt -q 2>/dev/null || true
-        fi
-
-        cd $PROJECT_DIR
-        echo -e "${GREEN}✓ $name 后端就绪${NC}"
-    fi
-}
-
-deploy_frontend() {
-    local name=$1
-    local dir=$2
-
-    echo -e "${YELLOW}>>> 构建 $name 前端...${NC}"
-
-    if [ -d "$dir/frontend" ]; then
-        cd "$dir/frontend"
-
-        if [ -f "package.json" ]; then
-            # 强制重新构建：删除旧的构建产物
-            rm -rf dist
-            echo "Installing dependencies for $name..."
-            npm install || { echo "npm install failed for $name"; cd $PROJECT_DIR; return 1; }
-            echo "Building $name..."
-            npm run build || { echo "npm run build failed for $name"; cd $PROJECT_DIR; return 1; }
-        fi
-
-        cd $PROJECT_DIR
-        echo -e "${GREEN}✓ $name 前端构建完成${NC}"
-    else
-        echo -e "${YELLOW}⚠ $dir/frontend 目录不存在，跳过${NC}"
-    fi
-}
-
-# 部署各个系统
+# 获取变化的文件列表
+CHANGED_FILES=$(git diff --name-only "$LAST_COMMIT" "$CURRENT_COMMIT" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+echo -e "${BLUE}变化的文件数: $(echo "$CHANGED_FILES" | wc -l)${NC}"
 echo ""
-echo "=== 部署后端服务 ==="
 
-# 运行数据库迁移（如果有新的迁移文件）
+# 检测哪些系统需要更新
+check_system_changed() {
+    local system_dir=$1
+    echo "$CHANGED_FILES" | grep -q "^$system_dir/" && return 0
+    return 1
+}
+
+# 系统映射：目录名 -> PM2服务名 -> 是否有前端
+declare -A SYSTEMS=(
+    ["Portal"]="portal-backend:yes"
+    ["HR"]="hr-backend:yes"
+    ["account"]="account-backend:yes"
+    ["CRM"]="crm-backend:yes"
+    ["SCM"]="scm-backend:no"
+    ["SHM"]="shm-backend:yes"
+    ["EAM"]="eam-backend:no"
+    ["MES"]="mes-backend:no"
+    ["报价"]="quotation-backend:yes"
+    ["采购"]="caigou-backend:yes"
+)
+
+# 需要更新的系统
+BACKEND_TO_RESTART=""
+FRONTEND_TO_BUILD=""
+
+# 检查 shared 模块是否有变化（影响所有后端）
+SHARED_CHANGED=false
+if echo "$CHANGED_FILES" | grep -q "^shared/"; then
+    echo -e "${YELLOW}⚠ shared 模块有变化，需要重启所有后端${NC}"
+    SHARED_CHANGED=true
+fi
+
+# 检查各系统变化
+echo ""
+echo "=== 检测系统变化 ==="
+for system_dir in "${!SYSTEMS[@]}"; do
+    config="${SYSTEMS[$system_dir]}"
+    pm2_name="${config%%:*}"
+    has_frontend="${config##*:}"
+
+    if check_system_changed "$system_dir"; then
+        echo -e "${YELLOW}✓ $system_dir 有变化${NC}"
+
+        # 检查后端是否有变化
+        if echo "$CHANGED_FILES" | grep -q "^$system_dir/backend/"; then
+            BACKEND_TO_RESTART="$BACKEND_TO_RESTART $pm2_name"
+        fi
+
+        # 检查前端是否有变化
+        if [ "$has_frontend" = "yes" ]; then
+            if echo "$CHANGED_FILES" | grep -q "^$system_dir/frontend/\|^$system_dir/src/\|^$system_dir/package"; then
+                FRONTEND_TO_BUILD="$FRONTEND_TO_BUILD $system_dir"
+            fi
+        fi
+    fi
+done
+
+# 如果 shared 有变化，重启所有后端
+if [ "$SHARED_CHANGED" = true ]; then
+    for system_dir in "${!SYSTEMS[@]}"; do
+        config="${SYSTEMS[$system_dir]}"
+        pm2_name="${config%%:*}"
+        if [[ ! "$BACKEND_TO_RESTART" =~ "$pm2_name" ]]; then
+            BACKEND_TO_RESTART="$BACKEND_TO_RESTART $pm2_name"
+        fi
+    done
+fi
+
+echo ""
+echo "=== 部署计划 ==="
+if [ -n "$BACKEND_TO_RESTART" ]; then
+    echo -e "${BLUE}后端需要重启:$BACKEND_TO_RESTART${NC}"
+else
+    echo -e "${GREEN}后端无需重启${NC}"
+fi
+
+if [ -n "$FRONTEND_TO_BUILD" ]; then
+    echo -e "${BLUE}前端需要构建:$FRONTEND_TO_BUILD${NC}"
+else
+    echo -e "${GREEN}前端无需构建${NC}"
+fi
+
+# 运行数据库迁移
 run_migrations() {
-    echo -e "${YELLOW}>>> 检查数据库迁移...${NC}"
+    echo ""
+    echo "=== 检查数据库迁移 ==="
 
     MIGRATION_LOG="$PROJECT_DIR/.migration_log"
-
-    # 检查多个迁移目录
     MIGRATION_DIRS=(
         "$PROJECT_DIR/Portal/backend/migrations"
         "$PROJECT_DIR/shared/migrations"
@@ -84,17 +133,13 @@ run_migrations() {
             for sql_file in "$MIGRATION_DIR"/*.sql; do
                 if [ -f "$sql_file" ]; then
                     filename=$(basename "$sql_file")
-
-                    # 检查是否已执行过
                     if ! grep -q "$filename" "$MIGRATION_LOG" 2>/dev/null; then
-                        echo "执行迁移: $filename"
+                        echo -e "${YELLOW}执行迁移: $filename${NC}"
                         mysql -u app -papp cncplan < "$sql_file" 2>/dev/null || {
-                            echo "迁移警告: $filename 可能已执行或有错误，继续..."
+                            echo -e "${YELLOW}迁移警告: $filename 可能已执行或有错误，继续...${NC}"
                         }
                         echo "$filename" >> "$MIGRATION_LOG"
                         echo -e "${GREEN}✓ 迁移完成: $filename${NC}"
-                    else
-                        echo "跳过已执行的迁移: $filename"
                     fi
                 fi
             done
@@ -104,86 +149,75 @@ run_migrations() {
 
 run_migrations
 
-deploy_backend "Portal" "Portal" 3002
-deploy_backend "HR" "HR" 8003
-deploy_backend "Account" "account" 8004
-deploy_backend "CRM" "CRM" 8002
-deploy_backend "SCM" "SCM" 8005
-deploy_backend "SHM" "SHM" 8006
-deploy_backend "EAM" "EAM" 8008
-deploy_backend "MES" "MES" 8007
-deploy_backend "Quotation" "报价" 8001
-deploy_backend "Caigou" "采购" 5001
+# 构建前端
+build_frontend() {
+    local system_dir=$1
+    local log_file="/tmp/build_${system_dir}.log"
 
-echo ""
-echo "=== 并行构建前端 ==="
+    echo -e "${YELLOW}>>> 构建 $system_dir 前端...${NC}"
 
-# 并行构建函数
-build_frontend_parallel() {
-    local name=$1
-    local dir=$2
-    local log_file="/tmp/build_${name}.log"
-
-    if [ -d "$PROJECT_DIR/$dir/frontend" ]; then
-        cd "$PROJECT_DIR/$dir/frontend"
-        rm -rf dist
-        npm install --silent 2>/dev/null
-        npm run build > "$log_file" 2>&1
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✓ $name 完成${NC}"
-        else
-            echo -e "${YELLOW}✗ $name 失败，查看 $log_file${NC}"
-        fi
-    elif [ -d "$PROJECT_DIR/$dir" ] && [ -f "$PROJECT_DIR/$dir/package.json" ]; then
-        # Portal 等没有 frontend 子目录的情况
-        cd "$PROJECT_DIR/$dir"
-        rm -rf dist
-        npm install --silent 2>/dev/null
-        npm run build > "$log_file" 2>&1
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✓ $name 完成${NC}"
-        else
-            echo -e "${YELLOW}✗ $name 失败，查看 $log_file${NC}"
-        fi
+    # Portal 等没有 frontend 子目录
+    if [ -d "$PROJECT_DIR/$system_dir/frontend" ]; then
+        cd "$PROJECT_DIR/$system_dir/frontend"
+    elif [ -f "$PROJECT_DIR/$system_dir/package.json" ]; then
+        cd "$PROJECT_DIR/$system_dir"
+    else
+        echo -e "${YELLOW}⚠ $system_dir 前端目录不存在，跳过${NC}"
+        return
     fi
+
+    rm -rf dist
+    npm install --silent 2>/dev/null
+    npm run build > "$log_file" 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ $system_dir 前端构建完成${NC}"
+    else
+        echo -e "${RED}✗ $system_dir 前端构建失败，查看 $log_file${NC}"
+    fi
+
     cd "$PROJECT_DIR"
 }
 
-START_TIME=$(date +%s)
+# 执行前端构建（并行）
+if [ -n "$FRONTEND_TO_BUILD" ]; then
+    echo ""
+    echo "=== 构建前端 ==="
+    START_TIME=$(date +%s)
 
-# 并行执行所有前端构建
-build_frontend_parallel "Portal" "Portal" &
-build_frontend_parallel "HR" "HR" &
-build_frontend_parallel "Account" "account" &
-build_frontend_parallel "CRM" "CRM" &
-build_frontend_parallel "SHM" "SHM" &
-build_frontend_parallel "Quotation" "报价" &
-build_frontend_parallel "Caigou" "采购" &
+    for system_dir in $FRONTEND_TO_BUILD; do
+        build_frontend "$system_dir" &
+    done
+    wait
 
-# 等待所有构建完成
-wait
-
-END_TIME=$(date +%s)
-echo -e "${GREEN}✓ 并行构建完成，耗时: $((END_TIME - START_TIME)) 秒${NC}"
-
-echo ""
-echo "=== 重启服务 ==="
-
-# 使用 PM2 重启所有服务
-if command -v pm2 &> /dev/null; then
-    pm2 reload all --update-env 2>/dev/null || pm2 restart all 2>/dev/null || true
-    echo -e "${GREEN}✓ PM2 服务已重启${NC}"
+    END_TIME=$(date +%s)
+    echo -e "${GREEN}✓ 前端构建完成，耗时: $((END_TIME - START_TIME)) 秒${NC}"
 fi
 
-# 或者使用 systemctl（如果配置了 systemd）
-# sudo systemctl restart jzc-portal jzc-hr jzc-crm jzc-scm jzc-shm jzc-eam jzc-mes
+# 重启后端服务（只重启需要的）
+if [ -n "$BACKEND_TO_RESTART" ]; then
+    echo ""
+    echo "=== 重启后端服务 ==="
+
+    for pm2_name in $BACKEND_TO_RESTART; do
+        echo -e "${YELLOW}>>> 重启 $pm2_name${NC}"
+        pm2 restart "$pm2_name" --update-env 2>/dev/null || {
+            echo -e "${RED}✗ $pm2_name 重启失败${NC}"
+        }
+    done
+
+    echo -e "${GREEN}✓ 后端服务重启完成${NC}"
+fi
+
+# 保存当前 commit hash
+echo "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 
 echo ""
 echo "========================================="
-echo -e "${GREEN}✅ 部署完成: $(date)${NC}"
+echo -e "${GREEN}✅ 智能部署完成: $(date)${NC}"
 echo "========================================="
 
-# 显示服务状态
+# 显示服务状态（只显示相关服务）
 if command -v pm2 &> /dev/null; then
     echo ""
     echo "当前服务状态:"

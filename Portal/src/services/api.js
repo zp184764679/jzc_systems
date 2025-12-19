@@ -472,4 +472,61 @@ export const emailAPI = {
   checkHealth: () => api.get('/emails/health'),
 }
 
+// ========== File Hub APIs ==========
+
+export const fileHubAPI = {
+  // 获取文件列表（支持多维筛选）
+  getFiles: (params) => api.get('/file-hub/files', { params }),
+
+  // 全局搜索文件
+  searchFiles: (query, params = {}) => api.get('/file-hub/search', { params: { q: query, ...params } }),
+
+  // 获取文件详情
+  getFile: (id) => api.get(`/file-hub/files/${id}`),
+
+  // 下载文件
+  downloadFile: (id) => api.get(`/file-hub/files/${id}/download`, { responseType: 'blob' }),
+
+  // 预览文件
+  previewFile: (id) => api.get(`/file-hub/files/${id}/preview`, { responseType: 'blob' }),
+
+  // 批量下载
+  batchDownload: (fileIds) => api.post('/file-hub/batch-download', { file_ids: fileIds }, { responseType: 'blob' }),
+
+  // 上传文件
+  uploadFile: (formData) => api.post('/file-hub/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
+  // 按订单号获取文件
+  getByOrder: (orderNo) => api.get(`/file-hub/by-order/${encodeURIComponent(orderNo)}`),
+
+  // 按项目号获取文件
+  getByProject: (projectNo) => api.get(`/file-hub/by-project/${encodeURIComponent(projectNo)}`),
+
+  // 按供应商获取文件
+  getBySupplier: (supplierId) => api.get(`/file-hub/by-supplier/${supplierId}`),
+
+  // 按客户获取文件
+  getByCustomer: (customerId) => api.get(`/file-hub/by-customer/${customerId}`),
+
+  // 获取统计信息
+  getStatistics: (params) => api.get('/file-hub/statistics', { params }),
+
+  // 获取文件分类列表
+  getCategories: () => api.get('/file-hub/categories'),
+
+  // 获取来源系统列表
+  getSourceSystems: () => api.get('/file-hub/source-systems'),
+
+  // 添加文件到索引（内部API）
+  addToIndex: (data) => api.post('/file-hub/index', data),
+
+  // 更新文件索引
+  updateIndex: (id, data) => api.put(`/file-hub/index/${id}`, data),
+
+  // 从索引中移除
+  removeFromIndex: (id) => api.delete(`/file-hub/index/${id}`),
+}
+
 export default api

@@ -14,7 +14,8 @@ import {
   DesktopOutlined,
   SoundOutlined,
   DeleteOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  FolderOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -66,6 +67,11 @@ export default function AppLayout() {
       key: '/templates',
       icon: <FolderOpenOutlined />,
       label: '文件模板库',
+    },
+    {
+      key: '/file-hub',
+      icon: <FolderOutlined />,
+      label: '文件中心',
     },
     // User security settings - available to all users
     {
@@ -135,6 +141,9 @@ export default function AppLayout() {
     }
     if (location.pathname.startsWith('/templates')) {
       return '/templates'
+    }
+    if (location.pathname.startsWith('/file-hub')) {
+      return '/file-hub'
     }
     if (location.pathname.startsWith('/security/password')) {
       return '/security/password'

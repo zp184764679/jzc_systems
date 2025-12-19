@@ -48,6 +48,7 @@ def init_db():
     from models.issue import Issue
     from models.file_share_link import FileShareLink
     from models.project_message import ProjectMessage, MessageReadStatus
+    from models.file_index import FileIndex
 
     Base.metadata.create_all(bind=engine)
     print("Project management database tables created successfully")
