@@ -5,6 +5,7 @@ from flask import Blueprint, request, send_file, jsonify
 from datetime import datetime
 import io
 
+from models import SessionLocal
 from models.project import Project
 from models.task import Task
 from services.export_service import ExportService
@@ -57,22 +58,23 @@ def export_projects_excel():
         customer = request.args.get('customer')
         part_number = request.args.get('part_number')
 
-        # 构建查询
-        query = Project.query.filter(Project.deleted_at.is_(None))
+        with SessionLocal() as session:
+            # 构建查询
+            query = session.query(Project).filter(Project.deleted_at.is_(None))
 
-        if status:
-            query = query.filter(Project.status == status)
-        if priority:
-            query = query.filter(Project.priority == priority)
-        if customer:
-            query = query.filter(Project.customer.like(f'%{customer}%'))
-        if part_number:
-            query = query.filter(Project.part_number == part_number)
+            if status:
+                query = query.filter(Project.status == status)
+            if priority:
+                query = query.filter(Project.priority == priority)
+            if customer:
+                query = query.filter(Project.customer.like(f'%{customer}%'))
+            if part_number:
+                query = query.filter(Project.part_number == part_number)
 
-        projects = query.order_by(Project.created_at.desc()).all()
+            projects = query.order_by(Project.created_at.desc()).all()
 
-        # 序列化
-        projects_data = [serialize_project(p) for p in projects]
+            # 序列化
+            projects_data = [serialize_project(p) for p in projects]
 
         # 生成 Excel
         excel_data = ExportService.export_projects_to_excel(projects_data)
@@ -101,22 +103,23 @@ def export_projects_pdf():
         customer = request.args.get('customer')
         part_number = request.args.get('part_number')
 
-        # 构建查询
-        query = Project.query.filter(Project.deleted_at.is_(None))
+        with SessionLocal() as session:
+            # 构建查询
+            query = session.query(Project).filter(Project.deleted_at.is_(None))
 
-        if status:
-            query = query.filter(Project.status == status)
-        if priority:
-            query = query.filter(Project.priority == priority)
-        if customer:
-            query = query.filter(Project.customer.like(f'%{customer}%'))
-        if part_number:
-            query = query.filter(Project.part_number == part_number)
+            if status:
+                query = query.filter(Project.status == status)
+            if priority:
+                query = query.filter(Project.priority == priority)
+            if customer:
+                query = query.filter(Project.customer.like(f'%{customer}%'))
+            if part_number:
+                query = query.filter(Project.part_number == part_number)
 
-        projects = query.order_by(Project.created_at.desc()).all()
+            projects = query.order_by(Project.created_at.desc()).all()
 
-        # 序列化
-        projects_data = [serialize_project(p) for p in projects]
+            # 序列化
+            projects_data = [serialize_project(p) for p in projects]
 
         # 生成 PDF
         pdf_data = ExportService.export_projects_summary_to_pdf(projects_data)
@@ -139,26 +142,28 @@ def export_projects_pdf():
 def export_project_report_pdf(project_id):
     """导出单个项目报告到 PDF"""
     try:
-        # 获取项目
-        project = Project.query.get(project_id)
-        if not project:
-            return jsonify({'error': '项目不存在'}), 404
+        with SessionLocal() as session:
+            # 获取项目
+            project = session.query(Project).filter_by(id=project_id).first()
+            if not project:
+                return jsonify({'error': '项目不存在'}), 404
 
-        # 获取任务
-        tasks = Task.query.filter(
-            Task.project_id == project_id,
-            Task.deleted_at.is_(None)
-        ).order_by(Task.created_at.asc()).all()
+            # 获取任务
+            tasks = session.query(Task).filter(
+                Task.project_id == project_id,
+                Task.deleted_at.is_(None)
+            ).order_by(Task.created_at.asc()).all()
 
-        # 序列化
-        project_data = serialize_project(project)
-        tasks_data = [serialize_task(t) for t in tasks]
+            # 序列化
+            project_data = serialize_project(project)
+            tasks_data = [serialize_task(t) for t in tasks]
+            project_no = project.project_no
 
         # 生成 PDF
         pdf_data = ExportService.export_project_report_to_pdf(project_data, tasks_data)
 
         # 生成文件名
-        filename = f"项目报告_{project.project_no}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        filename = f"项目报告_{project_no}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         return send_file(
             io.BytesIO(pdf_data),
@@ -175,25 +180,28 @@ def export_project_report_pdf(project_id):
 def export_project_tasks_excel(project_id):
     """导出项目任务列表到 Excel"""
     try:
-        # 获取项目
-        project = Project.query.get(project_id)
-        if not project:
-            return jsonify({'error': '项目不存在'}), 404
+        with SessionLocal() as session:
+            # 获取项目
+            project = session.query(Project).filter_by(id=project_id).first()
+            if not project:
+                return jsonify({'error': '项目不存在'}), 404
 
-        # 获取任务
-        tasks = Task.query.filter(
-            Task.project_id == project_id,
-            Task.deleted_at.is_(None)
-        ).order_by(Task.created_at.asc()).all()
+            # 获取任务
+            tasks = session.query(Task).filter(
+                Task.project_id == project_id,
+                Task.deleted_at.is_(None)
+            ).order_by(Task.created_at.asc()).all()
 
-        # 序列化
-        tasks_data = [serialize_task(t) for t in tasks]
+            # 序列化
+            tasks_data = [serialize_task(t) for t in tasks]
+            project_name = project.name
+            project_no = project.project_no
 
         # 生成 Excel
-        excel_data = ExportService.export_tasks_to_excel(tasks_data, project.name)
+        excel_data = ExportService.export_tasks_to_excel(tasks_data, project_name)
 
         # 生成文件名
-        filename = f"任务列表_{project.project_no}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        filename = f"任务列表_{project_no}_{datetime.now().strftime('%Y%m%d')}.xlsx"
 
         return send_file(
             io.BytesIO(excel_data),
@@ -213,17 +221,18 @@ def export_part_number_report_pdf(part_number):
         from urllib.parse import unquote
         decoded_part_number = unquote(part_number)
 
-        # 获取相同部件番号的所有项目
-        projects = Project.query.filter(
-            Project.part_number == decoded_part_number,
-            Project.deleted_at.is_(None)
-        ).order_by(Project.created_at.desc()).all()
+        with SessionLocal() as session:
+            # 获取相同部件番号的所有项目
+            projects = session.query(Project).filter(
+                Project.part_number == decoded_part_number,
+                Project.deleted_at.is_(None)
+            ).order_by(Project.created_at.desc()).all()
 
-        if not projects:
-            return jsonify({'error': f'未找到部件番号 {decoded_part_number} 的项目'}), 404
+            if not projects:
+                return jsonify({'error': f'未找到部件番号 {decoded_part_number} 的项目'}), 404
 
-        # 序列化
-        projects_data = [serialize_project(p) for p in projects]
+            # 序列化
+            projects_data = [serialize_project(p) for p in projects]
 
         # 生成 PDF
         pdf_data = ExportService.export_projects_summary_to_pdf(projects_data)
