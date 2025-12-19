@@ -26,6 +26,8 @@ class EmailIntegrationService:
         self.timeout = 30
         # 本地请求禁用代理
         self.no_proxy = {'http': None, 'https': None}
+        # Portal 服务令牌（用于与邮件系统的服务间通信）
+        self.portal_service_token = os.getenv('PORTAL_SERVICE_TOKEN', 'jzc-portal-integration-token-2025')
 
     def _get_headers(self, token: Optional[str] = None) -> Dict[str, str]:
         """构建请求头"""
@@ -35,6 +37,13 @@ class EmailIntegrationService:
         if token:
             headers['Authorization'] = f'Bearer {token}'
         return headers
+
+    def _get_portal_headers(self) -> Dict[str, str]:
+        """构建 Portal 服务令牌请求头"""
+        return {
+            'Content-Type': 'application/json',
+            'X-Portal-Token': self.portal_service_token
+        }
 
     # ==================== 邮件列表接口 ====================
 
@@ -49,7 +58,7 @@ class EmailIntegrationService:
         token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        获取邮件列表（从邮件翻译系统代理）
+        获取邮件列表（使用 Portal 服务令牌认证）
 
         Args:
             keyword: 搜索关键词（主题、发件人）
@@ -58,7 +67,7 @@ class EmailIntegrationService:
             start_date: 开始日期 (YYYY-MM-DD)
             end_date: 结束日期 (YYYY-MM-DD)
             translation_status: 翻译状态筛选 (none/translating/completed/failed)
-            token: 邮件系统认证 token
+            token: 邮件系统认证 token（已废弃，使用服务令牌）
 
         Returns:
             {
@@ -72,7 +81,8 @@ class EmailIntegrationService:
             }
         """
         try:
-            url = f"{self.email_api_url}/api/emails"
+            # 使用 Portal 专用接口，通过服务令牌认证
+            url = f"{self.email_api_url}/api/task-extractions/portal/emails"
             params = {
                 'keyword': keyword,
                 'page': page,
@@ -88,7 +98,7 @@ class EmailIntegrationService:
             response = requests.get(
                 url,
                 params=params,
-                headers=self._get_headers(token),
+                headers=self._get_portal_headers(),
                 timeout=self.timeout,
                 proxies=self.no_proxy
             )
@@ -122,7 +132,7 @@ class EmailIntegrationService:
             elif response.status_code == 401:
                 return {
                     'success': False,
-                    'error': '邮件系统认证失败，请重新登录',
+                    'error': '服务令牌无效，请检查配置',
                     'data': None
                 }
             else:
@@ -156,16 +166,17 @@ class EmailIntegrationService:
 
         Args:
             email_id: 邮件 ID
-            token: 邮件系统认证 token
+            token: 邮件系统认证 token（已废弃）
 
         Returns:
             邮件详情
         """
         try:
-            url = f"{self.email_api_url}/api/emails/{email_id}"
+            # 使用 Portal 专用接口
+            url = f"{self.email_api_url}/api/task-extractions/portal/emails/{email_id}"
             response = requests.get(
                 url,
-                headers=self._get_headers(token),
+                headers=self._get_portal_headers(),
                 timeout=self.timeout,
                 proxies=self.no_proxy
             )
@@ -202,16 +213,17 @@ class EmailIntegrationService:
 
         Args:
             email_id: 邮件 ID
-            token: 邮件系统认证 token
+            token: 邮件系统认证 token（已废弃）
 
         Returns:
             预提取结果
         """
         try:
-            url = f"{self.email_api_url}/api/task-extractions/emails/{email_id}"
+            # 使用 Portal 专用接口
+            url = f"{self.email_api_url}/api/task-extractions/portal/emails/{email_id}/extraction"
             response = requests.get(
                 url,
-                headers=self._get_headers(token),
+                headers=self._get_portal_headers(),
                 timeout=self.timeout,
                 proxies=self.no_proxy
             )
@@ -224,7 +236,7 @@ class EmailIntegrationService:
             elif response.status_code == 404:
                 return {
                     'success': False,
-                    'error': '邮件不存在或无权限',
+                    'error': '邮件不存在',
                     'data': None
                 }
             else:
@@ -247,17 +259,18 @@ class EmailIntegrationService:
         Args:
             email_id: 邮件 ID
             force: 是否强制重新提取
-            token: 邮件系统认证 token
+            token: 邮件系统认证 token（已废弃）
 
         Returns:
             触发结果
         """
         try:
-            url = f"{self.email_api_url}/api/task-extractions/emails/{email_id}/extract"
+            # 使用 Portal 专用接口
+            url = f"{self.email_api_url}/api/task-extractions/portal/emails/{email_id}/extract"
             response = requests.post(
                 url,
                 params={'force': force},
-                headers=self._get_headers(token),
+                headers=self._get_portal_headers(),
                 timeout=self.timeout,
                 proxies=self.no_proxy
             )
