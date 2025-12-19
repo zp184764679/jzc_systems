@@ -629,12 +629,40 @@ def update_task_status(task_id):
 
 
 # ============================================================
-# 任务附件管理 API
+# 任务附件管理 API (支持分类和版本)
 # ============================================================
+
+# 预定义附件类别
+PREDEFINED_CATEGORIES = {
+    'template': {'name': '模板下载', 'icon': 'download', 'order': 1},
+    'chinese_translation': {'name': '中文翻译版', 'icon': 'translation', 'order': 2},
+    'reply': {'name': '回复版本', 'icon': 'upload', 'order': 3}
+}
+
+
+def get_attachments_data(task):
+    """获取任务的附件数据结构"""
+    if not task.attachments:
+        return {'categories': {}, 'custom_categories': [], 'legacy': []}
+
+    try:
+        data = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
+        # 兼容旧数据格式（数组格式）
+        if isinstance(data, list):
+            return {'categories': {}, 'custom_categories': [], 'legacy': data}
+        return data
+    except:
+        return {'categories': {}, 'custom_categories': [], 'legacy': []}
+
+
+def save_attachments_data(task, data):
+    """保存附件数据"""
+    task.attachments = json.dumps(data, ensure_ascii=False)
+
 
 @tasks_bp.route('/<int:task_id>/attachments', methods=['GET'])
 def get_task_attachments(task_id):
-    """获取任务附件列表"""
+    """获取任务附件列表（分类结构）"""
     user = get_current_user()
     if not user:
         return jsonify({'error': '未授权'}), 401
@@ -645,15 +673,14 @@ def get_task_attachments(task_id):
         if not task:
             return jsonify({'error': '任务不存在'}), 404
 
-        # 解析附件 JSON
-        attachments = []
-        if task.attachments:
-            try:
-                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
-            except:
-                pass
+        data = get_attachments_data(task)
 
-        return jsonify({'attachments': attachments}), 200
+        return jsonify({
+            'predefined_categories': PREDEFINED_CATEGORIES,
+            'categories': data.get('categories', {}),
+            'custom_categories': data.get('custom_categories', []),
+            'legacy': data.get('legacy', [])  # 旧格式附件
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -662,7 +689,7 @@ def get_task_attachments(task_id):
 
 @tasks_bp.route('/<int:task_id>/attachments', methods=['POST'])
 def upload_task_attachment(task_id):
-    """上传任务附件"""
+    """上传任务附件（支持分类）"""
     user = get_current_user()
     if not user:
         return jsonify({'error': '未授权'}), 401
@@ -677,6 +704,11 @@ def upload_task_attachment(task_id):
     if not allowed_file(file.filename):
         return jsonify({'error': f'不支持的文件类型，允许: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
 
+    # 获取分类信息
+    category = request.form.get('category', 'legacy')  # 默认放入legacy
+    custom_category_id = request.form.get('custom_category_id')  # 自定义类别ID
+    custom_category_name = request.form.get('custom_category_name')  # 新建自定义类别名称
+
     session = SessionLocal()
     try:
         task = session.query(Task).filter_by(id=task_id).first()
@@ -685,7 +717,6 @@ def upload_task_attachment(task_id):
 
         # 生成唯一文件名
         original_filename = secure_filename(file.filename)
-        # 保留中文文件名
         if not original_filename or original_filename == '_':
             original_filename = file.filename
         file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
@@ -695,19 +726,17 @@ def upload_task_attachment(task_id):
         # 保存文件
         file_path = os.path.join(TASK_ATTACHMENTS_DIR, stored_filename)
         file.save(file_path)
-
-        # 获取文件大小
         file_size = os.path.getsize(file_path)
 
-        # 更新任务附件列表
-        attachments = []
-        if task.attachments:
-            try:
-                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
-            except:
-                pass
+        # 获取当前附件数据
+        data = get_attachments_data(task)
+        if 'categories' not in data:
+            data['categories'] = {}
+        if 'custom_categories' not in data:
+            data['custom_categories'] = []
 
-        new_attachment = {
+        # 创建新附件记录
+        new_file = {
             'id': unique_id,
             'name': original_filename,
             'stored_name': stored_filename,
@@ -715,22 +744,183 @@ def upload_task_attachment(task_id):
             'type': file_ext,
             'url': f'/api/tasks/{task_id}/attachments/{unique_id}/download',
             'uploaded_at': datetime.now().isoformat(),
-            'uploaded_by': user.get('username', 'unknown')
+            'uploaded_by': user.get('username', 'unknown'),
+            'uploaded_by_name': user.get('full_name', user.get('username', 'unknown'))
         }
-        attachments.append(new_attachment)
 
-        task.attachments = json.dumps(attachments, ensure_ascii=False)
+        # 根据类别存储
+        if category in PREDEFINED_CATEGORIES:
+            # 预定义类别
+            if category not in data['categories']:
+                data['categories'][category] = {'files': []}
+
+            # 计算版本号
+            existing_files = data['categories'][category].get('files', [])
+            new_file['version'] = len(existing_files) + 1
+
+            # 新版本添加到列表开头
+            data['categories'][category]['files'].insert(0, new_file)
+
+        elif custom_category_id:
+            # 已有的自定义类别
+            cat = next((c for c in data['custom_categories'] if c['id'] == custom_category_id), None)
+            if cat:
+                new_file['version'] = len(cat.get('files', [])) + 1
+                cat['files'].insert(0, new_file)
+            else:
+                return jsonify({'error': '自定义类别不存在'}), 404
+
+        elif custom_category_name:
+            # 新建自定义类别
+            cat_id = f"custom_{str(uuid.uuid4())[:8]}"
+            new_file['version'] = 1
+            new_category = {
+                'id': cat_id,
+                'name': custom_category_name,
+                'files': [new_file],
+                'created_at': datetime.now().isoformat()
+            }
+            data['custom_categories'].append(new_category)
+
+        else:
+            # 放入 legacy
+            if 'legacy' not in data:
+                data['legacy'] = []
+            data['legacy'].append(new_file)
+
+        save_attachments_data(task, data)
         session.commit()
 
         return jsonify({
             'message': '上传成功',
-            'attachment': new_attachment
+            'file': new_file,
+            'category': category if category in PREDEFINED_CATEGORIES else (custom_category_id or 'legacy')
         }), 201
     except Exception as e:
         session.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         session.close()
+
+
+@tasks_bp.route('/<int:task_id>/attachments/categories', methods=['POST'])
+def create_custom_category(task_id):
+    """创建自定义附件类别"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    data_req = request.get_json()
+    if not data_req or not data_req.get('name'):
+        return jsonify({'error': '类别名称不能为空'}), 400
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        data = get_attachments_data(task)
+        if 'custom_categories' not in data:
+            data['custom_categories'] = []
+
+        cat_id = f"custom_{str(uuid.uuid4())[:8]}"
+        new_category = {
+            'id': cat_id,
+            'name': data_req['name'],
+            'files': [],
+            'created_at': datetime.now().isoformat(),
+            'created_by': user.get('username', 'unknown')
+        }
+        data['custom_categories'].append(new_category)
+
+        save_attachments_data(task, data)
+        session.commit()
+
+        return jsonify({
+            'message': '类别创建成功',
+            'category': new_category
+        }), 201
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/attachments/categories/<category_id>', methods=['DELETE'])
+def delete_custom_category(task_id, category_id):
+    """删除自定义附件类别（及其所有文件）"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        data = get_attachments_data(task)
+
+        # 找到并删除类别
+        cat = next((c for c in data.get('custom_categories', []) if c['id'] == category_id), None)
+        if not cat:
+            return jsonify({'error': '类别不存在'}), 404
+
+        # 删除该类别下的所有文件
+        for f in cat.get('files', []):
+            file_path = os.path.join(TASK_ATTACHMENTS_DIR, f.get('stored_name', ''))
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+        data['custom_categories'] = [c for c in data['custom_categories'] if c['id'] != category_id]
+        save_attachments_data(task, data)
+        session.commit()
+
+        return jsonify({'message': '类别已删除'}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+def find_attachment_in_data(data, attachment_id):
+    """在附件数据结构中查找指定附件"""
+    # 在预定义类别中查找
+    for cat_key, cat_data in data.get('categories', {}).items():
+        for f in cat_data.get('files', []):
+            if f.get('id') == attachment_id:
+                return f, 'categories', cat_key
+
+    # 在自定义类别中查找
+    for cat in data.get('custom_categories', []):
+        for f in cat.get('files', []):
+            if f.get('id') == attachment_id:
+                return f, 'custom', cat['id']
+
+    # 在legacy中查找
+    for f in data.get('legacy', []):
+        if f.get('id') == attachment_id:
+            return f, 'legacy', None
+
+    return None, None, None
+
+
+def remove_attachment_from_data(data, attachment_id):
+    """从附件数据结构中移除指定附件"""
+    # 从预定义类别中移除
+    for cat_key, cat_data in data.get('categories', {}).items():
+        cat_data['files'] = [f for f in cat_data.get('files', []) if f.get('id') != attachment_id]
+
+    # 从自定义类别中移除
+    for cat in data.get('custom_categories', []):
+        cat['files'] = [f for f in cat.get('files', []) if f.get('id') != attachment_id]
+
+    # 从legacy中移除
+    if 'legacy' in data:
+        data['legacy'] = [f for f in data['legacy'] if f.get('id') != attachment_id]
 
 
 @tasks_bp.route('/<int:task_id>/attachments/<attachment_id>/download', methods=['GET'])
@@ -746,15 +936,9 @@ def download_task_attachment(task_id, attachment_id):
         if not task:
             return jsonify({'error': '任务不存在'}), 404
 
-        # 查找附件
-        attachments = []
-        if task.attachments:
-            try:
-                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
-            except:
-                pass
+        data = get_attachments_data(task)
+        attachment, _, _ = find_attachment_in_data(data, attachment_id)
 
-        attachment = next((a for a in attachments if a.get('id') == attachment_id), None)
         if not attachment:
             return jsonify({'error': '附件不存在'}), 404
 
@@ -786,15 +970,9 @@ def delete_task_attachment(task_id, attachment_id):
         if not task:
             return jsonify({'error': '任务不存在'}), 404
 
-        # 查找并删除附件
-        attachments = []
-        if task.attachments:
-            try:
-                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
-            except:
-                pass
+        data = get_attachments_data(task)
+        attachment, _, _ = find_attachment_in_data(data, attachment_id)
 
-        attachment = next((a for a in attachments if a.get('id') == attachment_id), None)
         if not attachment:
             return jsonify({'error': '附件不存在'}), 404
 
@@ -803,9 +981,9 @@ def delete_task_attachment(task_id, attachment_id):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-        # 更新附件列表
-        attachments = [a for a in attachments if a.get('id') != attachment_id]
-        task.attachments = json.dumps(attachments, ensure_ascii=False)
+        # 从数据结构中移除
+        remove_attachment_from_data(data, attachment_id)
+        save_attachments_data(task, data)
         session.commit()
 
         return jsonify({'message': '删除成功'}), 200

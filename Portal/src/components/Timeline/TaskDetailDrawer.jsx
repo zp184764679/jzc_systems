@@ -8,7 +8,6 @@ import {
   Button,
   Progress,
   Typography,
-  Divider,
   message,
   List,
   Upload,
@@ -16,12 +15,15 @@ import {
   Popconfirm,
   Spin,
   Slider,
-  Tooltip
+  Tooltip,
+  Collapse,
+  Empty,
+  Modal,
+  Badge
 } from 'antd'
 import {
   CalendarOutlined,
   UserOutlined,
-  ClockCircleOutlined,
   CheckCircleOutlined,
   EditOutlined,
   FlagOutlined,
@@ -36,12 +38,17 @@ import {
   FileImageOutlined,
   FileExcelOutlined,
   FileWordOutlined,
-  InboxOutlined
+  InboxOutlined,
+  PlusOutlined,
+  HistoryOutlined,
+  TranslationOutlined,
+  SendOutlined,
+  FolderAddOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { taskAPI } from '../../services/api'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { TextArea } = Input
 const { Dragger } = Upload
 
@@ -74,6 +81,13 @@ const taskTypeConfig = {
   meeting: '会议'
 }
 
+// 预定义类别配置
+const CATEGORY_CONFIG = {
+  template: { name: '模板下载', icon: <DownloadOutlined />, color: '#1890ff', description: '原始模板文件' },
+  chinese_translation: { name: '中文翻译版', icon: <TranslationOutlined />, color: '#52c41a', description: '翻译后的版本' },
+  reply: { name: '回复版本', icon: <SendOutlined />, color: '#722ed1', description: '填写/回复后的版本' }
+}
+
 // 格式化文件大小
 const formatFileSize = (bytes) => {
   if (!bytes) return '-'
@@ -87,27 +101,229 @@ const getFileIcon = (fileName) => {
   const ext = fileName?.split('.').pop()?.toLowerCase()
   switch (ext) {
     case 'pdf':
-      return <FilePdfOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+      return <FilePdfOutlined style={{ color: '#ff4d4f', fontSize: 18 }} />
     case 'doc':
     case 'docx':
-      return <FileWordOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+      return <FileWordOutlined style={{ color: '#1890ff', fontSize: 18 }} />
     case 'xls':
     case 'xlsx':
-      return <FileExcelOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+      return <FileExcelOutlined style={{ color: '#52c41a', fontSize: 18 }} />
     case 'png':
     case 'jpg':
     case 'jpeg':
     case 'gif':
-      return <FileImageOutlined style={{ color: '#faad14', fontSize: 20 }} />
+      return <FileImageOutlined style={{ color: '#faad14', fontSize: 18 }} />
     default:
-      return <FileTextOutlined style={{ color: '#8c8c8c', fontSize: 20 }} />
+      return <FileTextOutlined style={{ color: '#8c8c8c', fontSize: 18 }} />
   }
+}
+
+// 附件类别卡片组件
+function AttachmentCategoryCard({
+  categoryKey,
+  categoryConfig,
+  files = [],
+  onUpload,
+  onDownload,
+  onDelete,
+  uploading,
+  isCustom = false,
+  customCategoryId = null,
+  onDeleteCategory
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const latestFile = files[0]
+  const olderFiles = files.slice(1)
+
+  const handleUpload = (file) => {
+    if (isCustom) {
+      onUpload(file, null, customCategoryId)
+    } else {
+      onUpload(file, categoryKey)
+    }
+    return false
+  }
+
+  return (
+    <Card
+      size="small"
+      style={{
+        marginBottom: 12,
+        border: `1px solid ${categoryConfig.color}20`,
+        borderRadius: 8
+      }}
+      title={
+        <Space>
+          <span style={{ color: categoryConfig.color }}>{categoryConfig.icon}</span>
+          <span>{categoryConfig.name}</span>
+          {files.length > 0 && (
+            <Badge count={files.length} style={{ backgroundColor: categoryConfig.color }} />
+          )}
+        </Space>
+      }
+      extra={
+        <Space>
+          {isCustom && onDeleteCategory && (
+            <Popconfirm
+              title="删除此类别？"
+              description="将同时删除该类别下的所有文件"
+              onConfirm={() => onDeleteCategory(customCategoryId)}
+            >
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
+          <Upload
+            beforeUpload={handleUpload}
+            showUploadList={false}
+            disabled={uploading}
+          >
+            <Button
+              type="primary"
+              size="small"
+              icon={<UploadOutlined />}
+              loading={uploading}
+              style={{ background: categoryConfig.color, borderColor: categoryConfig.color }}
+            >
+              上传
+            </Button>
+          </Upload>
+        </Space>
+      }
+    >
+      {files.length === 0 ? (
+        <div style={{ padding: '16px 0', textAlign: 'center' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {categoryConfig.description || '暂无文件'}
+          </Text>
+        </div>
+      ) : (
+        <div>
+          {/* 最新版本 - 突出显示 */}
+          <div
+            style={{
+              padding: 12,
+              background: '#f6ffed',
+              borderRadius: 6,
+              border: '1px solid #b7eb8f',
+              marginBottom: olderFiles.length > 0 ? 8 : 0
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {getFileIcon(latestFile.name)}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a
+                    onClick={() => onDownload(latestFile)}
+                    style={{ fontWeight: 500, cursor: 'pointer' }}
+                  >
+                    {latestFile.name}
+                  </a>
+                  <Tag color="green" style={{ marginLeft: 4 }}>最新 v{latestFile.version}</Tag>
+                </div>
+                <Space size="middle" style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+                  <span>{formatFileSize(latestFile.size)}</span>
+                  <span>{latestFile.uploaded_by_name || latestFile.uploaded_by}</span>
+                  <span>{latestFile.uploaded_at ? dayjs(latestFile.uploaded_at).format('MM-DD HH:mm') : ''}</span>
+                </Space>
+              </div>
+              <Space>
+                <Tooltip title="下载">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    onClick={() => onDownload(latestFile)}
+                  />
+                </Tooltip>
+                <Popconfirm
+                  title="确定删除此文件？"
+                  onConfirm={() => onDelete(latestFile.id)}
+                >
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Space>
+            </div>
+          </div>
+
+          {/* 历史版本 */}
+          {olderFiles.length > 0 && (
+            <div>
+              <Button
+                type="link"
+                size="small"
+                icon={<HistoryOutlined />}
+                onClick={() => setExpanded(!expanded)}
+                style={{ padding: 0, marginBottom: 8 }}
+              >
+                {expanded ? '收起' : '展开'} 历史版本 ({olderFiles.length})
+              </Button>
+
+              {expanded && (
+                <List
+                  size="small"
+                  dataSource={olderFiles}
+                  renderItem={(file) => (
+                    <List.Item
+                      style={{
+                        padding: '8px 12px',
+                        background: '#fafafa',
+                        borderRadius: 4,
+                        marginBottom: 4
+                      }}
+                      actions={[
+                        <Tooltip title="下载" key="download">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            onClick={() => onDownload(file)}
+                          />
+                        </Tooltip>,
+                        <Popconfirm
+                          key="delete"
+                          title="确定删除此版本？"
+                          onConfirm={() => onDelete(file.id)}
+                        >
+                          <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      ]}
+                    >
+                      <List.Item.Meta
+                        avatar={getFileIcon(file.name)}
+                        title={
+                          <Space>
+                            <a onClick={() => onDownload(file)} style={{ cursor: 'pointer', fontSize: 13 }}>
+                              {file.name}
+                            </a>
+                            <Tag style={{ fontSize: 10 }}>v{file.version}</Tag>
+                          </Space>
+                        }
+                        description={
+                          <span style={{ fontSize: 11 }}>
+                            {file.uploaded_by_name || file.uploaded_by} · {file.uploaded_at ? dayjs(file.uploaded_at).format('MM-DD HH:mm') : ''}
+                          </span>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
 }
 
 export default function TaskDetailDrawer({ visible, task, projectId, onClose, onTaskUpdate, onEditTask }) {
   const [completing, setCompleting] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [attachments, setAttachments] = useState([])
+  const [attachmentsData, setAttachmentsData] = useState({
+    categories: {},
+    custom_categories: [],
+    legacy: []
+  })
   const [loadingAttachments, setLoadingAttachments] = useState(false)
 
   // 编辑状态
@@ -118,6 +334,11 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
   // 进度编辑
   const [editingProgress, setEditingProgress] = useState(false)
   const [progressValue, setProgressValue] = useState(0)
+
+  // 新建类别
+  const [showAddCategory, setShowAddCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [creatingCategory, setCreatingCategory] = useState(false)
 
   // 加载附件
   useEffect(() => {
@@ -133,7 +354,11 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
     setLoadingAttachments(true)
     try {
       const res = await taskAPI.getAttachments(task.id)
-      setAttachments(res.data.attachments || [])
+      setAttachmentsData({
+        categories: res.data.categories || {},
+        custom_categories: res.data.custom_categories || [],
+        legacy: res.data.legacy || []
+      })
     } catch (error) {
       console.error('Failed to load attachments:', error)
     } finally {
@@ -175,11 +400,17 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
   }
 
   // 上传附件
-  const handleUpload = async (file) => {
+  const handleUpload = async (file, category, customCategoryId = null) => {
     setUploading(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (category) {
+        formData.append('category', category)
+      }
+      if (customCategoryId) {
+        formData.append('custom_category_id', customCategoryId)
+      }
       await taskAPI.uploadAttachment(task.id, formData)
       message.success('上传成功')
       loadAttachments()
@@ -233,6 +464,37 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
       onTaskUpdate?.()
     } catch (error) {
       message.error('更新失败')
+    }
+  }
+
+  // 创建自定义类别
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      message.error('请输入类别名称')
+      return
+    }
+    setCreatingCategory(true)
+    try {
+      await taskAPI.createCategory(task.id, newCategoryName.trim())
+      message.success('类别创建成功')
+      setNewCategoryName('')
+      setShowAddCategory(false)
+      loadAttachments()
+    } catch (error) {
+      message.error('创建失败')
+    } finally {
+      setCreatingCategory(false)
+    }
+  }
+
+  // 删除自定义类别
+  const handleDeleteCategory = async (categoryId) => {
+    try {
+      await taskAPI.deleteCategory(task.id, categoryId)
+      message.success('类别已删除')
+      loadAttachments()
+    } catch (error) {
+      message.error('删除失败')
     }
   }
 
@@ -451,107 +713,154 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
         )}
       </Card>
 
-      {/* 附件区域 */}
+      {/* 附件区域 - 分类管理 */}
       <Card
         title={
           <Space>
             <PaperClipOutlined />
-            <span>附件</span>
-            <Tag>{attachments.length}</Tag>
+            <span>附件管理</span>
           </Space>
         }
         size="small"
         style={{ marginBottom: 16 }}
+        extra={
+          <Button
+            type="dashed"
+            size="small"
+            icon={<FolderAddOutlined />}
+            onClick={() => setShowAddCategory(true)}
+          >
+            添加类别
+          </Button>
+        }
       >
-        {/* 上传区域 */}
-        <Dragger
-          beforeUpload={handleUpload}
-          showUploadList={false}
-          disabled={uploading}
-          multiple
-          style={{ marginBottom: 16 }}
-        >
-          <p className="ant-upload-drag-icon">
-            {uploading ? <Spin /> : <InboxOutlined style={{ color: '#1890ff' }} />}
-          </p>
-          <p className="ant-upload-text">
-            {uploading ? '上传中...' : '点击或拖拽文件到此处上传'}
-          </p>
-          <p className="ant-upload-hint">
-            支持 PDF、Word、Excel、图片等格式
-          </p>
-        </Dragger>
-
-        {/* 附件列表 */}
         {loadingAttachments ? (
-          <div style={{ textAlign: 'center', padding: 20 }}>
+          <div style={{ textAlign: 'center', padding: 40 }}>
             <Spin />
           </div>
-        ) : attachments.length === 0 ? (
-          <Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 20 }}>
-            暂无附件
-          </Text>
         ) : (
-          <List
-            size="small"
-            dataSource={attachments}
-            renderItem={(item) => (
-              <List.Item
-                style={{
-                  padding: '12px',
-                  background: '#fafafa',
-                  borderRadius: 8,
-                  marginBottom: 8
+          <div>
+            {/* 预定义类别 */}
+            {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
+              <AttachmentCategoryCard
+                key={key}
+                categoryKey={key}
+                categoryConfig={config}
+                files={attachmentsData.categories[key]?.files || []}
+                onUpload={handleUpload}
+                onDownload={handleDownload}
+                onDelete={handleDeleteAttachment}
+                uploading={uploading}
+              />
+            ))}
+
+            {/* 自定义类别 */}
+            {attachmentsData.custom_categories.map((cat) => (
+              <AttachmentCategoryCard
+                key={cat.id}
+                categoryKey={cat.id}
+                categoryConfig={{
+                  name: cat.name,
+                  icon: <PaperClipOutlined />,
+                  color: '#fa8c16',
+                  description: '自定义类别'
                 }}
-                actions={[
-                  <Tooltip title="下载" key="download">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<DownloadOutlined />}
-                      onClick={() => handleDownload(item)}
-                    />
-                  </Tooltip>,
-                  <Popconfirm
-                    key="delete"
-                    title="确定删除此附件？"
-                    onConfirm={() => handleDeleteAttachment(item.id)}
-                  >
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                    />
-                  </Popconfirm>
-                ]}
+                files={cat.files || []}
+                onUpload={handleUpload}
+                onDownload={handleDownload}
+                onDelete={handleDeleteAttachment}
+                uploading={uploading}
+                isCustom={true}
+                customCategoryId={cat.id}
+                onDeleteCategory={handleDeleteCategory}
+              />
+            ))}
+
+            {/* 旧格式附件（兼容） */}
+            {attachmentsData.legacy?.length > 0 && (
+              <Card
+                size="small"
+                title={
+                  <Space>
+                    <HistoryOutlined />
+                    <span>其他附件</span>
+                    <Badge count={attachmentsData.legacy.length} />
+                  </Space>
+                }
+                style={{ marginBottom: 12 }}
               >
-                <List.Item.Meta
-                  avatar={getFileIcon(item.name)}
-                  title={
-                    <a onClick={() => handleDownload(item)} style={{ cursor: 'pointer' }}>
-                      {item.name}
-                    </a>
-                  }
-                  description={
-                    <Space size="large">
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {formatFileSize(item.size)}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {item.uploaded_by}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {item.uploaded_at ? dayjs(item.uploaded_at).format('MM-DD HH:mm') : ''}
-                      </Text>
-                    </Space>
-                  }
+                <List
+                  size="small"
+                  dataSource={attachmentsData.legacy}
+                  renderItem={(file) => (
+                    <List.Item
+                      style={{
+                        padding: '8px 12px',
+                        background: '#fafafa',
+                        borderRadius: 4,
+                        marginBottom: 4
+                      }}
+                      actions={[
+                        <Tooltip title="下载" key="download">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            onClick={() => handleDownload(file)}
+                          />
+                        </Tooltip>,
+                        <Popconfirm
+                          key="delete"
+                          title="确定删除？"
+                          onConfirm={() => handleDeleteAttachment(file.id)}
+                        >
+                          <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      ]}
+                    >
+                      <List.Item.Meta
+                        avatar={getFileIcon(file.name)}
+                        title={
+                          <a onClick={() => handleDownload(file)} style={{ cursor: 'pointer' }}>
+                            {file.name}
+                          </a>
+                        }
+                        description={
+                          <span style={{ fontSize: 11 }}>
+                            {file.uploaded_by} · {file.uploaded_at ? dayjs(file.uploaded_at).format('MM-DD HH:mm') : ''}
+                          </span>
+                        }
+                      />
+                    </List.Item>
+                  )}
                 />
-              </List.Item>
+              </Card>
             )}
-          />
+          </div>
         )}
       </Card>
+
+      {/* 添加自定义类别弹窗 */}
+      <Modal
+        title="添加自定义类别"
+        open={showAddCategory}
+        onCancel={() => {
+          setShowAddCategory(false)
+          setNewCategoryName('')
+        }}
+        onOk={handleCreateCategory}
+        confirmLoading={creatingCategory}
+        okText="创建"
+        cancelText="取消"
+      >
+        <Input
+          placeholder="输入类别名称，如：评审意见、修改记录..."
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+          onPressEnter={handleCreateCategory}
+          autoFocus
+        />
+      </Modal>
 
       {/* 富文本内容样式 */}
       <style>{`

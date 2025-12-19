@@ -111,11 +111,11 @@ export const taskAPI = {
   updateTaskStatus: (taskId, status) =>
     api.put(`/tasks/${taskId}/status`, { status }),
 
-  // ========== 任务附件 API ==========
-  // Get task attachments
+  // ========== 任务附件 API (支持分类和版本) ==========
+  // Get task attachments (分类结构)
   getAttachments: (taskId) => api.get(`/tasks/${taskId}/attachments`),
 
-  // Upload attachment
+  // Upload attachment with category
   uploadAttachment: (taskId, formData) =>
     api.post(`/tasks/${taskId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -124,6 +124,14 @@ export const taskAPI = {
   // Delete attachment
   deleteAttachment: (taskId, attachmentId) =>
     api.delete(`/tasks/${taskId}/attachments/${attachmentId}`),
+
+  // Create custom category
+  createCategory: (taskId, name) =>
+    api.post(`/tasks/${taskId}/attachments/categories`, { name }),
+
+  // Delete custom category
+  deleteCategory: (taskId, categoryId) =>
+    api.delete(`/tasks/${taskId}/attachments/categories/${categoryId}`),
 
   // Update task description
   updateDescription: (taskId, description) =>
