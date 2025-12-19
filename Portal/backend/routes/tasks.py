@@ -68,17 +68,24 @@ def get_all_tasks():
     session = SessionLocal()
     try:
         # 获取所有活跃项目（排除已取消和已删除的）
+        # 注意：MySQL 不支持 NULLS LAST，使用 COALESCE 模拟
+        from sqlalchemy import case
         projects = session.query(Project).filter(
             Project.status.notin_(['cancelled', 'deleted']),
             Project.deleted_at.is_(None)
-        ).order_by(Project.planned_start_date.asc().nullslast()).all()
+        ).order_by(
+            case((Project.planned_start_date.is_(None), 1), else_=0),
+            Project.planned_start_date.asc()
+        ).all()
 
         result = []
         for project in projects:
             # 获取项目的所有任务
             tasks = session.query(Task).filter_by(project_id=project.id).order_by(
-                Task.start_date.asc().nullslast(),
-                Task.due_date.asc().nullslast()
+                case((Task.start_date.is_(None), 1), else_=0),
+                Task.start_date.asc(),
+                case((Task.due_date.is_(None), 1), else_=0),
+                Task.due_date.asc()
             ).all()
 
             if tasks:  # 只返回有任务的项目
