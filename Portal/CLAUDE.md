@@ -216,6 +216,88 @@ Portal/
 | GET | `/api/share/<code>/download` | 下载分享文件（公开） |
 | GET | `/api/share/<code>/preview` | 预览分享文件（公开） |
 
+### 邮件集成 API (routes/email_integration.py)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/emails` | 获取邮件列表（代理邮件翻译系统） |
+| GET | `/api/emails/<id>` | 获取邮件详情 |
+| GET | `/api/emails/<id>/task-extraction` | 获取邮件的预提取任务信息 |
+| POST | `/api/emails/<id>/extract` | 完整提取流程（含智能匹配） |
+| POST | `/api/emails/<id>/trigger-extraction` | 手动触发任务提取 |
+| GET | `/api/emails/health` | 检查邮件系统健康状态 |
+
+---
+
+## 邮件集成功能
+
+### 功能概述
+
+从「供应商邮件翻译系统」选择邮件，通过 Ollama LLM 自动提取任务信息并填充任务表单。
+
+### 架构
+
+```
+Portal 前端 (React)
+    ↓ emailAPI 调用
+Portal 后端 (Flask @ 3002)
+    ↓ 服务令牌认证
+┌─────────────────────────────────┐
+│ 邮件翻译系统 (FastAPI @ 2000)   │
+│ 数据库: email_translate         │
+│ 预提取: task_extractions 表     │
+└─────────────────────────────────┘
+    ↓
+┌─────────────────────────────────┐
+│ Ollama LLM @ 11434              │
+│ 模型: qwen2.5:7b (开发)         │
+│       qwen3:8b (生产)           │
+└─────────────────────────────────┘
+```
+
+### 核心文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/services/email_integration_service.py` | 邮件服务代理 + 智能匹配 |
+| `backend/routes/email_integration.py` | `/api/emails/*` API 路由 |
+| `src/components/Tasks/EmailImportPanel.jsx` | 邮件导入面板组件 |
+| `src/components/Tasks/TaskFormModal.jsx` | 任务表单（含邮件导入按钮） |
+| `src/services/api.js` | `emailAPI` 客户端 |
+
+### 智能匹配
+
+1. **项目匹配**: 根据邮件中提取的品番号 (part_number) 模糊匹配 Portal 项目
+2. **员工匹配**: 根据提取的负责人姓名匹配 HR 系统员工
+
+### 提取字段
+
+| 邮件内容 | 提取字段 | 任务字段 | 匹配逻辑 |
+|---------|---------|---------|---------|
+| 主题+正文 | project_name | - | AI 推断项目名 |
+| 正文 | customer_name | - | 发件人公司 |
+| 正文 | order_no | - | 订单号/PO号 |
+| 主题+正文 | title | title | AI 摘要 |
+| 正文 | description | description | AI 提取 |
+| 紧急程度 | priority | priority | AI 判断 |
+| 日期 | due_date | due_date | 正则+AI |
+| 品番号 | part_number | → project_id | 数据库匹配 |
+| 联系人 | assignee_name | → assigned_to_id | HR 匹配 |
+
+### 环境配置
+
+```bash
+# Portal/backend/.env
+EMAIL_TRANSLATE_API_URL=http://localhost:2000
+LLM_BASE=http://localhost:11434
+LLM_MODEL=qwen2.5:7b
+PORTAL_SERVICE_TOKEN=jzc-portal-integration-token-2025
+```
+
+### 预提取机制
+
+邮件翻译完成后，Celery 异步任务自动提取任务信息存入 `task_extractions` 表。Portal 导入时直接读取，实现秒级响应。
+
 ---
 
 ## 数据模型
@@ -466,6 +548,14 @@ npm run build
 - [x] 邮件翻译助手（Claude Opus）
 - [x] PDF 文档翻译工具
 - [x] 移动端响应式适配
+- [x] 邮件集成 - 智能任务创建
+  - [x] 邮件列表代理（从翻译系统获取）
+  - [x] AI 任务信息提取（Ollama LLM）
+  - [x] 预提取机制（翻译后自动提取）
+  - [x] 智能匹配项目（品番号）
+  - [x] 智能匹配员工（姓名匹配 HR）
+  - [x] EmailImportPanel 组件
+  - [x] 集成到 TaskFormModal
 
 ---
 
@@ -475,6 +565,8 @@ npm run build
 |------|----------|------|
 | 所有子系统 | JWT Token | Portal 签发的 Token 可在所有子系统验证 |
 | shared/auth | symlink | 共享认证模块，User 模型和 Token 验证函数 |
+| 邮件翻译系统 | 服务令牌 API | 获取邮件列表和预提取的任务信息 |
+| HR 系统 | JWT Token 代理 | 员工姓名匹配查询 |
 
 ---
 
