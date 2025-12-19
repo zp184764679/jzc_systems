@@ -14,6 +14,7 @@ import minMax from 'dayjs/plugin/minMax'
 import isBetween from 'dayjs/plugin/isBetween'
 import { taskAPI } from '../../services/api'
 import TaskDetailDrawer from './TaskDetailDrawer'
+import TaskFormModal from '../Tasks/TaskFormModal'
 
 dayjs.extend(minMax)
 dayjs.extend(isBetween)
@@ -46,6 +47,8 @@ export default function AllTasksTimeline() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editingTask, setEditingTask] = useState(null)
   const [dayWidth, setDayWidth] = useState(30)
   const [viewStart, setViewStart] = useState(dayjs().subtract(7, 'day'))
 
@@ -164,6 +167,26 @@ export default function AllTasksTimeline() {
   // 任务更新后刷新
   const handleTaskUpdate = () => {
     fetchAllTasks()
+  }
+
+  // 编辑任务
+  const handleEditTask = (task) => {
+    setEditingTask(task)
+    setEditModalVisible(true)
+    setDrawerVisible(false)  // 关闭详情抽屉
+  }
+
+  // 编辑模态框关闭
+  const handleEditModalClose = () => {
+    setEditModalVisible(false)
+    setEditingTask(null)
+  }
+
+  // 编辑保存成功
+  const handleEditSuccess = () => {
+    handleEditModalClose()
+    fetchAllTasks()
+    message.success('任务已更新')
   }
 
   // 查看项目详情
@@ -682,6 +705,16 @@ export default function AllTasksTimeline() {
         projectId={selectedProjectId}
         onClose={handleDrawerClose}
         onTaskUpdate={handleTaskUpdate}
+        onEditTask={handleEditTask}
+      />
+
+      {/* 任务编辑模态框 */}
+      <TaskFormModal
+        open={editModalVisible}
+        projectId={selectedProjectId}
+        task={editingTask}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditSuccess}
       />
     </div>
   )

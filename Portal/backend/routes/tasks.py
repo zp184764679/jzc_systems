@@ -68,7 +68,7 @@ def get_all_tasks():
     session = SessionLocal()
     try:
         # 获取所有活跃项目（排除已取消和已删除的）
-        # 注意：MySQL 不支持 NULLS LAST，使用 COALESCE 模拟
+        # 注意：MySQL 不支持 NULLS LAST，使用 case 模拟
         from sqlalchemy import case
         projects = session.query(Project).filter(
             Project.status.notin_(['cancelled', 'deleted']),
@@ -77,6 +77,10 @@ def get_all_tasks():
             case((Project.planned_start_date.is_(None), 1), else_=0),
             Project.planned_start_date.asc()
         ).all()
+
+        # 预加载所有员工信息用于查询负责人姓名
+        from shared.auth.models import User
+        users = {u.id: u.full_name or u.username for u in session.query(User).all()}
 
         result = []
         for project in projects:
@@ -89,6 +93,13 @@ def get_all_tasks():
             ).all()
 
             if tasks:  # 只返回有任务的项目
+                # 为每个任务添加负责人姓名
+                task_list = []
+                for t in tasks:
+                    task_dict = t.to_dict()
+                    task_dict['assigned_to_name'] = users.get(t.assigned_to_id) if t.assigned_to_id else None
+                    task_list.append(task_dict)
+
                 result.append({
                     'project': {
                         'id': project.id,
@@ -101,7 +112,7 @@ def get_all_tasks():
                         'planned_start_date': project.planned_start_date.isoformat() if project.planned_start_date else None,
                         'planned_end_date': project.planned_end_date.isoformat() if project.planned_end_date else None
                     },
-                    'tasks': [t.to_dict() for t in tasks]
+                    'tasks': task_list
                 })
 
         return jsonify({
