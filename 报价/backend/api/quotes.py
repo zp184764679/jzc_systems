@@ -262,6 +262,174 @@ async def save_quote(
     return quote
 
 
+# ============ 固定路径路由（必须在 /{quote_id} 之前定义） ============
+
+@router.get("/expiring")
+def get_expiring_quotes(
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """
+    获取即将过期的报价单
+    """
+    from datetime import date
+    today = date.today()
+    future_date = today + timedelta(days=days)
+
+    quotes = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= future_date,
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED])
+    ).order_by(Quote.valid_until.asc()).all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": q.id,
+                "quote_number": q.quote_number,
+                "customer_name": q.customer_name,
+                "product_name": q.product_name,
+                "total_amount": float(q.total_amount) if q.total_amount else 0,
+                "status": q.status,
+                "valid_until": q.valid_until.isoformat() if q.valid_until else None,
+                "days_remaining": (q.valid_until - today).days if q.valid_until else None
+            }
+            for q in quotes
+        ],
+        "total": len(quotes)
+    }
+
+
+@router.get("/validity-statistics")
+def get_validity_statistics(
+    db: Session = Depends(get_db)
+):
+    """
+    获取报价单有效期统计
+    """
+    from datetime import date
+    from sqlalchemy import func
+
+    today = date.today()
+
+    total = db.query(Quote).count()
+
+    overdue = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until < today,
+        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
+    ).count()
+
+    marked_expired = db.query(Quote).filter(
+        Quote.status == QuoteStatus.EXPIRED
+    ).count()
+
+    expiring_7_days = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= today + timedelta(days=7),
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    expiring_30_days = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until >= today,
+        Quote.valid_until <= today + timedelta(days=30),
+        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    valid = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until > today,
+        Quote.status.notin_([QuoteStatus.EXPIRED, QuoteStatus.SENT])
+    ).count()
+
+    return {
+        "success": True,
+        "data": {
+            "total": total,
+            "overdue": overdue,
+            "marked_expired": marked_expired,
+            "expiring_7_days": expiring_7_days,
+            "expiring_30_days": expiring_30_days,
+            "valid": valid,
+            "today": today.isoformat()
+        }
+    }
+
+
+@router.get("/statuses", response_model=List[StatusInfo])
+def get_quote_statuses():
+    """
+    获取报价单状态列表
+    """
+    statuses = [
+        {"value": QuoteStatus.DRAFT, "label": "草稿", "color": "default"},
+        {"value": QuoteStatus.PENDING_REVIEW, "label": "待审核", "color": "processing"},
+        {"value": QuoteStatus.APPROVED, "label": "已批准", "color": "success"},
+        {"value": QuoteStatus.REJECTED, "label": "已拒绝", "color": "error"},
+        {"value": QuoteStatus.SENT, "label": "已发送", "color": "cyan"},
+        {"value": QuoteStatus.EXPIRED, "label": "已过期", "color": "warning"},
+    ]
+    return statuses
+
+
+@router.post("/check-expired")
+def check_and_expire_quotes(
+    db: Session = Depends(get_db)
+):
+    """
+    检查并标记已过期的报价单
+    """
+    from datetime import date
+    today = date.today()
+
+    expired_quotes = db.query(Quote).filter(
+        Quote.valid_until != None,
+        Quote.valid_until < today,
+        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
+    ).all()
+
+    expired_count = 0
+    expired_list = []
+
+    for quote in expired_quotes:
+        old_status = quote.status
+        quote.status = QuoteStatus.EXPIRED
+        expired_count += 1
+        expired_list.append({
+            "id": quote.id,
+            "quote_number": quote.quote_number,
+            "customer_name": quote.customer_name,
+            "old_status": old_status,
+            "valid_until": quote.valid_until.isoformat()
+        })
+
+        approval = QuoteApproval(
+            quote_id=quote.id,
+            action="expire",
+            from_status=old_status,
+            to_status=QuoteStatus.EXPIRED,
+            approver_name="系统",
+            comment="报价单已超过有效期，系统自动标记为过期"
+        )
+        db.add(approval)
+
+    db.commit()
+    logger.info(f"已标记 {expired_count} 条报价单为过期状态")
+
+    return {
+        "success": True,
+        "message": f"已检查并标记 {expired_count} 条报价单为过期状态",
+        "data": {
+            "expired_count": expired_count,
+            "expired_quotes": expired_list
+        }
+    }
+
+
 @router.get("/{quote_id}", response_model=QuoteResponse)
 def get_quote(quote_id: int, db: Session = Depends(get_db)):
     """
@@ -576,22 +744,6 @@ async def export_chenlong_template(
 
 
 # ============ 审批相关 API ============
-
-@router.get("/statuses", response_model=List[StatusInfo])
-def get_quote_statuses():
-    """
-    获取报价单状态列表
-    """
-    statuses = [
-        {"value": QuoteStatus.DRAFT, "label": "草稿", "color": "default"},
-        {"value": QuoteStatus.PENDING_REVIEW, "label": "待审核", "color": "processing"},
-        {"value": QuoteStatus.APPROVED, "label": "已批准", "color": "success"},
-        {"value": QuoteStatus.REJECTED, "label": "已拒绝", "color": "error"},
-        {"value": QuoteStatus.SENT, "label": "已发送", "color": "cyan"},
-        {"value": QuoteStatus.EXPIRED, "label": "已过期", "color": "warning"},
-    ]
-    return statuses
-
 
 @router.post("/{quote_id}/submit", response_model=QuoteResponse)
 def submit_quote(
@@ -1139,116 +1291,6 @@ def set_current_version(
     return quote
 
 
-# ============ 有效期校验 API ============
-
-@router.get("/expiring")
-def get_expiring_quotes(
-    days: int = 7,
-    db: Session = Depends(get_db)
-):
-    """
-    获取即将过期的报价单
-
-    Args:
-        days: 查询未来多少天内过期的报价单，默认7天
-
-    Returns:
-        即将过期的报价单列表
-    """
-    from datetime import date
-    today = date.today()
-    future_date = today + timedelta(days=days)
-
-    # 查询即将过期的报价单（排除草稿和已过期状态）
-    quotes = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until >= today,
-        Quote.valid_until <= future_date,
-        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED])
-    ).order_by(Quote.valid_until.asc()).all()
-
-    return {
-        "success": True,
-        "data": [
-            {
-                "id": q.id,
-                "quote_number": q.quote_number,
-                "customer_name": q.customer_name,
-                "product_name": q.product_name,
-                "total_amount": float(q.total_amount) if q.total_amount else 0,
-                "status": q.status,
-                "valid_until": q.valid_until.isoformat() if q.valid_until else None,
-                "days_remaining": (q.valid_until - today).days if q.valid_until else None
-            }
-            for q in quotes
-        ],
-        "total": len(quotes)
-    }
-
-
-@router.post("/check-expired")
-def check_and_expire_quotes(
-    db: Session = Depends(get_db)
-):
-    """
-    检查并标记已过期的报价单
-
-    将过期的报价单状态更新为 expired
-    仅影响 pending_review 和 approved 状态的报价单
-
-    Returns:
-        处理结果统计
-    """
-    from datetime import date
-    today = date.today()
-
-    # 查询已过期的报价单
-    expired_quotes = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until < today,
-        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
-    ).all()
-
-    expired_count = 0
-    expired_list = []
-
-    for quote in expired_quotes:
-        old_status = quote.status
-        quote.status = QuoteStatus.EXPIRED
-        expired_count += 1
-        expired_list.append({
-            "id": quote.id,
-            "quote_number": quote.quote_number,
-            "customer_name": quote.customer_name,
-            "old_status": old_status,
-            "valid_until": quote.valid_until.isoformat()
-        })
-
-        # 记录审批历史
-        approval = QuoteApproval(
-            quote_id=quote.id,
-            action="expire",
-            from_status=old_status,
-            to_status=QuoteStatus.EXPIRED,
-            approver_name="系统",
-            comment="报价单已超过有效期，系统自动标记为过期"
-        )
-        db.add(approval)
-
-    db.commit()
-
-    logger.info(f"已标记 {expired_count} 条报价单为过期状态")
-
-    return {
-        "success": True,
-        "message": f"已检查并标记 {expired_count} 条报价单为过期状态",
-        "data": {
-            "expired_count": expired_count,
-            "expired_quotes": expired_list
-        }
-    }
-
-
 @router.put("/{quote_id}/extend-validity", response_model=QuoteResponse)
 def extend_quote_validity(
     quote_id: int,
@@ -1314,73 +1356,6 @@ def extend_quote_validity(
     logger.info(f"报价单有效期已延长: {quote.quote_number}, {old_valid_until} -> {new_date}")
 
     return quote
-
-
-@router.get("/validity-statistics")
-def get_validity_statistics(
-    db: Session = Depends(get_db)
-):
-    """
-    获取报价单有效期统计
-
-    Returns:
-        有效期统计数据
-    """
-    from datetime import date
-    from sqlalchemy import func
-
-    today = date.today()
-
-    # 统计各种状态
-    total = db.query(Quote).count()
-
-    # 已过期（valid_until < today 且 状态不是 expired/sent）
-    overdue = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until < today,
-        Quote.status.in_([QuoteStatus.PENDING_REVIEW, QuoteStatus.APPROVED])
-    ).count()
-
-    # 已标记过期
-    marked_expired = db.query(Quote).filter(
-        Quote.status == QuoteStatus.EXPIRED
-    ).count()
-
-    # 7天内过期
-    expiring_7_days = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until >= today,
-        Quote.valid_until <= today + timedelta(days=7),
-        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
-    ).count()
-
-    # 30天内过期
-    expiring_30_days = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until >= today,
-        Quote.valid_until <= today + timedelta(days=30),
-        Quote.status.notin_([QuoteStatus.DRAFT, QuoteStatus.EXPIRED, QuoteStatus.SENT])
-    ).count()
-
-    # 有效期内
-    valid = db.query(Quote).filter(
-        Quote.valid_until != None,
-        Quote.valid_until > today,
-        Quote.status.notin_([QuoteStatus.EXPIRED, QuoteStatus.SENT])
-    ).count()
-
-    return {
-        "success": True,
-        "data": {
-            "total": total,
-            "overdue": overdue,
-            "marked_expired": marked_expired,
-            "expiring_7_days": expiring_7_days,
-            "expiring_30_days": expiring_30_days,
-            "valid": valid,
-            "today": today.isoformat()
-        }
-    }
 
 
 @router.get("/{quote_id}/compare/{other_id}", response_model=QuoteCompareResponse)
