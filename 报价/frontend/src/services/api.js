@@ -8,7 +8,7 @@ import { message } from 'antd';
 import { authEvents, AUTH_EVENTS } from '../utils/authEvents';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 200000, // OCR Vision识别需要较长时间（200秒）
   headers: {
     'Content-Type': 'application/json',
