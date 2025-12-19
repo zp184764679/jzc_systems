@@ -44,6 +44,41 @@ import {
   HomeOutlined,
   MenuOutlined,
   ClearOutlined,
+  // 新增图标 - 日本制造业文件分类
+  QuestionCircleOutlined,
+  DollarOutlined,
+  ProfileOutlined,
+  CheckSquareOutlined,
+  UnorderedListOutlined,
+  SolutionOutlined,
+  ShoppingCartOutlined,
+  CheckCircleOutlined,
+  ToolOutlined,
+  NodeIndexOutlined,
+  AuditOutlined,
+  ExperimentOutlined,
+  FlagOutlined,
+  WarningOutlined,
+  InboxOutlined,
+  CarOutlined,
+  SendOutlined,
+  WalletOutlined,
+  MinusCircleOutlined,
+  PlusCircleOutlined,
+  BookOutlined,
+  LockOutlined,
+  SafetyOutlined,
+  TrophyOutlined,
+  GlobalOutlined,
+  AlertOutlined,
+  VerifiedOutlined,
+  MailOutlined,
+  TeamOutlined,
+  ShopOutlined,
+  BuildOutlined,
+  AccountBookOutlined,
+  RightOutlined,
+  DownOutlined,
 } from '@ant-design/icons'
 import { fileHubAPI } from '../../services/api'
 import dayjs from 'dayjs'
@@ -52,17 +87,71 @@ import './FileHub.css'
 const { Header, Sider, Content } = Layout
 const { RangePicker } = DatePicker
 
-// 文件分类图标映射
+// 文件分类图标映射 - 日本制造业完整流程
 const categoryIcons = {
+  // 营业/询价
+  rfq: <QuestionCircleOutlined />,
+  quotation: <DollarOutlined />,
+  // 技术/设计
   specification: <FileTextOutlined />,
+  purchase_spec: <ProfileOutlined />,
   drawing: <FileImageOutlined />,
-  contract: <FileProtectOutlined />,
-  invoice: <FileDoneOutlined />,
-  qc_report: <FileSearchOutlined />,
+  approval_drawing: <CheckSquareOutlined />,
+  bom: <UnorderedListOutlined />,
+  work_instruction: <SolutionOutlined />,
+  // 采购/发注
+  purchase_order: <ShoppingCartOutlined />,
+  order_ack: <CheckCircleOutlined />,
+  // 生产
+  manufacturing_order: <ToolOutlined />,
+  process_sheet: <NodeIndexOutlined />,
+  // 品质管理
+  inspection_standard: <AuditOutlined />,
+  inspection_report: <FileSearchOutlined />,
+  mill_cert: <ExperimentOutlined />,
+  first_article: <FlagOutlined />,
+  ncr: <WarningOutlined />,
+  ppap: <FileProtectOutlined />,
+  // 物流/出货
   delivery_note: <FileSyncOutlined />,
+  packing_list: <InboxOutlined />,
+  shipping_inspection: <CarOutlined />,
+  waybill: <SendOutlined />,
+  // 财务/结算
+  invoice: <FileDoneOutlined />,
+  receipt: <WalletOutlined />,
+  debit_note: <MinusCircleOutlined />,
+  credit_note: <PlusCircleOutlined />,
+  // 合同/契约
+  contract: <FileProtectOutlined />,
+  master_agreement: <BookOutlined />,
+  nda: <LockOutlined />,
+  quality_agreement: <SafetyOutlined />,
+  // 认证/合规
   certificate: <SafetyCertificateOutlined />,
+  iso_cert: <TrophyOutlined />,
+  rohs_cert: <GlobalOutlined />,
+  sds: <AlertOutlined />,
+  coc: <VerifiedOutlined />,
+  // 其他
   photo: <PictureOutlined />,
+  correspondence: <MailOutlined />,
+  meeting_minutes: <TeamOutlined />,
   other: <FileOutlined />,
+}
+
+// 分组图标映射
+const groupIcons = {
+  sales: <ShopOutlined />,
+  engineering: <ToolOutlined />,
+  procurement: <ShoppingCartOutlined />,
+  manufacturing: <BuildOutlined />,
+  quality: <SafetyOutlined />,
+  logistics: <CarOutlined />,
+  finance: <AccountBookOutlined />,
+  contract: <FileProtectOutlined />,
+  certification: <SafetyCertificateOutlined />,
+  other: <FolderOutlined />,
 }
 
 // 来源系统颜色映射
@@ -87,6 +176,8 @@ export default function FileHubPage() {
   const [pageSize, setPageSize] = useState(20)
   const [statistics, setStatistics] = useState(null)
   const [categories, setCategories] = useState([])
+  const [categoryGroups, setCategoryGroups] = useState([])  // 分组后的分类
+  const [expandedGroups, setExpandedGroups] = useState({})  // 展开的分组
   const [sourceSystems, setSourceSystems] = useState([])
 
   // 筛选条件
@@ -119,13 +210,32 @@ export default function FileHubPage() {
   const loadMetadata = useCallback(async () => {
     try {
       const [categoriesRes, systemsRes, statsRes] = await Promise.all([
-        fileHubAPI.getCategories(),
+        fileHubAPI.getCategoriesGrouped(),
         fileHubAPI.getSourceSystems(),
         fileHubAPI.getStatistics(),
       ])
 
       if (categoriesRes.data?.success) {
-        setCategories(categoriesRes.data.data)
+        const data = categoriesRes.data.data
+        setCategoryGroups(data.groups || [])
+        // 扁平化分类列表用于上传弹窗
+        const flatCategories = []
+        data.groups?.forEach(group => {
+          group.categories?.forEach(cat => {
+            flatCategories.push({
+              ...cat,
+              group_name: group.name_zh,
+              group_code: group.code
+            })
+          })
+        })
+        setCategories(flatCategories)
+        // 默认展开前3个分组
+        const defaultExpanded = {}
+        data.groups?.slice(0, 3).forEach(g => {
+          defaultExpanded[g.code] = true
+        })
+        setExpandedGroups(defaultExpanded)
       }
       if (systemsRes.data?.success) {
         setSourceSystems(systemsRes.data.data)
@@ -386,20 +496,52 @@ export default function FileHubPage() {
     },
   ]
 
+  // 切换分组展开状态
+  const toggleGroup = (groupCode) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupCode]: !prev[groupCode]
+    }))
+  }
+
   // 侧边栏筛选面板
   const renderFilterPanel = () => (
     <div className="file-hub-filter-panel">
       <div className="filter-section">
-        <div className="filter-title">文件类型</div>
+        <div className="filter-title">
+          文件类型
+          <span style={{ fontSize: 12, color: '#999', marginLeft: 8 }}>
+            ({selectedCategories.length}选中)
+          </span>
+        </div>
         <Checkbox.Group
           value={selectedCategories}
           onChange={setSelectedCategories}
-          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+          style={{ width: '100%' }}
         >
-          {categories.map((cat) => (
-            <Checkbox key={cat.code} value={cat.code}>
-              {categoryIcons[cat.code]} {cat.name_zh}
-            </Checkbox>
+          {categoryGroups.map((group) => (
+            <div key={group.code} className="filter-group">
+              <div
+                className="filter-group-header"
+                onClick={() => toggleGroup(group.code)}
+              >
+                <span className="group-icon">{groupIcons[group.code]}</span>
+                <span className="group-name">{group.name_zh}</span>
+                <span className="group-toggle">
+                  {expandedGroups[group.code] ? <DownOutlined /> : <RightOutlined />}
+                </span>
+              </div>
+              {expandedGroups[group.code] && (
+                <div className="filter-group-items">
+                  {group.categories?.map((cat) => (
+                    <Checkbox key={cat.code} value={cat.code}>
+                      {categoryIcons[cat.code] || <FileOutlined />}
+                      <span style={{ marginLeft: 4 }}>{cat.name_zh}</span>
+                    </Checkbox>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </Checkbox.Group>
       </div>
@@ -680,11 +822,29 @@ export default function FileHubPage() {
             label="文件分类"
             rules={[{ required: true, message: '请选择文件分类' }]}
           >
-            <Select placeholder="选择文件分类">
-              {categories.map((cat) => (
-                <Select.Option key={cat.code} value={cat.code}>
-                  {categoryIcons[cat.code]} {cat.name_zh}
-                </Select.Option>
+            <Select
+              placeholder="选择文件分类"
+              showSearch
+              optionFilterProp="children"
+              filterOption={(input, option) =>
+                option?.children?.toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {categoryGroups.map((group) => (
+                <Select.OptGroup key={group.code} label={
+                  <span>
+                    {groupIcons[group.code]} {group.name_zh}
+                  </span>
+                }>
+                  {group.categories?.map((cat) => (
+                    <Select.Option key={cat.code} value={cat.code}>
+                      {categoryIcons[cat.code] || <FileOutlined />} {cat.name_zh}
+                      <span style={{ color: '#999', marginLeft: 8, fontSize: 12 }}>
+                        ({cat.name_ja})
+                      </span>
+                    </Select.Option>
+                  ))}
+                </Select.OptGroup>
               ))}
             </Select>
           </Form.Item>

@@ -5,7 +5,7 @@ File Hub API Routes - 文件中心API
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from models import SessionLocal
-from models.file_index import FileIndex, FileStatus, FILE_CATEGORIES, SOURCE_SYSTEMS
+from models.file_index import FileIndex, FileStatus, FILE_CATEGORIES, FILE_CATEGORY_GROUPS, SOURCE_SYSTEMS
 from services.file_index_service import FileIndexService
 from datetime import datetime
 import sys
@@ -706,3 +706,85 @@ def get_source_systems():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
+
+@file_hub_bp.route('/categories-grouped', methods=['GET'])
+def get_categories_grouped():
+    """获取按分组组织的文件分类（日本制造业完整流程）"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': '未授权'}), 401
+
+    try:
+        # 按分组组织分类
+        grouped = {}
+        for code, info in FILE_CATEGORIES.items():
+            group_key = info.get('group', 'other')
+            if group_key not in grouped:
+                group_info = FILE_CATEGORY_GROUPS.get(group_key, FILE_CATEGORY_GROUPS['other'])
+                grouped[group_key] = {
+                    'code': group_key,
+                    'name_zh': group_info['zh'],
+                    'name_ja': group_info['ja'],
+                    'name_en': group_info['en'],
+                    'icon': group_info['icon'],
+                    'sort': group_info['sort'],
+                    'categories': []
+                }
+
+            grouped[group_key]['categories'].append({
+                'code': code,
+                'name_zh': info['zh'],
+                'name_ja': info['ja'],
+                'name_en': info['en'],
+                'icon': info['icon'],
+                'sort': info['sort']
+            })
+
+        # 对分组和分类进行排序
+        result = []
+        for group in sorted(grouped.values(), key=lambda x: x['sort']):
+            group['categories'] = sorted(group['categories'], key=lambda x: x['sort'])
+            result.append(group)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'groups': result,
+                'all_categories': FILE_CATEGORIES,
+                'all_groups': FILE_CATEGORY_GROUPS
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取分组分类失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@file_hub_bp.route('/category-groups', methods=['GET'])
+def get_category_groups():
+    """获取分类分组列表"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': '未授权'}), 401
+
+    try:
+        groups = []
+        for code, info in FILE_CATEGORY_GROUPS.items():
+            groups.append({
+                'code': code,
+                'name_zh': info['zh'],
+                'name_ja': info['ja'],
+                'name_en': info['en'],
+                'icon': info['icon'],
+                'sort': info['sort']
+            })
+
+        # 按排序返回
+        groups = sorted(groups, key=lambda x: x['sort'])
+
+        return jsonify({'success': True, 'data': groups})
+
+    except Exception as e:
+        logger.error(f"获取分组列表失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

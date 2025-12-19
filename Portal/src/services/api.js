@@ -516,6 +516,12 @@ export const fileHubAPI = {
   // 获取文件分类列表
   getCategories: () => api.get('/file-hub/categories'),
 
+  // 获取按分组组织的文件分类（日本制造业完整流程）
+  getCategoriesGrouped: () => api.get('/file-hub/categories-grouped'),
+
+  // 获取分类分组列表
+  getCategoryGroups: () => api.get('/file-hub/category-groups'),
+
   // 获取来源系统列表
   getSourceSystems: () => api.get('/file-hub/source-systems'),
 
