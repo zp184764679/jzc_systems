@@ -6,7 +6,8 @@ import {
   Select,
   message,
   Result,
-  Cascader
+  Cascader,
+  Space
 } from 'antd'
 import {
   PlusOutlined,
@@ -19,6 +20,7 @@ import {
 import { projectAPI } from '../../services/api'
 import ProjectFormModal from '../../components/Projects/ProjectFormModal'
 import ProjectsTimeline from '../../components/Timeline/ProjectsTimeline'
+import { ProjectListExportButton } from '../../components/Export/ExportButton'
 
 const { Search } = Input
 const { Option } = Select
@@ -195,9 +197,19 @@ export default function ProjectListPage() {
       {/* Header */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <h1 style={{ margin: 0 }}>项目管理</h1>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setShowCreateModal(true)}>
-          新建项目
-        </Button>
+        <Space>
+          <ProjectListExportButton
+            filters={{
+              status: statusFilter,
+              priority: priorityFilter,
+              customer: customerPartFilter[0],
+              part_number: customerPartFilter[1],
+            }}
+          />
+          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setShowCreateModal(true)}>
+            新建项目
+          </Button>
+        </Space>
       </div>
 
       {/* Filters - 筛选栏 */}

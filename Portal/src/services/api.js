@@ -418,4 +418,35 @@ export const templateAPI = {
   copyToProject: (templateId, projectId) => api.post(`/templates/${templateId}/copy-to-project`, { project_id: projectId }),
 }
 
+// ========== Export APIs ==========
+
+export const exportAPI = {
+  // 导出项目列表 Excel
+  exportProjectsExcel: (params) => api.get('/export/projects/excel', {
+    params,
+    responseType: 'blob'
+  }),
+
+  // 导出项目汇总 PDF
+  exportProjectsPdf: (params) => api.get('/export/projects/pdf', {
+    params,
+    responseType: 'blob'
+  }),
+
+  // 导出单个项目报告 PDF
+  exportProjectReportPdf: (projectId) => api.get(`/export/project/${projectId}/pdf`, {
+    responseType: 'blob'
+  }),
+
+  // 导出项目任务列表 Excel
+  exportProjectTasksExcel: (projectId) => api.get(`/export/project/${projectId}/tasks/excel`, {
+    responseType: 'blob'
+  }),
+
+  // 导出部件番号汇总 PDF
+  exportPartNumberPdf: (partNumber) => api.get(`/export/part/${encodeURIComponent(partNumber)}/pdf`, {
+    responseType: 'blob'
+  }),
+}
+
 export default api

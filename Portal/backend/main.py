@@ -40,6 +40,7 @@ from routes.announcements import announcements_bp
 from routes.recycle_bin import recycle_bin_bp
 from routes.chat import chat_bp
 from routes.templates import templates_bp
+from routes.export import export_bp
 from models import init_db
 
 app = Flask(__name__)
@@ -111,6 +112,7 @@ app.register_blueprint(announcements_bp)
 app.register_blueprint(recycle_bin_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(templates_bp)
+app.register_blueprint(export_bp)
 
 
 @app.route('/api/auth/login', methods=['POST'])
