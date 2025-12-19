@@ -175,14 +175,9 @@ export default function RichTextEditor({
     }
   }), [imageHandler])
 
-  // 格式配置
-  const formats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'color', 'background',
-    'list', 'bullet',
-    'link', 'image'
-  ]
+  // 格式配置 - 不限制格式，让 Quill 自动处理所有工具栏对应的格式
+  // 注意：react-quill-new 中如果显式指定 formats，需要确保与工具栏完全匹配
+  // 移除 formats 限制可以避免 "Cannot register" 错误
 
   // 处理附件上传
   const handleAttachmentUpload = async (file) => {
@@ -248,7 +243,6 @@ export default function RichTextEditor({
           value={value || ''}
           onChange={onChange}
           modules={modules}
-          formats={formats}
           placeholder={placeholder}
           readOnly={readOnly}
           style={{
