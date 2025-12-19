@@ -110,14 +110,19 @@ async def recognize_drawing(
         result = ocr_service.extract_drawing_info(drawing.file_path)
 
         if result.get('success'):
-            # 应用智能规则进行自动修正
-            corrected_result = learning_service.apply_smart_rules(result)
+            # 应用自动修正（基于历史学习+智能规则）- 方案A
+            corrected_result = learning_service.auto_correct_ocr_result(result, min_count=3)
             auto_corrections = corrected_result.pop('_auto_corrections', [])
+            correction_count = corrected_result.pop('_correction_count', 0)
 
             if auto_corrections:
-                logger.info(f"✨ 智能规则应用了{len(auto_corrections)}个自动修正")
+                logger.info(f"✨ 自动修正应用了{len(auto_corrections)}个修正（历史学习+智能规则）")
                 for correction in auto_corrections:
-                    logger.info(f"  - {correction['field']}: {correction['original']} → {correction['corrected']}")
+                    source = correction.get('source', 'smart_rule')
+                    if source == 'learned_pattern':
+                        logger.info(f"  - [学习] {correction['field']}: {correction['original']} → {correction['corrected']} (基于{correction.get('pattern_count', 0)}次历史)")
+                    else:
+                        logger.info(f"  - [规则] {correction['field']}: {correction['original']} → {correction['corrected']}")
 
             result = corrected_result
 

@@ -1,14 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pm2 *)",
-      "Bash(npm *)",
-      "Bash(python *)",
-      "Bash(pip *)",
-      "Bash(git *)",
-      "Bash(gh *)",
-      "Bash(mysql *)",
-      "Bash(mysqldump *)",
+      "Bash(pm2:*)",
+      "Bash(npm:*)",
+      "Bash(python:*)",
+      "Bash(pip:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(mysql:*)",
+      "Bash(mysqldump:*)",
       "Read(*)",
       "Edit(*)",
       "Write(*.py)",

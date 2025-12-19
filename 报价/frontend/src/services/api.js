@@ -187,4 +187,19 @@ export const getProductRoutes = (productId) => api.get(`/products/${productId}/r
 export const getDrawingRoutes = (drawingId) => api.get(`/drawings/${drawingId}/routes`);
 export const getQuoteRoutes = (quoteId) => api.get(`/quotes/${quoteId}/routes`);
 
+// ==================== OCR学习 API ====================
+
+// 记录人工修正（用于AI学习）
+export const recordOcrCorrection = (data) => api.post('/ocr/corrections', data);
+
+// 获取修正统计
+export const getOcrCorrectionStats = (params) => api.get('/ocr/corrections/stats', { params });
+
+// 获取字段修正模式
+export const getOcrFieldPatterns = (fieldName, minCount = 3) =>
+  api.get('/ocr/corrections/patterns', { params: { field_name: fieldName, min_count: minCount } });
+
+// 获取AI学习洞察
+export const getOcrLearningInsights = () => api.get('/ocr/learning/insights');
+
 export default api;

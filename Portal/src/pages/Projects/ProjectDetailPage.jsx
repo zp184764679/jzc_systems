@@ -16,6 +16,7 @@ import ProjectTimeline from '../../components/Timeline/ProjectTimeline'
 import TaskKanban from '../../components/Tasks/TaskKanban'
 import TaskFormModal from '../../components/Tasks/TaskFormModal'
 import ProjectChat from '../../components/Chat/ProjectChat'
+import { ProjectExportButton } from '../../components/Export/ExportButton'
 
 const { Text, Title } = Typography
 
@@ -225,6 +226,13 @@ export default function ProjectDetailPage() {
                   status={project.status === 'completed' ? 'success' : 'active'}
                 />
               </div>
+
+              {/* 导出按钮 */}
+              <ProjectExportButton
+                projectId={id}
+                projectNo={project?.project_no}
+                style={{ borderRadius: 8 }}
+              />
 
               {/* 创建任务按钮 - Apple 风格 */}
               <Button

@@ -38,6 +38,7 @@ import {
   exportQuoteExcel,
   exportQuotePDF,
   exportChenlongTemplate,
+  recordOcrCorrection,
 } from '../services/api'
 
 const { Step } = Steps
@@ -144,6 +145,7 @@ function QuoteCreate() {
   const [processOptions, setProcessOptions] = useState([]) // 工序库选项（从API加载）
   const [materialRecommendations, setMaterialRecommendations] = useState([]) // 材料长度推荐
   const [showDrawingModal, setShowDrawingModal] = useState(false) // 控制图纸预览Modal
+  const [originalOcrValues, setOriginalOcrValues] = useState(null) // OCR原始识别值（用于学习）
 
   // 查询图纸信息
   const { data: drawing, isLoading: drawingLoading } = useQuery({
@@ -311,6 +313,24 @@ function QuoteCreate() {
       setTimeout(() => {
         form.validateFields(['requirement_items']).catch(() => {})
       }, 100)
+
+      // 保存原始OCR值（用于学习系统）
+      setOriginalOcrValues({
+        drawing_number: drawing.drawing_number,
+        customer_code: drawing.customer_name,
+        customer_part_number: drawing.customer_part_number,
+        product_name: drawing.product_name,
+        material: drawing.material,
+        outer_diameter: parseNumericValue(drawing.outer_diameter),
+        length: parseNumericValue(drawing.length),
+        weight: parseNumericValue(drawing.weight),
+        tolerance: drawing.tolerance,
+        surface_roughness: drawing.surface_roughness,
+        heat_treatment: drawing.heat_treatment || '',
+        surface_treatment: drawing.surface_treatment || '',
+        special_requirements: drawing.special_requirements || '',
+      })
+      console.log('[OCR学习] 已保存原始OCR识别值:', drawing.drawing_number)
 
       // 显示填充结果消息
       const validRequirementCount = requirementItems.filter(x => x && x.trim()).length
@@ -688,7 +708,73 @@ function QuoteCreate() {
   }
 
   // 处理保存
-  const handleSave = () => {
+  const handleSave = async () => {
+    // 记录OCR修正（用于AI学习）
+    if (originalOcrValues && drawing) {
+      try {
+        const currentValues = form.getFieldsValue()
+        const corrections = []
+
+        // 定义需要跟踪的OCR字段
+        const ocrFields = [
+          { key: 'drawing_number', label: '图纸编号' },
+          { key: 'customer_code', label: '客户编码' },
+          { key: 'customer_part_number', label: '客户品番' },
+          { key: 'product_name', label: '品名' },
+          { key: 'material', label: '材料' },
+          { key: 'outer_diameter', label: '外径' },
+          { key: 'length', label: '长度' },
+          { key: 'weight', label: '重量' },
+          { key: 'tolerance', label: '公差' },
+          { key: 'surface_roughness', label: '表面粗糙度' },
+          { key: 'heat_treatment', label: '热处理' },
+          { key: 'surface_treatment', label: '表面处理' },
+        ]
+
+        // 比较每个字段
+        for (const field of ocrFields) {
+          const originalValue = originalOcrValues[field.key]
+          const currentValue = currentValues[field.key]
+
+          // 转换为字符串进行比较（处理数字和字符串的情况）
+          const origStr = originalValue != null ? String(originalValue) : ''
+          const currStr = currentValue != null ? String(currentValue) : ''
+
+          if (origStr !== currStr) {
+            corrections.push({
+              field_name: field.key,
+              field_label: field.label,
+              original_value: origStr,
+              corrected_value: currStr,
+            })
+          }
+        }
+
+        // 如果有修正，发送到后端
+        if (corrections.length > 0) {
+          console.log('[OCR学习] 检测到修正:', corrections.length, '个字段')
+          for (const correction of corrections) {
+            // 后端期望的字段：drawing_id, field_name, ocr_value, corrected_value
+            recordOcrCorrection({
+              drawing_id: parseInt(drawingId),
+              field_name: correction.field_name,
+              ocr_value: correction.original_value,
+              corrected_value: correction.corrected_value,
+            }).catch(err => {
+              console.warn('[OCR学习] 记录修正失败:', err)
+            })
+          }
+          console.log('[OCR学习] 修正数据已提交学习系统')
+        } else {
+          console.log('[OCR学习] 无字段修正，OCR识别结果准确')
+        }
+      } catch (error) {
+        console.warn('[OCR学习] 处理修正时出错:', error)
+        // 不阻塞保存操作
+      }
+    }
+
+    // 执行保存
     saveMutation.mutate({
       drawing_id: parseInt(drawingId),
       calculation_result: quoteResult,

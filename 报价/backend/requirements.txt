@@ -46,3 +46,10 @@ redis==5.0.1
 # 工具库
 python-dateutil==2.8.2
 pytz==2024.1
+
+# 向量数据库和嵌入模型 (方案C: RAG增强)
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
+# MySQL驱动
+pymysql>=1.1.0

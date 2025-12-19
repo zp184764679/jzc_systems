@@ -12,6 +12,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 延迟导入向量存储服务，避免循环依赖
+_vector_store_service = None
+
+def _get_vector_store():
+    """延迟获取向量存储服务"""
+    global _vector_store_service
+    if _vector_store_service is None:
+        try:
+            from services.vector_store_service import get_vector_store_service
+            _vector_store_service = get_vector_store_service()
+        except Exception as e:
+            logger.warning(f"⚠️  向量存储服务不可用: {e}")
+    return _vector_store_service
+
 
 class OCRLearningService:
     """OCR智能学习服务"""
@@ -152,6 +166,15 @@ class OCRLearningService:
         self.db.commit()
 
         logger.info(f"📝 记录修正: [{field_name}] {ocr_value} → {corrected_value} (类型: {correction_type}, 相似度: {similarity:.2f})")
+
+        # 同步到向量库（方案C）
+        try:
+            vector_store = _get_vector_store()
+            if vector_store:
+                vector_store.add_correction(correction)
+                logger.info(f"✅ 修正已同步到向量库")
+        except Exception as e:
+            logger.warning(f"⚠️  向量库同步失败: {e}")
 
         return correction
 
@@ -337,6 +360,109 @@ class OCRLearningService:
         patterns.sort(key=lambda x: x['count'], reverse=True)
 
         return patterns
+
+
+    def auto_correct_ocr_result(self, ocr_data: Dict, min_count: int = 3) -> Dict:
+        """
+        自动应用高频修正模式到OCR结果（方案A核心功能）
+
+        原理：
+        - 查询历史修正记录
+        - 如果某个修正出现超过min_count次，自动应用
+        - 返回修正后的数据
+
+        Args:
+            ocr_data: OCR识别的原始数据
+            min_count: 最小出现次数，默认3次
+
+        Returns:
+            修正后的数据字典，包含_auto_corrections列表
+        """
+        corrected_data = ocr_data.copy()
+        auto_corrections = []
+
+        # 获取所有字段的高频修正模式
+        field_names = [
+            'drawing_number', 'customer_name', 'product_name', 'customer_part_number',
+            'material', 'outer_diameter', 'length', 'weight',
+            'tolerance', 'surface_roughness', 'heat_treatment', 'surface_treatment'
+        ]
+
+        for field_name in field_names:
+            original_value = ocr_data.get(field_name)
+            if not original_value:
+                continue
+
+            # 标准化原始值用于匹配
+            original_str = str(original_value).strip().lower()
+
+            # 查询该字段的高频修正模式
+            patterns = self.get_field_patterns(field_name, min_count=min_count)
+
+            for pattern in patterns:
+                pattern_ocr_value = (pattern.get('ocr_value') or '').strip().lower()
+
+                # 如果OCR值匹配历史模式
+                if pattern_ocr_value and pattern_ocr_value == original_str:
+                    corrected_value = pattern.get('corrected_value', '')
+                    if corrected_value and corrected_value != str(original_value):
+                        corrected_data[field_name] = corrected_value
+                        auto_corrections.append({
+                            'field': field_name,
+                            'original': str(original_value),
+                            'corrected': corrected_value,
+                            'pattern_count': pattern.get('count', 0),
+                            'source': 'learned_pattern'
+                        })
+                        logger.info(f"🤖 自动修正 [{field_name}]: '{original_value}' → '{corrected_value}' (基于{pattern.get('count', 0)}次历史修正)")
+                        break  # 每个字段只应用第一个匹配的模式
+
+        # 然后应用智能规则（作为补充）
+        smart_corrected = self.apply_smart_rules(corrected_data)
+
+        # 合并智能规则的修正
+        if smart_corrected.get('_auto_corrections'):
+            auto_corrections.extend(smart_corrected['_auto_corrections'])
+            del smart_corrected['_auto_corrections']
+
+        # 方案C：向量检索增强（对未修正的字段尝试向量检索）
+        try:
+            vector_store = _get_vector_store()
+            if vector_store:
+                already_corrected_fields = {c['field'] for c in auto_corrections}
+                for field_name in field_names:
+                    if field_name in already_corrected_fields:
+                        continue  # 已经被修正的字段跳过
+                    original_value = ocr_data.get(field_name)
+                    if not original_value:
+                        continue
+                    # 向量检索建议
+                    suggested = vector_store.get_suggested_correction(
+                        field_name=field_name,
+                        ocr_value=str(original_value),
+                        min_similarity=0.85  # 高阈值，确保准确性
+                    )
+                    if suggested and suggested != str(original_value):
+                        smart_corrected[field_name] = suggested
+                        auto_corrections.append({
+                            'field': field_name,
+                            'original': str(original_value),
+                            'corrected': suggested,
+                            'source': 'vector_search'
+                        })
+                        logger.info(f"🔍 向量检索修正 [{field_name}]: '{original_value}' → '{suggested}'")
+        except Exception as e:
+            logger.warning(f"⚠️  向量检索增强失败: {e}")
+
+        smart_corrected['_auto_corrections'] = auto_corrections
+        smart_corrected['_correction_count'] = len(auto_corrections)
+
+        if auto_corrections:
+            logger.info(f"✅ 自动修正完成，共修正 {len(auto_corrections)} 个字段")
+        else:
+            logger.info("✅ 无需自动修正，OCR结果已准确")
+
+        return smart_corrected
 
 
 def get_ocr_learning_service(db: Session) -> OCRLearningService:

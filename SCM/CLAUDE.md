@@ -625,6 +625,45 @@ SCM/
 
 ---
 
+## 前端页面/组件
+
+### 页面列表
+
+| 页面 | 路径 | 说明 |
+|------|------|------|
+| Dashboard | `/scm/` | 仪表盘 - 库存概览统计 |
+| Stock | `/scm/inventory/stock` | 库存总览 |
+| In | `/scm/inventory/in` | 入库登记 |
+| Out | `/scm/inventory/out` | 出库登记 |
+| DeliveryCheck | `/scm/inventory/delivery` | 交货核销 |
+| TransactionHistory | `/scm/inventory/history` | 库存流水历史 |
+| PendingShipments | `/scm/inventory/pending` | 待出货列表 |
+| MaterialList | `/scm/materials` | 物料管理页面（含分类树） |
+| InboundList | `/scm/inbound` | 入库单管理 |
+| StocktakeList | `/scm/stocktake` | 盘点管理 |
+| TransferList | `/scm/transfer` | 库存转移 |
+| BatchList | `/scm/batch-serial/batch` | 批次管理 |
+| SerialList | `/scm/batch-serial/serial` | 序列号管理 |
+| BaseDataSettings | `/scm/settings` | 基础数据设置 |
+
+### 核心组件
+
+| 组件 | 说明 |
+|------|------|
+| MaterialForm | 物料新建/编辑表单 |
+| CategoryTree | 物料分类树组件 |
+| WarehouseSelector | 仓库选择器 |
+| BinSelector | 库位选择器 |
+| StockCard | 库存统计卡片 |
+| InboundForm | 入库单表单（含明细） |
+| StocktakeForm | 盘点单表单 |
+| TransferForm | 转移单表单 |
+| BatchTraceModal | 批次追溯弹窗 |
+| SerialTraceModal | 序列号追溯弹窗 |
+| LowStockAlert | 低库存预警组件 |
+
+---
+
 ## 本地开发
 
 ```bash

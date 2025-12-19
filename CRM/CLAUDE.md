@@ -432,6 +432,38 @@ CRM/
 
 ---
 
+## 前端页面/组件
+
+### 页面列表
+
+| 页面 | 路径 | 说明 |
+|------|------|------|
+| Dashboard | `/crm/` | 仪表盘 - CRM 概览统计 |
+| CustomerList | `/crm/customers` | 客户列表 - 客户管理主页 |
+| CustomerDetail | `/crm/customers/:id` | 客户详情 - 联系人、结算、交货信息 |
+| OpportunityList | `/crm/opportunities` | 销售机会列表 |
+| SalesPipeline | `/crm/pipeline` | 销售漏斗看板 |
+| ContractList | `/crm/contracts` | 合同管理列表 |
+| CustomerReports | `/crm/reports` | 客户分析报表 |
+| OrderList | `/crm/orders` | 订单列表（含工作流、审批） |
+| OrderNew | `/crm/orders/new` | 新建订单 |
+| OrderReports | `/crm/orders/reports` | 订单报表统计 |
+
+### 核心组件
+
+| 组件 | 说明 |
+|------|------|
+| CustomerForm | 客户新建/编辑表单 |
+| ContactEditor | 联系人管理组件 |
+| SettlementEditor | 结算信息编辑组件 |
+| OpportunityCard | 销售机会卡片（拖拽看板） |
+| FollowUpTimeline | 跟进记录时间线 |
+| ContractApproval | 合同审批流程组件 |
+| OrderWorkflow | 订单状态流转组件 |
+| ReportChart | 报表图表组件 |
+
+---
+
 ## 本地开发
 
 ```bash

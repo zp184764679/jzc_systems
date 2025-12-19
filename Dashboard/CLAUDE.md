@@ -202,6 +202,30 @@ Dashboard/
 
 ---
 
+## 前端页面/组件
+
+### 页面列表
+
+| 页面 | 路径 | 说明 |
+|------|------|------|
+| 仪表盘 | `/dashboard/` | KPI 指标、订单状态分布、交付趋势图表 |
+| 时间轴 | `/dashboard/timeline` | 生产进度可视化，支持按客户/订单/工序/部门切换 |
+| 待办事项 | `/dashboard/tasks` | 任务管理，支持优先级、截止日期、状态筛选 |
+| 客户门户 | `/dashboard/portal` | 生成客户访问链接，管理客户可见订单 |
+| 报表中心 | `/dashboard/reports` | 报表生成、下载、历史记录管理 |
+
+### 核心组件
+
+| 组件 | 位置 | 说明 |
+|------|------|------|
+| MainLayout | `components/Layout/MainLayout.jsx` | 主布局（Header + Sider + Content） |
+| TimelineChart | `components/Timeline/TimelineChart.jsx` | 时间轴图表组件 |
+| KPICard | `components/Dashboard/KPICard.jsx` | KPI 指标卡片 |
+| TaskCard | `components/Tasks/TaskCard.jsx` | 任务卡片组件 |
+| ReportGenerator | `components/Reports/ReportGenerator.jsx` | 报表生成表单 |
+
+---
+
 ## 配置文件
 
 ### 后端环境变量 (.env)
@@ -232,9 +256,41 @@ npm run dev
 
 ---
 
+## 已完成功能
+
+- [x] 仪表盘 KPI 指标展示
+- [x] 订单状态分布图表
+- [x] 交付趋势分析图表
+- [x] 时间轴多维度视图（客户/订单/工序/部门）
+- [x] 待办事项 CRUD 操作
+- [x] 任务优先级和截止日期管理
+- [x] 客户门户临时链接生成
+- [x] 报表中心 - 生产报表
+- [x] 报表中心 - 订单报表
+- [x] 报表中心 - 任务报表
+- [x] 报表中心 - KPI 报表
+- [x] 报表导出（Excel/PDF/CSV）
+- [ ] 实时数据刷新
+- [ ] 移动端适配
+- [ ] 邮件通知集成
+
+---
+
+## 与其他系统的集成
+
+| 调用方 | 被调用方 | 集成内容 | 状态 |
+|--------|----------|----------|------|
+| Dashboard | Portal | SSO 认证、用户信息 | 待实现 |
+| Dashboard | 报价 | 订单数据、生产计划 | 待实现 |
+| Dashboard | MES | 生产进度、工序状态 | 待实现 |
+| Dashboard | HR | 员工信息、部门数据 | 待实现 |
+
+---
+
 ## 注意事项
 
 1. **数据库**: 使用共享的 `cncplan` 数据库
 2. **客户门户**: 支持生成临时访问链接，有过期时间
 3. **时间轴**: 支持多维度数据聚合展示
 4. **部署状态**: 尚未部署到生产环境
+5. **报表存储**: 生成的报表文件保存在 `backend/reports/` 目录

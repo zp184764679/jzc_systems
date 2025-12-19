@@ -155,6 +155,51 @@ def get_learning_insights(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"生成洞察失败: {str(e)}")
 
 
+@router.post("/vector-sync")
+def sync_vector_store(db: Session = Depends(get_db)):
+    """
+    同步修正记录到向量库
+
+    - 将数据库中的修正记录同步到ChromaDB
+    - 用于初始化或恢复向量库
+    """
+    logger.info("🔄 开始同步向量库...")
+
+    try:
+        from services.vector_store_service import get_vector_store_service
+        vector_store = get_vector_store_service(db)
+        synced = vector_store.sync_from_database()
+
+        return {
+            "success": True,
+            "synced_count": synced,
+            "total_count": vector_store.collection.count(),
+            "message": f"向量库同步完成，新增{synced}条记录"
+        }
+    except Exception as e:
+        logger.error(f"❌ 向量库同步失败: {e}")
+        raise HTTPException(status_code=500, detail=f"向量库同步失败: {str(e)}")
+
+
+@router.get("/vector-stats")
+def get_vector_stats():
+    """
+    获取向量库统计信息
+    """
+    try:
+        from services.vector_store_service import get_vector_store_service
+        vector_store = get_vector_store_service()
+
+        return {
+            "success": True,
+            "total_vectors": vector_store.collection.count(),
+            "collection_name": "ocr_corrections"
+        }
+    except Exception as e:
+        logger.error(f"❌ 获取向量库统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取统计失败: {str(e)}")
+
+
 @router.get("/health")
 def health_check():
     """OCR学习服务健康检查"""
