@@ -522,6 +522,65 @@ class EmailIntegrationService:
             }
         }
 
+    # ==================== 邮件同步接口 ====================
+
+    def sync_emails(self, since_days: int = 7) -> Dict[str, Any]:
+        """
+        触发邮件系统同步最新邮件
+
+        从 IMAP 服务器拉取最新邮件到邮件翻译系统数据库
+
+        Args:
+            since_days: 同步最近多少天的邮件（默认7天）
+
+        Returns:
+            {
+                'success': True,
+                'message': '已触发 X 个邮箱账户的同步',
+                'synced_accounts': X,
+                'since_days': 7
+            }
+        """
+        try:
+            url = f"{self.email_api_url}/api/task-extractions/portal/sync"
+            response = requests.post(
+                url,
+                params={'since_days': since_days},
+                headers=self._get_portal_headers(),
+                timeout=self.timeout,
+                proxies=self.no_proxy
+            )
+
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    **response.json()
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'同步请求失败: {response.status_code}',
+                    'data': None
+                }
+        except requests.exceptions.ConnectionError:
+            return {
+                'success': False,
+                'error': '邮件系统连接失败，请检查服务是否启动',
+                'data': None
+            }
+        except requests.exceptions.Timeout:
+            return {
+                'success': False,
+                'error': '同步请求超时',
+                'data': None
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'同步请求失败: {str(e)}',
+                'data': None
+            }
+
     # ==================== 健康检查 ====================
 
     def check_health(self) -> Dict[str, Any]:

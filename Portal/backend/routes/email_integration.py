@@ -227,6 +227,36 @@ def trigger_extraction(email_id: int):
         return jsonify(result), 503
 
 
+# ==================== 邮件同步接口 ====================
+
+@email_integration_bp.route('/sync', methods=['POST'])
+@require_auth
+def sync_emails():
+    """
+    触发邮件系统同步最新邮件
+
+    从 IMAP 服务器拉取最新邮件到邮件翻译系统数据库
+
+    Query Parameters:
+        since_days: 同步最近多少天的邮件 (默认 7)
+
+    Returns:
+        {
+            'success': True,
+            'message': '已触发 X 个邮箱账户的同步',
+            'synced_accounts': X
+        }
+    """
+    since_days = request.args.get('since_days', 7, type=int)
+
+    result = email_integration_service.sync_emails(since_days=since_days)
+
+    if result.get('success'):
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 503
+
+
 # ==================== 健康检查 ====================
 
 @email_integration_bp.route('/health', methods=['GET'])

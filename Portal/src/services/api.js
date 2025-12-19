@@ -503,6 +503,10 @@ export const emailAPI = {
 
   // 检查邮件系统健康状态
   checkHealth: () => api.get('/emails/health'),
+
+  // 同步最新邮件（从 IMAP 服务器拉取）
+  syncEmails: (sinceDays = 7) =>
+    api.post('/emails/sync', null, { params: { since_days: sinceDays } }),
 }
 
 // ========== File Hub APIs ==========

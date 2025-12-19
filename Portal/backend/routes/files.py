@@ -29,6 +29,13 @@ from shared.file_storage_v2 import (
     get_file_history as get_storage_file_history
 )
 
+# 文件索引服务 - 同步到文件中心
+try:
+    from services.file_index_service import get_file_index_service
+except ImportError:
+    def get_file_index_service(db):
+        return None
+
 # Initialize auth database for user queries
 init_auth_db()
 
@@ -358,6 +365,30 @@ def upload_file():
 
         logger.info(f"File uploaded: {result['path']} by user {username}")
 
+        # 同步到文件中心索引（异步，不影响主流程）
+        try:
+            file_index_service = get_file_index_service(session)
+            if file_index_service:
+                file_index_service.index_file(
+                    source_system='portal',
+                    source_table='project_files',
+                    source_id=project_file.id,
+                    file_name=result['original_filename'],
+                    file_path=result['path'],
+                    file_category=category,
+                    file_url=result.get('url'),
+                    file_size=result['size'],
+                    file_type=file.content_type,
+                    project_id=int(project_id),
+                    project_no=project.project_id,
+                    customer_name=getattr(project, 'customer_name', None),
+                    uploaded_by=user_id,
+                    uploaded_by_name=user.get('full_name') or username,
+                )
+                logger.info(f"[FileIndex] 项目文件已索引: file_id={project_file.id}")
+        except Exception as idx_err:
+            logger.warning(f"[FileIndex] 项目文件索引异常: {idx_err}")
+
         return jsonify(project_file.to_dict()), 201
 
     except Exception as e:
@@ -618,6 +649,40 @@ def upload_file_version(file_id):
         )
 
         logger.info(f"File version uploaded: {result['path']} v{new_version} by user {username}")
+
+        # 同步到文件中心索引（异步，不影响主流程）
+        try:
+            file_index_service = get_file_index_service(session)
+            if file_index_service:
+                # 新版本文件索引
+                file_index_service.index_file(
+                    source_system='portal',
+                    source_table='project_files',
+                    source_id=new_file.id,
+                    file_name=result['original_filename'],
+                    file_path=result['path'],
+                    file_category=original_file.category,
+                    file_url=result.get('url'),
+                    file_size=result['size'],
+                    file_type=file.content_type,
+                    project_id=original_file.project_id,
+                    project_no=entity_id,
+                    customer_name=getattr(project, 'customer_name', None) if project else None,
+                    uploaded_by=user_id,
+                    uploaded_by_name=user.get('full_name') or username,
+                    version=new_version,
+                    is_latest_version=True,
+                )
+                # 更新旧版本索引 - 标记为非最新
+                file_index_service.update_index(
+                    source_system='portal',
+                    source_table='project_files',
+                    source_id=file_id,
+                    is_latest_version=False,
+                )
+                logger.info(f"[FileIndex] 项目文件新版本已索引: file_id={new_file.id}, version={new_version}")
+        except Exception as idx_err:
+            logger.warning(f"[FileIndex] 项目文件版本索引异常: {idx_err}")
 
         return jsonify(new_file.to_dict()), 201
 
@@ -1084,6 +1149,20 @@ def delete_file(file_id):
         )
 
         logger.info(f"File record deleted: file_id={file_id} by user {username}")
+
+        # 从文件中心移除索引（异步，不影响主流程）
+        try:
+            file_index_service = get_file_index_service(session)
+            if file_index_service:
+                file_index_service.remove_from_index(
+                    source_system='portal',
+                    source_table='project_files',
+                    source_id=file_id,
+                    soft_delete=True
+                )
+                logger.info(f"[FileIndex] 项目文件索引已移除: file_id={file_id}")
+        except Exception as idx_err:
+            logger.warning(f"[FileIndex] 移除项目文件索引异常: {idx_err}")
 
         return jsonify({
             'message': '文件已删除',

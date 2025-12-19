@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Modal, Table, Input, DatePicker, Button, Tag, Space, Spin, Alert, Descriptions, Card, Tooltip, message } from 'antd'
-import { MailOutlined, SearchOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, RobotOutlined } from '@ant-design/icons'
+import { MailOutlined, SearchOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, RobotOutlined, CloudSyncOutlined } from '@ant-design/icons'
 import { emailAPI } from '../../services/api'
 import dayjs from 'dayjs'
 
@@ -30,6 +30,44 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
   const [extracting, setExtracting] = useState(false)
   const [extractedData, setExtractedData] = useState(null)
   const [extractError, setExtractError] = useState(null)
+
+  // 同步状态
+  const [syncing, setSyncing] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState(null)
+  const syncTriggered = useRef(false)
+
+  // 同步邮件（从 IMAP 服务器拉取最新邮件）
+  const syncEmails = async (silent = false) => {
+    try {
+      setSyncing(true)
+      if (!silent) {
+        message.loading({ content: '正在同步最新邮件...', key: 'sync', duration: 0 })
+      }
+
+      const response = await emailAPI.syncEmails(7) // 同步最近7天的邮件
+      if (response.data?.success) {
+        setLastSyncTime(new Date())
+        if (!silent) {
+          message.success({ content: response.data.message || '邮件同步已触发', key: 'sync' })
+        }
+        // 等待3秒后刷新列表，给后台同步一些时间
+        setTimeout(() => {
+          loadEmails()
+        }, 3000)
+      } else {
+        if (!silent) {
+          message.error({ content: response.data?.error || '同步失败', key: 'sync' })
+        }
+      }
+    } catch (error) {
+      console.error('邮件同步失败:', error)
+      if (!silent) {
+        message.error({ content: '邮件同步失败，请检查邮件系统连接', key: 'sync' })
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   // 加载邮件列表
   const loadEmails = async () => {
@@ -63,7 +101,20 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
     }
   }
 
-  // 首次加载和条件变化时刷新列表
+  // 首次打开时自动同步
+  useEffect(() => {
+    if (open && !syncTriggered.current) {
+      syncTriggered.current = true
+      // 自动同步最新邮件（静默模式，不显示 loading）
+      syncEmails(true)
+    }
+    if (!open) {
+      // 关闭时重置
+      syncTriggered.current = false
+    }
+  }, [open])
+
+  // 条件变化时刷新列表
   useEffect(() => {
     if (open) {
       loadEmails()
@@ -254,7 +305,7 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
       styles={{ body: { padding: '16px 24px' } }}
     >
       {/* 搜索栏 */}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12 }}>
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input
           placeholder="搜索邮件主题或发件人"
           prefix={<SearchOutlined />}
@@ -272,8 +323,22 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
           搜索
         </Button>
         <Button icon={<SyncOutlined />} onClick={loadEmails}>
-          刷新
+          刷新列表
         </Button>
+        <Button
+          type="default"
+          icon={<CloudSyncOutlined spin={syncing} />}
+          onClick={() => syncEmails(false)}
+          loading={syncing}
+          style={{ background: syncing ? '#e6f7ff' : undefined }}
+        >
+          同步最新邮件
+        </Button>
+        {lastSyncTime && (
+          <span style={{ color: '#999', fontSize: 12 }}>
+            上次同步: {dayjs(lastSyncTime).format('HH:mm:ss')}
+          </span>
+        )}
       </div>
 
       {/* 主体内容：左侧邮件列表，右侧提取结果 */}
