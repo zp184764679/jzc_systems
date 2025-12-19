@@ -482,6 +482,20 @@ class EmailIntegrationService:
             'source_email_id': email_id
         }
 
+        # 6. 构建可直接用于创建项目的数据
+        project_data = {
+            'name': extracted.get('project_name', ''),
+            'description': extracted.get('description', ''),
+            'customer_name': extracted.get('customer_name', ''),
+            'order_no': extracted.get('order_no', ''),
+            'part_number': extracted.get('part_number', ''),
+            'priority': extracted.get('priority', 'normal'),
+            'planned_start_date': extracted.get('start_date'),
+            'planned_end_date': extracted.get('due_date'),
+            # 来源追踪
+            'source_email_id': email_id
+        }
+
         return {
             'success': True,
             'data': {
@@ -490,6 +504,7 @@ class EmailIntegrationService:
                 'matched_project': matched_project,
                 'matched_employee': matched_employee,
                 'task_data': task_data,
+                'project_data': project_data,
                 'confidence': extracted.get('confidence', {})
             }
         }

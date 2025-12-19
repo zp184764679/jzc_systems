@@ -360,6 +360,25 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
             {selectedEmail && extractedData && !extracting && (
               <div style={{ maxHeight: 350, overflowY: 'auto' }}>
                 <Descriptions column={1} size="small" bordered>
+                  {/* 项目相关字段 */}
+                  {extractedData.extraction?.project_name && (
+                    <Descriptions.Item label="项目名称">
+                      <span style={{ color: '#1890ff', fontWeight: 500 }}>
+                        {extractedData.extraction.project_name}
+                      </span>
+                    </Descriptions.Item>
+                  )}
+                  {extractedData.extraction?.customer_name && (
+                    <Descriptions.Item label="客户/供应商">
+                      {extractedData.extraction.customer_name}
+                    </Descriptions.Item>
+                  )}
+                  {extractedData.extraction?.order_no && (
+                    <Descriptions.Item label="订单号">
+                      {extractedData.extraction.order_no}
+                    </Descriptions.Item>
+                  )}
+                  {/* 任务相关字段 */}
                   <Descriptions.Item label="任务标题">
                     {extractedData.extraction?.title || '-'}
                   </Descriptions.Item>

@@ -1,8 +1,10 @@
-import { Modal, Form, Input, DatePicker, Select, message, Divider } from 'antd'
+import { Modal, Form, Input, DatePicker, Select, message, Divider, Button, Space } from 'antd'
 import { useState, useEffect } from 'react'
+import { MailOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { projectAPI } from '../../services/api'
 import { CustomerSelect, EmployeeSelect } from '../Selectors'
+import EmailImportPanel from '../Tasks/EmailImportPanel'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -13,6 +15,8 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
   const isEdit = !!project
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [selectedManager, setSelectedManager] = useState(null)
+  const [emailImportOpen, setEmailImportOpen] = useState(false)
+  const [importedFromEmail, setImportedFromEmail] = useState(null)
 
   useEffect(() => {
     if (open && project) {
@@ -39,8 +43,44 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
       form.resetFields()
       setSelectedCustomer(null)
       setSelectedManager(null)
+      setImportedFromEmail(null)
     }
   }, [open, project, form])
+
+  // 处理从邮件导入的数据
+  const handleEmailImport = (importedData) => {
+    setImportedFromEmail(importedData.source_email)
+
+    // 使用 project_data 填充项目表单
+    const projectData = importedData.project_data || importedData.extraction || {}
+
+    // 处理部件番号（可能是逗号分隔的字符串）
+    let partNumbers = []
+    if (projectData.part_number) {
+      partNumbers = projectData.part_number.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+    }
+
+    // 处理日期范围
+    let dateRange = null
+    if (projectData.planned_start_date || projectData.planned_end_date) {
+      dateRange = [
+        projectData.planned_start_date ? dayjs(projectData.planned_start_date) : null,
+        projectData.planned_end_date ? dayjs(projectData.planned_end_date) : null,
+      ]
+    }
+
+    // 填充表单
+    form.setFieldsValue({
+      name: projectData.name || projectData.project_name || '',
+      description: projectData.description || '',
+      order_no: projectData.order_no || '',
+      part_number: partNumbers,
+      priority: projectData.priority || 'normal',
+      dateRange: dateRange,
+    })
+
+    message.success('已从邮件导入项目信息')
+  }
 
   const handleSubmit = async () => {
     try {
@@ -95,27 +135,46 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
   }
 
   return (
-    <Modal
-      title={isEdit ? '编辑项目' : '新建项目'}
-      open={open}
-      onOk={handleSubmit}
-      onCancel={onClose}
-      width={600}
-      okText={isEdit ? '更新' : '创建'}
-      cancelText="取消"
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        style={{ marginTop: 24 }}
+    <>
+      <Modal
+        title={isEdit ? '编辑项目' : '新建项目'}
+        open={open}
+        onOk={handleSubmit}
+        onCancel={onClose}
+        width={600}
+        okText={isEdit ? '更新' : '创建'}
+        cancelText="取消"
       >
-        <Form.Item
-          name="name"
-          label="项目名称"
-          rules={[{ required: true, message: '请输入项目名称' }]}
+        <Form
+          form={form}
+          layout="vertical"
+          style={{ marginTop: 24 }}
         >
-          <Input placeholder="请输入项目名称" />
-        </Form.Item>
+          {/* 从邮件导入按钮 - 仅在新建项目时显示 */}
+          {!isEdit && (
+            <div style={{ marginBottom: 16 }}>
+              <Button
+                icon={<MailOutlined />}
+                onClick={() => setEmailImportOpen(true)}
+                style={{ marginRight: 8 }}
+              >
+                从邮件导入
+              </Button>
+              {importedFromEmail && (
+                <span style={{ color: '#52c41a', fontSize: 12 }}>
+                  已导入: {importedFromEmail.subject_translated || importedFromEmail.subject_original}
+                </span>
+              )}
+            </div>
+          )}
+
+          <Form.Item
+            name="name"
+            label="项目名称"
+            rules={[{ required: true, message: '请输入项目名称' }]}
+          >
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
 
         <Form.Item
           name="description"
@@ -204,5 +263,13 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
         )}
       </Form>
     </Modal>
+
+      {/* 邮件导入面板 */}
+      <EmailImportPanel
+        open={emailImportOpen}
+        onClose={() => setEmailImportOpen(false)}
+        onImport={handleEmailImport}
+      />
+    </>
   )
 }
