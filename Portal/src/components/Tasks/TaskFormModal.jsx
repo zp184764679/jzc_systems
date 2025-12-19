@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, DatePicker, Checkbox, InputNumber, message, Tabs } from 'antd'
-import { FileTextOutlined, SettingOutlined } from '@ant-design/icons'
+import { Modal, Form, Input, Select, DatePicker, Checkbox, InputNumber, message, Tabs, Button, Space } from 'antd'
+import { FileTextOutlined, SettingOutlined, MailOutlined } from '@ant-design/icons'
 import { taskAPI } from '../../services/api'
 import { EmployeeSelect } from '../Selectors'
 import RichTextEditor from '../Editor/RichTextEditor'
+import EmailImportPanel from './EmailImportPanel'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -13,6 +14,8 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
   const [loading, setLoading] = useState(false)
   const [description, setDescription] = useState('')
   const [attachments, setAttachments] = useState([])
+  const [emailImportOpen, setEmailImportOpen] = useState(false)
+  const [importedFromEmail, setImportedFromEmail] = useState(null)
   const isEdit = !!task
 
   useEffect(() => {
@@ -45,8 +48,36 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       form.resetFields()
       setDescription('')
       setAttachments([])
+      setImportedFromEmail(null)
     }
   }, [open, task, form])
+
+  // 处理从邮件导入的数据
+  const handleEmailImport = (importedData) => {
+    setImportedFromEmail(importedData.source_email)
+
+    // 填充表单
+    form.setFieldsValue({
+      title: importedData.title || '',
+      task_type: importedData.task_type || 'general',
+      priority: importedData.priority || 'normal',
+      assigned_to_id: importedData.assigned_to_id,
+      start_date: importedData.start_date ? dayjs(importedData.start_date) : null,
+      due_date: importedData.due_date ? dayjs(importedData.due_date) : null,
+    })
+
+    // 设置描述（包含待办事项）
+    let desc = importedData.extraction?.description || ''
+    if (importedData.extraction?.action_items?.length > 0) {
+      desc += '\n\n待办事项:\n'
+      importedData.extraction.action_items.forEach((item, i) => {
+        desc += `${i + 1}. ${item}\n`
+      })
+    }
+    setDescription(desc)
+
+    message.success('已从邮件导入任务信息')
+  }
 
   const handleSubmit = async () => {
     try {
@@ -98,6 +129,7 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
     form.resetFields()
     setDescription('')
     setAttachments([])
+    setImportedFromEmail(null)
     onClose()
   }
 
@@ -112,6 +144,24 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
       ),
       children: (
         <>
+          {/* 从邮件导入按钮 - 仅在新建任务时显示 */}
+          {!isEdit && (
+            <div style={{ marginBottom: 16 }}>
+              <Button
+                icon={<MailOutlined />}
+                onClick={() => setEmailImportOpen(true)}
+                style={{ marginRight: 8 }}
+              >
+                从邮件导入
+              </Button>
+              {importedFromEmail && (
+                <span style={{ color: '#52c41a', fontSize: 12 }}>
+                  已导入: {importedFromEmail.subject_translated || importedFromEmail.subject_original}
+                </span>
+              )}
+            </div>
+          )}
+
           <Form.Item
             name="title"
             label="任务标题"
@@ -276,20 +326,29 @@ export default function TaskFormModal({ open, onClose, onSuccess, projectId, tas
   ]
 
   return (
-    <Modal
-      title={isEdit ? '编辑任务' : '创建任务'}
-      open={open}
-      onOk={handleSubmit}
-      onCancel={handleCancel}
-      confirmLoading={loading}
-      okText={isEdit ? '更新' : '创建'}
-      cancelText="取消"
-      width={720}
-      styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
-    >
-      <Form form={form} layout="vertical">
-        <Tabs items={tabItems} defaultActiveKey="basic" />
-      </Form>
-    </Modal>
+    <>
+      <Modal
+        title={isEdit ? '编辑任务' : '创建任务'}
+        open={open}
+        onOk={handleSubmit}
+        onCancel={handleCancel}
+        confirmLoading={loading}
+        okText={isEdit ? '更新' : '创建'}
+        cancelText="取消"
+        width={720}
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+      >
+        <Form form={form} layout="vertical">
+          <Tabs items={tabItems} defaultActiveKey="basic" />
+        </Form>
+      </Modal>
+
+      {/* 邮件导入面板 */}
+      <EmailImportPanel
+        open={emailImportOpen}
+        onClose={() => setEmailImportOpen(false)}
+        onImport={handleEmailImport}
+      />
+    </>
   )
 }

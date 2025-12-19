@@ -449,4 +449,27 @@ export const exportAPI = {
   }),
 }
 
+// ========== Email Integration APIs ==========
+
+export const emailAPI = {
+  // 获取邮件列表（从邮件翻译系统代理）
+  getEmails: (params) => api.get('/emails', { params }),
+
+  // 获取邮件详情
+  getEmail: (id) => api.get(`/emails/${id}`),
+
+  // 获取邮件的任务提取结果
+  getTaskExtraction: (emailId) => api.get(`/emails/${emailId}/task-extraction`),
+
+  // 从邮件提取任务信息（完整流程：获取预提取 + 智能匹配）
+  extractTask: (emailId) => api.post(`/emails/${emailId}/extract`),
+
+  // 触发任务提取（手动重试）
+  triggerExtraction: (emailId, force = false) =>
+    api.post(`/emails/${emailId}/trigger-extraction`, null, { params: { force } }),
+
+  // 检查邮件系统健康状态
+  checkHealth: () => api.get('/emails/health'),
+}
+
 export default api
