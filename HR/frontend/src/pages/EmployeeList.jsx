@@ -43,6 +43,8 @@ const EmployeeList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all' or position name
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -53,33 +55,35 @@ const EmployeeList = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fetch employees
+  // Fetch employees with pagination - 默认只查在职员工
   const { data: employeesData, isLoading } = useQuery({
-    queryKey: ['employees', searchKeyword, selectedDepartment],
-    queryFn: () => employeeAPI.getEmployees(searchKeyword, selectedDepartment),
+    queryKey: ['employees', searchKeyword, selectedDepartment, currentPage, pageSize],
+    queryFn: () => employeeAPI.getEmployees({
+      search: searchKeyword,
+      department: selectedDepartment,
+      page: currentPage,
+      per_page: pageSize,
+      employment_status: 'Active', // 只查在职员工
+    }),
   });
   const allEmployees = employeesData?.data || [];
+  const pagination = employeesData?.pagination || { total: 0, page: 1, pages: 1 };
 
-  // Get unique departments from all employees for filter
+  // Get unique departments from employees for filter (from current page data)
   const uniqueDepartments = [...new Set(allEmployees.map(emp => emp.department).filter(Boolean))].sort();
 
-  // Get unique positions (titles) from active employees
-  const activeEmployees = allEmployees.filter(emp => emp.employment_status === 'Active' && !emp.is_blacklisted);
-  const uniquePositions = [...new Set(activeEmployees.map(emp => emp.title).filter(Boolean))].sort();
+  // Get unique positions (titles) from employees
+  const uniquePositions = [...new Set(allEmployees.map(emp => emp.title).filter(Boolean))].sort();
 
-  // Filter employees based on active tab (by position)
-  const employees = allEmployees.filter((emp) => {
-    // 只显示在职员工
-    if (emp.employment_status !== 'Active' || emp.is_blacklisted) {
-      return false;
-    }
-    // 如果选择"all"，显示所有在职员工
-    if (activeTab === 'all') {
-      return true;
-    }
-    // 否则按岗位筛选
-    return emp.title === activeTab;
-  });
+  // Filter employees based on active tab (by position) - 后端已筛选在职员工
+  const employees = activeTab === 'all'
+    ? allEmployees.filter(emp => !emp.is_blacklisted)
+    : allEmployees.filter(emp => !emp.is_blacklisted && emp.title === activeTab);
+
+  // 重置页码当搜索条件变化时
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchKeyword, selectedDepartment]);
 
   // Fetch departments for dropdown
   const { data: departmentsData } = useQuery({
@@ -647,12 +651,12 @@ const EmployeeList = () => {
     {
       key: 'all',
       icon: <UserOutlined />,
-      label: `全部在职 (${activeEmployees.length})`,
+      label: `全部在职 (${pagination.total})`,
     },
     ...uniquePositions.map(pos => ({
       key: pos,
       icon: <UserOutlined />,
-      label: `${pos} (${activeEmployees.filter(e => e.title === pos).length})`,
+      label: `${pos} (${allEmployees.filter(e => e.title === pos && !e.is_blacklisted).length})`,
     })),
   ];
 
@@ -703,9 +707,9 @@ const EmployeeList = () => {
 
   // Category options for mobile segmented control (显示岗位)
   const categoryOptions = [
-    { label: `全部(${activeEmployees.length})`, value: 'all' },
+    { label: `全部(${pagination.total})`, value: 'all' },
     ...uniquePositions.slice(0, 4).map(pos => ({  // 移动端只显示前4个岗位
-      label: `${pos.length > 4 ? pos.slice(0, 4) : pos}(${activeEmployees.filter(e => e.title === pos).length})`,
+      label: `${pos.length > 4 ? pos.slice(0, 4) : pos}(${allEmployees.filter(e => e.title === pos && !e.is_blacklisted).length})`,
       value: pos,
     })),
   ];
@@ -807,11 +811,17 @@ const EmployeeList = () => {
               scroll={isMobile ? undefined : { x: 1800 }}
               size={isMobile ? "small" : "middle"}
               pagination={{
-                defaultPageSize: isMobile ? 10 : 10,
+                current: currentPage,
+                pageSize: pageSize,
+                total: pagination.total,
                 showSizeChanger: !isMobile,
                 showTotal: isMobile ? undefined : (total) => `共 ${total} 条记录`,
                 pageSizeOptions: ['10', '20', '50', '100'],
                 size: isMobile ? 'small' : 'default',
+                onChange: (page, size) => {
+                  setCurrentPage(page);
+                  setPageSize(size);
+                },
               }}
             />
           </Content>

@@ -70,11 +70,17 @@ export const authAPI = {
 
 // Employee API
 export const employeeAPI = {
-  getEmployees: (keyword = '', department = '') => {
-    const params = {};
-    if (keyword) params.search = keyword;
-    if (department) params.department = department;
-    return api.get('/employees', { params });
+  getEmployees: (params = {}) => {
+    // 默认只查在职员工，支持分页
+    const queryParams = {
+      page: params.page || 1,
+      per_page: params.per_page || 20,
+      employment_status: params.employment_status ?? 'Active', // 默认在职
+    };
+    if (params.search) queryParams.search = params.search;
+    if (params.department) queryParams.department = params.department;
+    if (params.factory_id) queryParams.factory_id = params.factory_id;
+    return api.get('/employees', { params: queryParams });
   },
   getEmployeeById: (id) => api.get(`/employees/${id}`),
   createEmployee: (data) => api.post('/employees', data),
