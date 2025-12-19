@@ -365,18 +365,19 @@ export default function AllTasksTimeline() {
                   {/* 项目标题行 */}
                   <div
                     style={{
-                      height: 48,
-                      padding: '8px 16px',
+                      minHeight: 56,
+                      padding: '10px 16px',
                       borderBottom: '1px solid #e5e5e7',
                       background: '#f9f9fb',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between'
+                      justifyContent: 'space-between',
+                      gap: 8
                     }}
                   >
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <div style={{
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 600,
                         color: '#1d1d1f',
                         overflow: 'hidden',
@@ -384,19 +385,20 @@ export default function AllTasksTimeline() {
                         whiteSpace: 'nowrap',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 6
+                        gap: 8,
+                        lineHeight: 1.4
                       }}>
                         <span style={{
-                          width: 6,
-                          height: 6,
+                          width: 8,
+                          height: 8,
                           borderRadius: '50%',
                           background: priority.color,
                           flexShrink: 0
                         }} />
                         {project.part_number || project.name}
                       </div>
-                      <div style={{ fontSize: 11, color: '#86868b', marginTop: 2 }}>
-                        {project.customer || '-'} | {tasks.length} 个任务
+                      <div style={{ fontSize: 12, color: '#86868b', marginTop: 4, lineHeight: 1.3 }}>
+                        {project.customer || '-'} · {tasks.length} 个任务
                       </div>
                     </div>
                     <Tooltip title="查看项目详情">
@@ -415,8 +417,8 @@ export default function AllTasksTimeline() {
                     <div
                       key={task.id}
                       style={{
-                        height: 44,
-                        padding: '6px 16px 6px 28px',
+                        minHeight: 52,
+                        padding: '8px 16px 8px 32px',
                         borderBottom: '1px solid #f0f0f0',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
@@ -433,14 +435,15 @@ export default function AllTasksTimeline() {
                         color: '#1d1d1f',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
+                        lineHeight: 1.4
                       }}>
                         {task.title}
                       </div>
-                      <div style={{ fontSize: 11, color: '#86868b', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: '#86868b', marginTop: 4, lineHeight: 1.3 }}>
                         {task.assigned_to_name || '未分配'}
                         {task.due_date && (
-                          <span style={{ marginLeft: 8 }}>
+                          <span style={{ marginLeft: 10 }}>
                             截止: {dayjs(task.due_date).format('MM-DD')}
                           </span>
                         )}
@@ -535,7 +538,7 @@ export default function AllTasksTimeline() {
                 <div key={project.id}>
                   {/* 项目标题行占位 */}
                   <div style={{
-                    height: 48,
+                    minHeight: 56,
                     borderBottom: '1px solid #e5e5e7',
                     background: '#f9f9fb'
                   }}>
@@ -574,7 +577,7 @@ export default function AllTasksTimeline() {
                       <div
                         key={task.id}
                         style={{
-                          height: 44,
+                          minHeight: 52,
                           position: 'relative',
                           borderBottom: '1px solid #f0f0f0'
                         }}
@@ -623,7 +626,7 @@ export default function AllTasksTimeline() {
                               onClick={() => handleTaskClick(task, project.id)}
                               style={{
                                 position: 'absolute',
-                                top: 6,
+                                top: 10,
                                 left: barStyle.left,
                                 width: barStyle.width,
                                 height: 32,
