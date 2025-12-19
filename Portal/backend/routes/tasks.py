@@ -58,6 +58,56 @@ def safe_parse_date(date_str):
             return None
 
 
+@tasks_bp.route('/all', methods=['GET'])
+def get_all_tasks():
+    """获取所有项目的任务，按项目分组返回"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        # 获取所有活跃项目（排除已取消和已删除的）
+        projects = session.query(Project).filter(
+            Project.status.notin_(['cancelled', 'deleted']),
+            Project.deleted_at.is_(None)
+        ).order_by(Project.planned_start_date.asc().nullslast()).all()
+
+        result = []
+        for project in projects:
+            # 获取项目的所有任务
+            tasks = session.query(Task).filter_by(project_id=project.id).order_by(
+                Task.start_date.asc().nullslast(),
+                Task.due_date.asc().nullslast()
+            ).all()
+
+            if tasks:  # 只返回有任务的项目
+                result.append({
+                    'project': {
+                        'id': project.id,
+                        'name': project.name,
+                        'project_no': project.project_no,
+                        'part_number': project.part_number,
+                        'customer': project.customer,
+                        'status': project.status,
+                        'priority': project.priority,
+                        'planned_start_date': project.planned_start_date.isoformat() if project.planned_start_date else None,
+                        'planned_end_date': project.planned_end_date.isoformat() if project.planned_end_date else None
+                    },
+                    'tasks': [t.to_dict() for t in tasks]
+                })
+
+        return jsonify({
+            'data': result,
+            'total_projects': len(result),
+            'total_tasks': sum(len(p['tasks']) for p in result)
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
 @tasks_bp.route('/project/<int:project_id>', methods=['GET'])
 def get_project_tasks(project_id):
     """获取项目的所有任务"""

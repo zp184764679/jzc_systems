@@ -6,7 +6,6 @@ import HomePage from './pages/HomePage'
 import ProjectListPage from './pages/Projects/ProjectListPage'
 import ProjectDetailPage from './pages/Projects/ProjectDetailPage'
 import PartNumberDetailPage from './pages/Projects/PartNumberDetailPage'
-import TimelinePage from './pages/Projects/TimelinePage'
 import NotificationsPage from './pages/NotificationsPage'
 import AuditLogsPage from './pages/Security/AuditLogsPage'
 import LoginHistoryPage from './pages/Security/LoginHistoryPage'
@@ -54,7 +53,6 @@ function AppContent() {
       }>
         <Route path="/" element={<HomePage />} />
         <Route path="/projects" element={<ProjectListPage />} />
-        <Route path="/projects/timeline" element={<TimelinePage />} />
         <Route path="/projects/part/:partNumber" element={<PartNumberDetailPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

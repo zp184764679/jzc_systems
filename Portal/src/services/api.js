@@ -62,6 +62,9 @@ export const projectAPI = {
 // ========== Task APIs ==========
 
 export const taskAPI = {
+  // Get all tasks grouped by project
+  getAllTasks: () => api.get('/tasks/all'),
+
   // Get tasks for a project
   getProjectTasks: (projectId, params) =>
     api.get(`/tasks/project/${projectId}`, { params }),
