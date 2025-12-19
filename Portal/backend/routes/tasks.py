@@ -1,19 +1,32 @@
 """
 Tasks API Routes - 任务管理API
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from models import SessionLocal
 from models.task import Task, TaskStatus
 from models.project import Project
 from datetime import datetime
+from werkzeug.utils import secure_filename
 import sys
 import os
+import json
+import uuid
 
 # Add shared module to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from shared.auth import verify_token
 
 tasks_bp = Blueprint('tasks', __name__, url_prefix='/api/tasks')
+
+# 任务附件存储路径
+TASK_ATTACHMENTS_DIR = os.path.join(os.path.dirname(__file__), '../../storage/task_attachments')
+os.makedirs(TASK_ATTACHMENTS_DIR, exist_ok=True)
+
+# 允许的文件类型
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'zip', 'rar'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def get_current_user():
@@ -550,6 +563,226 @@ def update_task_status(task_id):
             'task': task.to_dict(),
             'old_status': old_status,
             'new_status': new_status
+        }), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+# ============================================================
+# 任务附件管理 API
+# ============================================================
+
+@tasks_bp.route('/<int:task_id>/attachments', methods=['GET'])
+def get_task_attachments(task_id):
+    """获取任务附件列表"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        # 解析附件 JSON
+        attachments = []
+        if task.attachments:
+            try:
+                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
+            except:
+                pass
+
+        return jsonify({'attachments': attachments}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/attachments', methods=['POST'])
+def upload_task_attachment(task_id):
+    """上传任务附件"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    if 'file' not in request.files:
+        return jsonify({'error': '没有文件'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '没有选择文件'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': f'不支持的文件类型，允许: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        # 生成唯一文件名
+        original_filename = secure_filename(file.filename)
+        # 保留中文文件名
+        if not original_filename or original_filename == '_':
+            original_filename = file.filename
+        file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+        unique_id = str(uuid.uuid4())[:8]
+        stored_filename = f"{task_id}_{unique_id}.{file_ext}"
+
+        # 保存文件
+        file_path = os.path.join(TASK_ATTACHMENTS_DIR, stored_filename)
+        file.save(file_path)
+
+        # 获取文件大小
+        file_size = os.path.getsize(file_path)
+
+        # 更新任务附件列表
+        attachments = []
+        if task.attachments:
+            try:
+                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
+            except:
+                pass
+
+        new_attachment = {
+            'id': unique_id,
+            'name': original_filename,
+            'stored_name': stored_filename,
+            'size': file_size,
+            'type': file_ext,
+            'url': f'/api/tasks/{task_id}/attachments/{unique_id}/download',
+            'uploaded_at': datetime.now().isoformat(),
+            'uploaded_by': user.get('username', 'unknown')
+        }
+        attachments.append(new_attachment)
+
+        task.attachments = json.dumps(attachments, ensure_ascii=False)
+        session.commit()
+
+        return jsonify({
+            'message': '上传成功',
+            'attachment': new_attachment
+        }), 201
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/attachments/<attachment_id>/download', methods=['GET'])
+def download_task_attachment(task_id, attachment_id):
+    """下载任务附件"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        # 查找附件
+        attachments = []
+        if task.attachments:
+            try:
+                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
+            except:
+                pass
+
+        attachment = next((a for a in attachments if a.get('id') == attachment_id), None)
+        if not attachment:
+            return jsonify({'error': '附件不存在'}), 404
+
+        file_path = os.path.join(TASK_ATTACHMENTS_DIR, attachment['stored_name'])
+        if not os.path.exists(file_path):
+            return jsonify({'error': '文件不存在'}), 404
+
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=attachment['name']
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/attachments/<attachment_id>', methods=['DELETE'])
+def delete_task_attachment(task_id, attachment_id):
+    """删除任务附件"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        # 查找并删除附件
+        attachments = []
+        if task.attachments:
+            try:
+                attachments = json.loads(task.attachments) if isinstance(task.attachments, str) else task.attachments
+            except:
+                pass
+
+        attachment = next((a for a in attachments if a.get('id') == attachment_id), None)
+        if not attachment:
+            return jsonify({'error': '附件不存在'}), 404
+
+        # 删除文件
+        file_path = os.path.join(TASK_ATTACHMENTS_DIR, attachment['stored_name'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # 更新附件列表
+        attachments = [a for a in attachments if a.get('id') != attachment_id]
+        task.attachments = json.dumps(attachments, ensure_ascii=False)
+        session.commit()
+
+        return jsonify({'message': '删除成功'}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+
+@tasks_bp.route('/<int:task_id>/description', methods=['PUT'])
+def update_task_description(task_id):
+    """快速更新任务描述"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未授权'}), 401
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': '缺少数据'}), 400
+
+    session = SessionLocal()
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'error': '任务不存在'}), 404
+
+        task.description = data.get('description', '')
+        session.commit()
+        session.refresh(task)
+
+        return jsonify({
+            'message': '描述已更新',
+            'task': task.to_dict()
         }), 200
     except Exception as e:
         session.rollback()

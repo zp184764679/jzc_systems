@@ -10,7 +10,13 @@ import {
   Typography,
   Divider,
   message,
-  List
+  List,
+  Upload,
+  Input,
+  Popconfirm,
+  Spin,
+  Slider,
+  Tooltip
 } from 'antd'
 import {
   CalendarOutlined,
@@ -20,13 +26,24 @@ import {
   EditOutlined,
   FlagOutlined,
   PaperClipOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  UploadOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  CloseOutlined,
+  FileTextOutlined,
+  FilePdfOutlined,
+  FileImageOutlined,
+  FileExcelOutlined,
+  FileWordOutlined,
+  InboxOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { taskAPI } from '../../services/api'
-import TaskFilesPanel from './TaskFilesPanel'
 
-const { Title, Text } = Typography
+const { Title, Text, Paragraph } = Typography
+const { TextArea } = Input
+const { Dragger } = Upload
 
 // 状态配置
 const statusConfig = {
@@ -65,80 +82,64 @@ const formatFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-// 富文本内容渲染组件
-function RichContent({ html }) {
-  if (!html) return null
-
-  // 检查是否是HTML内容（包含标签）
-  const isHtml = /<[^>]+>/.test(html)
-
-  if (!isHtml) {
-    // 纯文本，保留换行
-    return <Text style={{ whiteSpace: 'pre-wrap' }}>{html}</Text>
+// 文件图标
+const getFileIcon = (fileName) => {
+  const ext = fileName?.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'pdf':
+      return <FilePdfOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+    case 'doc':
+    case 'docx':
+      return <FileWordOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+    case 'xls':
+    case 'xlsx':
+      return <FileExcelOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+      return <FileImageOutlined style={{ color: '#faad14', fontSize: 20 }} />
+    default:
+      return <FileTextOutlined style={{ color: '#8c8c8c', fontSize: 20 }} />
   }
-
-  return (
-    <div
-      className="rich-content"
-      dangerouslySetInnerHTML={{ __html: html }}
-      style={{
-        lineHeight: 1.8,
-        wordBreak: 'break-word'
-      }}
-    />
-  )
-}
-
-// 附件列表组件
-function AttachmentList({ attachments }) {
-  if (!attachments || attachments.length === 0) return null
-
-  // 解析附件（可能是JSON字符串）
-  let parsedAttachments = attachments
-  if (typeof attachments === 'string') {
-    try {
-      parsedAttachments = JSON.parse(attachments)
-    } catch {
-      return null
-    }
-  }
-
-  if (!Array.isArray(parsedAttachments) || parsedAttachments.length === 0) return null
-
-  return (
-    <Card title="附件" size="small" style={{ marginBottom: 16 }}>
-      <List
-        size="small"
-        dataSource={parsedAttachments}
-        renderItem={(item) => (
-          <List.Item
-            actions={[
-              <Button
-                key="download"
-                type="link"
-                size="small"
-                icon={<DownloadOutlined />}
-                href={item.url}
-                target="_blank"
-              >
-                下载
-              </Button>
-            ]}
-          >
-            <List.Item.Meta
-              avatar={<PaperClipOutlined style={{ color: '#1890ff', fontSize: 20 }} />}
-              title={<a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a>}
-              description={formatFileSize(item.size)}
-            />
-          </List.Item>
-        )}
-      />
-    </Card>
-  )
 }
 
 export default function TaskDetailDrawer({ visible, task, projectId, onClose, onTaskUpdate, onEditTask }) {
   const [completing, setCompleting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [attachments, setAttachments] = useState([])
+  const [loadingAttachments, setLoadingAttachments] = useState(false)
+
+  // 编辑状态
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionValue, setDescriptionValue] = useState('')
+  const [savingDescription, setSavingDescription] = useState(false)
+
+  // 进度编辑
+  const [editingProgress, setEditingProgress] = useState(false)
+  const [progressValue, setProgressValue] = useState(0)
+
+  // 加载附件
+  useEffect(() => {
+    if (task?.id && visible) {
+      loadAttachments()
+      setDescriptionValue(task.description || '')
+      setProgressValue(task.completion_percentage || 0)
+    }
+  }, [task?.id, visible])
+
+  const loadAttachments = async () => {
+    if (!task?.id) return
+    setLoadingAttachments(true)
+    try {
+      const res = await taskAPI.getAttachments(task.id)
+      setAttachments(res.data.attachments || [])
+    } catch (error) {
+      console.error('Failed to load attachments:', error)
+    } finally {
+      setLoadingAttachments(false)
+    }
+  }
 
   if (!task) return null
 
@@ -173,6 +174,68 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
     }
   }
 
+  // 上传附件
+  const handleUpload = async (file) => {
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      await taskAPI.uploadAttachment(task.id, formData)
+      message.success('上传成功')
+      loadAttachments()
+      onTaskUpdate?.()
+    } catch (error) {
+      message.error('上传失败: ' + (error.response?.data?.error || error.message))
+    } finally {
+      setUploading(false)
+    }
+    return false
+  }
+
+  // 删除附件
+  const handleDeleteAttachment = async (attachmentId) => {
+    try {
+      await taskAPI.deleteAttachment(task.id, attachmentId)
+      message.success('删除成功')
+      loadAttachments()
+      onTaskUpdate?.()
+    } catch (error) {
+      message.error('删除失败')
+    }
+  }
+
+  // 下载附件
+  const handleDownload = (attachment) => {
+    window.open(attachment.url, '_blank')
+  }
+
+  // 保存描述
+  const handleSaveDescription = async () => {
+    setSavingDescription(true)
+    try {
+      await taskAPI.updateDescription(task.id, descriptionValue)
+      message.success('描述已更新')
+      setEditingDescription(false)
+      onTaskUpdate?.()
+    } catch (error) {
+      message.error('保存失败')
+    } finally {
+      setSavingDescription(false)
+    }
+  }
+
+  // 更新进度
+  const handleUpdateProgress = async (value) => {
+    try {
+      await taskAPI.updateProgress(task.id, value)
+      message.success('进度已更新')
+      setEditingProgress(false)
+      onTaskUpdate?.()
+    } catch (error) {
+      message.error('更新失败')
+    }
+  }
+
   return (
     <Drawer
       title={
@@ -182,7 +245,7 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
         </Space>
       }
       placement="right"
-      width={650}
+      width={700}
       open={visible}
       onClose={onClose}
       extra={
@@ -191,7 +254,7 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
             icon={<EditOutlined />}
             onClick={() => onEditTask?.(task)}
           >
-            编辑
+            完整编辑
           </Button>
           {task.status !== 'completed' && (
             <Button
@@ -232,6 +295,65 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
         </div>
       </Card>
 
+      {/* 进度条 */}
+      <Card
+        title="任务进度"
+        size="small"
+        style={{ marginBottom: 16 }}
+        extra={
+          !editingProgress ? (
+            <Button type="link" size="small" onClick={() => setEditingProgress(true)}>
+              调整进度
+            </Button>
+          ) : (
+            <Space>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleUpdateProgress(progressValue)}
+              >
+                保存
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setEditingProgress(false)
+                  setProgressValue(task.completion_percentage || 0)
+                }}
+              >
+                取消
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {editingProgress ? (
+          <div style={{ padding: '8px 0' }}>
+            <Slider
+              value={progressValue}
+              onChange={setProgressValue}
+              marks={{
+                0: '0%',
+                25: '25%',
+                50: '50%',
+                75: '75%',
+                100: '100%'
+              }}
+            />
+          </div>
+        ) : (
+          <Progress
+            percent={task.completion_percentage || 0}
+            status={task.status === 'completed' ? 'success' : 'active'}
+            strokeColor={{
+              '0%': '#108ee9',
+              '100%': '#87d068',
+            }}
+          />
+        )}
+      </Card>
+
       {/* 基本信息 */}
       <Card title="基本信息" size="small" style={{ marginBottom: 16 }}>
         <Descriptions column={2} size="small">
@@ -268,20 +390,168 @@ export default function TaskDetailDrawer({ visible, task, projectId, onClose, on
         </Descriptions>
       </Card>
 
-      {/* 任务描述 */}
-      {task.description && (
-        <Card title="任务描述" size="small" style={{ marginBottom: 16 }}>
-          <RichContent html={task.description} />
-        </Card>
-      )}
+      {/* 任务描述 - 可编辑 */}
+      <Card
+        title="任务描述"
+        size="small"
+        style={{ marginBottom: 16 }}
+        extra={
+          !editingDescription ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => setEditingDescription(true)}
+            >
+              编辑
+            </Button>
+          ) : (
+            <Space>
+              <Button
+                type="link"
+                size="small"
+                icon={<SaveOutlined />}
+                loading={savingDescription}
+                onClick={handleSaveDescription}
+              >
+                保存
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CloseOutlined />}
+                onClick={() => {
+                  setEditingDescription(false)
+                  setDescriptionValue(task.description || '')
+                }}
+              >
+                取消
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {editingDescription ? (
+          <TextArea
+            value={descriptionValue}
+            onChange={(e) => setDescriptionValue(e.target.value)}
+            placeholder="添加任务描述..."
+            autoSize={{ minRows: 3, maxRows: 10 }}
+            style={{ marginBottom: 8 }}
+          />
+        ) : task.description ? (
+          <div
+            style={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}
+            dangerouslySetInnerHTML={{ __html: task.description }}
+          />
+        ) : (
+          <Text type="secondary" style={{ fontStyle: 'italic' }}>
+            暂无描述，点击"编辑"添加
+          </Text>
+        )}
+      </Card>
 
-      {/* 附件 */}
-      <AttachmentList attachments={task.attachments} />
+      {/* 附件区域 */}
+      <Card
+        title={
+          <Space>
+            <PaperClipOutlined />
+            <span>附件</span>
+            <Tag>{attachments.length}</Tag>
+          </Space>
+        }
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
+        {/* 上传区域 */}
+        <Dragger
+          beforeUpload={handleUpload}
+          showUploadList={false}
+          disabled={uploading}
+          multiple
+          style={{ marginBottom: 16 }}
+        >
+          <p className="ant-upload-drag-icon">
+            {uploading ? <Spin /> : <InboxOutlined style={{ color: '#1890ff' }} />}
+          </p>
+          <p className="ant-upload-text">
+            {uploading ? '上传中...' : '点击或拖拽文件到此处上传'}
+          </p>
+          <p className="ant-upload-hint">
+            支持 PDF、Word、Excel、图片等格式
+          </p>
+        </Dragger>
 
-      <Divider />
-
-      {/* 三个文件框 */}
-      <TaskFilesPanel taskId={task.id} projectId={projectId} />
+        {/* 附件列表 */}
+        {loadingAttachments ? (
+          <div style={{ textAlign: 'center', padding: 20 }}>
+            <Spin />
+          </div>
+        ) : attachments.length === 0 ? (
+          <Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 20 }}>
+            暂无附件
+          </Text>
+        ) : (
+          <List
+            size="small"
+            dataSource={attachments}
+            renderItem={(item) => (
+              <List.Item
+                style={{
+                  padding: '12px',
+                  background: '#fafafa',
+                  borderRadius: 8,
+                  marginBottom: 8
+                }}
+                actions={[
+                  <Tooltip title="下载" key="download">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={() => handleDownload(item)}
+                    />
+                  </Tooltip>,
+                  <Popconfirm
+                    key="delete"
+                    title="确定删除此附件？"
+                    onConfirm={() => handleDeleteAttachment(item.id)}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                    />
+                  </Popconfirm>
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={getFileIcon(item.name)}
+                  title={
+                    <a onClick={() => handleDownload(item)} style={{ cursor: 'pointer' }}>
+                      {item.name}
+                    </a>
+                  }
+                  description={
+                    <Space size="large">
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {formatFileSize(item.size)}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {item.uploaded_by}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {item.uploaded_at ? dayjs(item.uploaded_at).format('MM-DD HH:mm') : ''}
+                      </Text>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
+      </Card>
 
       {/* 富文本内容样式 */}
       <style>{`

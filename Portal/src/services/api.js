@@ -96,6 +96,10 @@ export const taskAPI = {
   updateTaskProgress: (taskId, progress) =>
     api.put(`/tasks/${taskId}/progress`, { completion_percentage: progress }),
 
+  // Update progress (alias)
+  updateProgress: (taskId, progress) =>
+    api.put(`/tasks/${taskId}/progress`, { completion_percentage: progress }),
+
   // Move task to phase
   moveToPhase: (taskId, phaseId) =>
     api.post(`/tasks/${taskId}/move-to-phase`, { phase_id: phaseId }),
@@ -103,6 +107,24 @@ export const taskAPI = {
   // Update task status (for kanban drag)
   updateTaskStatus: (taskId, status) =>
     api.put(`/tasks/${taskId}/status`, { status }),
+
+  // ========== 任务附件 API ==========
+  // Get task attachments
+  getAttachments: (taskId) => api.get(`/tasks/${taskId}/attachments`),
+
+  // Upload attachment
+  uploadAttachment: (taskId, formData) =>
+    api.post(`/tasks/${taskId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+
+  // Delete attachment
+  deleteAttachment: (taskId, attachmentId) =>
+    api.delete(`/tasks/${taskId}/attachments/${attachmentId}`),
+
+  // Update task description
+  updateDescription: (taskId, description) =>
+    api.put(`/tasks/${taskId}/description`, { description }),
 }
 
 // ========== Phase APIs ==========
