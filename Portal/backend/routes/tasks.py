@@ -58,6 +58,27 @@ def safe_parse_date(date_str):
             return None
 
 
+def get_users_from_account_db():
+    """从 account 数据库获取用户列表"""
+    import pymysql
+    try:
+        conn = pymysql.connect(
+            host=os.environ.get('DB_HOST', os.environ.get('AUTH_DB_HOST', 'localhost')),
+            user=os.environ.get('MYSQL_USER', os.environ.get('AUTH_DB_USER')),
+            password=os.environ.get('MYSQL_PASSWORD', os.environ.get('AUTH_DB_PASSWORD')),
+            database='account',
+            charset='utf8mb4'
+        )
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, full_name FROM users')
+        users = {row[0]: row[2] or row[1] for row in cursor.fetchall()}
+        conn.close()
+        return users
+    except Exception as e:
+        print(f'Warning: Failed to fetch users from account db: {e}')
+        return {}
+
+
 @tasks_bp.route('/all', methods=['GET'])
 def get_all_tasks():
     """获取所有项目的任务，按项目分组返回"""
@@ -78,9 +99,8 @@ def get_all_tasks():
             Project.planned_start_date.asc()
         ).all()
 
-        # 预加载所有员工信息用于查询负责人姓名
-        from shared.auth.models import User
-        users = {u.id: u.full_name or u.username for u in session.query(User).all()}
+        # 从 account 数据库获取用户列表（因为 users 表在 account 库）
+        users = get_users_from_account_db()
 
         result = []
         for project in projects:
