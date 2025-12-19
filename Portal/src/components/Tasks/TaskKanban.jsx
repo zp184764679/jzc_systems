@@ -67,7 +67,7 @@ const priorityConfig = {
 }
 
 // 任务卡片组件
-function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
+function TaskCard({ task, onDragStart, onDragEnd, onClick, showProject = false }) {
   const priority = priorityConfig[task.priority] || priorityConfig.normal
   const isOverdue = task.due_date && dayjs(task.due_date).isBefore(dayjs(), 'day') && task.status !== 'completed'
 
@@ -95,6 +95,21 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
       }}
       className="kanban-task-card"
     >
+      {/* 多项目模式显示项目名称 */}
+      {showProject && task.projectName && (
+        <div style={{
+          marginBottom: 6,
+          padding: '2px 8px',
+          background: '#f0f0f5',
+          borderRadius: 4,
+          display: 'inline-block'
+        }}>
+          <Text style={{ fontSize: 10, color: '#666' }}>
+            {task.projectName}
+          </Text>
+        </div>
+      )}
+
       {/* 任务标题 */}
       <div style={{ marginBottom: 8 }}>
         <Text
@@ -171,7 +186,7 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
 }
 
 // 看板列组件
-function KanbanColumn({ column, tasks, onDrop, onTaskClick, isDragOver, onDragOver, onDragLeave }) {
+function KanbanColumn({ column, tasks, onDrop, onTaskClick, isDragOver, onDragOver, onDragLeave, showProject = false }) {
   return (
     <div
       onDragOver={(e) => {
@@ -246,6 +261,7 @@ function KanbanColumn({ column, tasks, onDrop, onTaskClick, isDragOver, onDragOv
               key={task.id}
               task={task}
               onClick={onTaskClick}
+              showProject={showProject}
             />
           ))
         )}
@@ -255,13 +271,17 @@ function KanbanColumn({ column, tasks, onDrop, onTaskClick, isDragOver, onDragOv
 }
 
 // 主组件
-export default function TaskKanban({ projectId, onEditTask, onRefresh }) {
+// 支持两种模式:
+// 1. 单项目模式: 传入 projectId, 从API获取任务
+// 2. 多项目模式: 传入 tasks 数组和 multiProject=true
+export default function TaskKanban({ projectId, tasks: externalTasks, multiProject = false, onEditTask, onRefresh }) {
   const [loading, setLoading] = useState(false)
   const [columns, setColumns] = useState([])
   const [dragOverColumn, setDragOverColumn] = useState(null)
 
+  // 单项目模式: 从API获取数据
   const fetchKanbanData = useCallback(async () => {
-    if (!projectId) return
+    if (!projectId || multiProject) return
 
     setLoading(true)
     try {
@@ -273,11 +293,23 @@ export default function TaskKanban({ projectId, onEditTask, onRefresh }) {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, multiProject])
 
   useEffect(() => {
     fetchKanbanData()
   }, [fetchKanbanData])
+
+  // 多项目模式: 根据外部传入的 tasks 构建列数据
+  useEffect(() => {
+    if (multiProject && externalTasks) {
+      const groupedColumns = KANBAN_COLUMNS.map(config => ({
+        ...config,
+        tasks: externalTasks.filter(t => t.status === config.key),
+        count: externalTasks.filter(t => t.status === config.key).length
+      }))
+      setColumns(groupedColumns)
+    }
+  }, [multiProject, externalTasks])
 
   const handleDrop = async (taskId, newStatus) => {
     try {
@@ -305,7 +337,8 @@ export default function TaskKanban({ projectId, onEditTask, onRefresh }) {
     onEditTask?.(task)
   }
 
-  if (loading && columns.length === 0) {
+  // 单项目模式下显示加载状态
+  if (loading && columns.length === 0 && !multiProject) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
         <Spin size="large" />
@@ -367,6 +400,7 @@ export default function TaskKanban({ projectId, onEditTask, onRefresh }) {
             isDragOver={dragOverColumn === column.key}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
+            showProject={multiProject}
           />
         ))}
       </div>
