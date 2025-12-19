@@ -9,7 +9,7 @@ import requests
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from models import db_session
+from models import SessionLocal
 from models.project import Project
 from services.integration_service import integration_service
 
@@ -295,9 +295,10 @@ class EmailIntegrationService:
         if not part_number:
             return None
 
+        db = SessionLocal()
         try:
             # 使用模糊匹配查询项目
-            project = Project.query.filter(
+            project = db.query(Project).filter(
                 Project.part_number.ilike(f'%{part_number}%')
             ).first()
 
@@ -314,6 +315,8 @@ class EmailIntegrationService:
         except Exception as e:
             print(f"[EmailIntegration] 项目匹配失败: {e}")
             return None
+        finally:
+            db.close()
 
     def match_employee_by_name(self, name: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
