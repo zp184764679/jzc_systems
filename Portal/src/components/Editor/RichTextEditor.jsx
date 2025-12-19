@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import ReactQuill from 'react-quill'
+import ReactQuill from 'react-quill-new'
 import { message, Spin, Upload, Button, Space } from 'antd'
 import { PictureOutlined, PaperClipOutlined, UploadOutlined } from '@ant-design/icons'
 import api from '../../services/api'
-import 'react-quill/dist/quill.snow.css'
+import 'react-quill-new/dist/quill.snow.css'
 
 // 上传图片到服务器
 const uploadImage = async (file) => {
