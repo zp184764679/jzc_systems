@@ -645,18 +645,25 @@ const EmployeeList = () => {
     },
   ];
 
-  // Menu items for positions (岗位) - 使用职位主数据表
+  // Menu items for positions (岗位) - 只显示有员工的职位
   const menuItems = [
     {
       key: 'all',
       icon: <UserOutlined />,
       label: `全部在职 (${pagination.total})`,
     },
-    ...positions.map(pos => ({
-      key: pos.name,
-      icon: <UserOutlined />,
-      label: `${pos.name} (${allEmployees.filter(e => e.title === pos.name && !e.is_blacklisted).length})`,
-    })),
+    ...positions
+      .map(pos => ({
+        name: pos.name,
+        count: allEmployees.filter(e => e.title === pos.name && !e.is_blacklisted).length
+      }))
+      .filter(item => item.count > 0)  // 过滤掉0人的职位
+      .sort((a, b) => b.count - a.count)  // 按人数降序排列
+      .map(item => ({
+        key: item.name,
+        icon: <UserOutlined />,
+        label: `${item.name} (${item.count})`,
+      })),
   ];
 
   // Mobile columns - simplified for small screens
