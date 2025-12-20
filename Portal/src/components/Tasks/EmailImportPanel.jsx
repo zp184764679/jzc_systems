@@ -77,7 +77,7 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
         page,
         page_size: pageSize,
         keyword,
-        translation_status: 'completed', // 只显示已翻译的邮件
+        // 不再限制翻译状态，允许导入未翻译的中文邮件
       }
       if (dateRange && dateRange[0]) {
         params.start_date = dateRange[0].format('YYYY-MM-DD')
@@ -254,6 +254,21 @@ export default function EmailImportPanel({ open, onClose, onImport }) {
       key: 'date',
       width: 100,
       render: (text) => text ? dayjs(text).format('MM-DD HH:mm') : '-',
+    },
+    {
+      title: '翻译',
+      key: 'translation',
+      width: 60,
+      render: (_, record) => {
+        const status = record.translation_status
+        if (status === 'completed') {
+          return <Tag color="green">已翻译</Tag>
+        } else if (status === 'processing') {
+          return <Tag color="blue">翻译中</Tag>
+        } else {
+          return <Tag>原文</Tag>
+        }
+      },
     },
     {
       title: '任务提取',
