@@ -705,11 +705,20 @@ const EmployeeList = () => {
   ];
 
   // Category options for mobile segmented control (显示岗位)
+  // 计算每个岗位的在职人数，过滤掉0人的岗位，按人数排序取前4个
+  const positionCounts = uniquePositions
+    .map(pos => ({
+      position: pos,
+      count: allEmployees.filter(e => e.title === pos && !e.is_blacklisted).length
+    }))
+    .filter(item => item.count > 0)  // 过滤掉0人的岗位
+    .sort((a, b) => b.count - a.count);  // 按人数降序排列
+
   const categoryOptions = [
-    { label: `全部(${pagination.total})`, value: 'all' },
-    ...uniquePositions.slice(0, 4).map(pos => ({  // 移动端只显示前4个岗位
-      label: `${pos.length > 4 ? pos.slice(0, 4) : pos}(${allEmployees.filter(e => e.title === pos && !e.is_blacklisted).length})`,
-      value: pos,
+    { label: `全部在职(${pagination.total})`, value: 'all' },
+    ...positionCounts.slice(0, 4).map(item => ({  // 移动端只显示前4个岗位
+      label: `${item.position.length > 4 ? item.position.slice(0, 4) : item.position}(${item.count})`,
+      value: item.position,
     })),
   ];
 
