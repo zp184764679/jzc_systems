@@ -22,6 +22,16 @@ import re
 import os
 import tempfile
 
+# 文件索引服务 - 同步到文件中心
+try:
+    from services.file_index_service import index_invoice_file, remove_invoice_from_index
+except ImportError:
+    # 如果服务不可用，使用空函数
+    def index_invoice_file(*args, **kwargs):
+        return {'success': False, 'error': 'file_index_service not available'}
+    def remove_invoice_from_index(*args, **kwargs):
+        return {'success': False, 'error': 'file_index_service not available'}
+
 URL_PREFIX = '/api/v1/invoices'
 
 bp = Blueprint('invoice', __name__)
@@ -496,6 +506,20 @@ def upload_invoice_by_employee():
         db.session.add(invoice)
         db.session.commit()
 
+        # 同步到文件中心（异步，不影响主流程）
+        try:
+            index_result = index_invoice_file(
+                invoice,
+                supplier=supplier,
+                po=po,
+                user_id=user_id,
+                user_name=request.headers.get('User-Name')
+            )
+            if not index_result.get('success'):
+                print(f'[FileIndex] 发票索引失败: {index_result.get("error")}')
+        except Exception as idx_err:
+            print(f'[FileIndex] 发票索引异常: {idx_err}')
+
         return jsonify({
             'success': True,
             'message': '发票上传成功',
@@ -640,6 +664,20 @@ def upload_monthly_invoice_by_employee():
 
         db.session.commit()
 
+        # 同步到文件中心（异步，不影响主流程）
+        try:
+            index_result = index_invoice_file(
+                invoice,
+                supplier=supplier,
+                po=None,  # 月结发票无单个PO
+                user_id=user_id,
+                user_name=request.headers.get('User-Name')
+            )
+            if not index_result.get('success'):
+                print(f'[FileIndex] 月结发票索引失败: {index_result.get("error")}')
+        except Exception as idx_err:
+            print(f'[FileIndex] 月结发票索引异常: {idx_err}')
+
         return jsonify({
             'success': True,
             'message': f'月结发票上传成功，包含{len(pos)}个PO',
@@ -679,8 +717,17 @@ def delete_invoice(invoice_id):
             # 单次结算：恢复单个PO
             invoice.po.invoice_uploaded = False
 
+        # 先记录ID用于索引移除
+        deleted_invoice_id = invoice.id
+
         db.session.delete(invoice)
         db.session.commit()
+
+        # 从文件中心移除索引（异步，不影响主流程）
+        try:
+            remove_invoice_from_index(deleted_invoice_id)
+        except Exception as idx_err:
+            print(f'[FileIndex] 移除发票索引异常: {idx_err}')
 
         return jsonify({
             'success': True,
@@ -837,6 +884,20 @@ def upload_invoice():
 
         db.session.add(invoice)
         db.session.commit()
+
+        # 同步到文件中心（异步，不影响主流程）
+        try:
+            index_result = index_invoice_file(
+                invoice,
+                supplier=supplier,
+                po=po,
+                user_id=None,  # 供应商上传
+                user_name=supplier.company_name
+            )
+            if not index_result.get('success'):
+                print(f'[FileIndex] 供应商发票索引失败: {index_result.get("error")}')
+        except Exception as idx_err:
+            print(f'[FileIndex] 供应商发票索引异常: {idx_err}')
 
         return jsonify({
             'success': True,
@@ -1281,6 +1342,20 @@ def upload_monthly_invoice():
             po.invoice_uploaded = True
 
         db.session.commit()
+
+        # 同步到文件中心（异步，不影响主流程）
+        try:
+            index_result = index_invoice_file(
+                invoice,
+                supplier=supplier,
+                po=None,  # 月结发票无单个PO
+                user_id=None,  # 供应商上传
+                user_name=supplier.company_name
+            )
+            if not index_result.get('success'):
+                print(f'[FileIndex] 供应商月结发票索引失败: {index_result.get("error")}')
+        except Exception as idx_err:
+            print(f'[FileIndex] 供应商月结发票索引异常: {idx_err}')
 
         return jsonify({
             'success': True,

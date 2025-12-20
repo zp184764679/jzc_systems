@@ -17,6 +17,22 @@ from services.crm_match_service import enhance_ocr_result_with_crm
 from utils.file_handler import save_upload_file, delete_file, get_file_type
 import logging
 
+# 文件索引服务 - 同步到文件中心
+try:
+    from services.file_index_service import (
+        index_drawing_file,
+        remove_drawing_from_index,
+        update_drawing_index
+    )
+except ImportError:
+    # 如果服务不可用，使用空函数
+    def index_drawing_file(*args, **kwargs):
+        return {'success': False, 'error': 'file_index_service not available'}
+    def remove_drawing_from_index(*args, **kwargs):
+        return {'success': False, 'error': 'file_index_service not available'}
+    def update_drawing_index(*args, **kwargs):
+        return {'success': False, 'error': 'file_index_service not available'}
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -63,6 +79,14 @@ async def upload_drawing(
         db.refresh(drawing)
 
         logger.info(f"✅ 图纸记录创建成功: ID={drawing.id}")
+
+        # 同步到文件中心（异步，不影响主流程）
+        try:
+            index_result = index_drawing_file(drawing)
+            if not index_result.get('success'):
+                logger.warning(f'[FileIndex] 图纸索引失败: {index_result.get("error")}')
+        except Exception as idx_err:
+            logger.warning(f'[FileIndex] 图纸索引异常: {idx_err}')
 
         return drawing
 
@@ -186,6 +210,14 @@ async def recognize_drawing(
                     raise
 
             logger.info(f"✅ OCR识别成功: drawing_id={drawing_id}")
+
+            # 更新文件中心索引（OCR识别后可能更新了客户名、图号等）
+            try:
+                update_result = update_drawing_index(drawing)
+                if not update_result.get('success'):
+                    logger.warning(f'[FileIndex] 更新图纸索引失败: {update_result.get("error")}')
+            except Exception as idx_err:
+                logger.warning(f'[FileIndex] 更新图纸索引异常: {idx_err}')
 
             return OCRResult(**result)
         else:
@@ -311,9 +343,18 @@ def delete_drawing(drawing_id: int, db: Session = Depends(get_db)):
     if drawing.file_path:
         delete_file(drawing.file_path)
 
+    # 先记录ID用于索引移除
+    deleted_drawing_id = drawing.id
+
     # 删除数据库记录
     db.delete(drawing)
     db.commit()
+
+    # 从文件中心移除索引（异步，不影响主流程）
+    try:
+        remove_drawing_from_index(deleted_drawing_id)
+    except Exception as idx_err:
+        logger.warning(f'[FileIndex] 移除图纸索引异常: {idx_err}')
 
     logger.info(f"✅ 图纸已删除: drawing_id={drawing_id}")
 

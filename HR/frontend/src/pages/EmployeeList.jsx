@@ -71,6 +71,8 @@ const EmployeeList = () => {
 
   // Get unique departments from employees for filter (from current page data)
   const uniqueDepartments = [...new Set(allEmployees.map(emp => emp.department).filter(Boolean))].sort();
+  // Get unique positions from employees for mobile category filter
+  const uniquePositions = [...new Set(allEmployees.map(emp => emp.title).filter(Boolean))].sort();
 
   // Filter employees based on active tab (by position) - 后端已筛选在职员工
   const employees = activeTab === 'all'
