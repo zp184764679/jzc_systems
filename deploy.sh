@@ -149,6 +149,27 @@ run_migrations() {
 
 run_migrations
 
+# 检查认证配置一致性
+check_auth_config() {
+    echo ""
+    echo "=== 检查认证配置一致性 ==="
+
+    if [ -f "$PROJECT_DIR/shared/check_auth_config.py" ]; then
+        python3 "$PROJECT_DIR/shared/check_auth_config.py" 2>/dev/null
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}⚠ 认证配置不一致，请检查各系统的 JWT_SECRET_KEY 和 AUTH_DB_NAME${NC}"
+            echo -e "${YELLOW}运行 'python3 shared/check_auth_config.py --fix' 查看修复建议${NC}"
+            # 不中止部署，只是警告
+        else
+            echo -e "${GREEN}✓ 认证配置检查通过${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 未找到配置检查脚本，跳过${NC}"
+    fi
+}
+
+check_auth_config
+
 # 构建前端
 build_frontend() {
     local system_dir=$1
