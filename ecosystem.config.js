@@ -79,6 +79,13 @@ module.exports = {
       env: { PORT: 8100 }
     },
     {
+      name: 'tdm-backend',
+      cwd: './TDM/backend',
+      script: 'main.py',
+      interpreter: './venv/bin/python3',
+      env: { PORT: 8009 }
+    },
+    {
       name: 'docs-strapi',
       cwd: './DocPublisher/strapi',
       script: 'node_modules/@strapi/strapi/bin/strapi.js',
@@ -169,6 +176,13 @@ module.exports = {
       cwd: './DocPublisher/frontend',
       script: 'node_modules/vite/bin/vite.js',
       args: '--port 6200 --host',
+      env: { NODE_ENV: 'development' }
+    },
+    {
+      name: 'tdm-frontend',
+      cwd: './TDM/frontend',
+      script: 'node_modules/vite/bin/vite.js',
+      args: '--port 7600 --host',
       env: { NODE_ENV: 'development' }
     },
 

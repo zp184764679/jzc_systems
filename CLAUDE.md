@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，采用微服务架构，包含 12 个独立但互联的子系统，覆盖企业运营的各个核心环节。
+JZC 企业管理系统是一套完整的企业资源规划 (ERP) 解决方案，采用微服务架构，包含 13 个独立但互联的子系统，覆盖企业运营的各个核心环节。
 
 ### 项目目标
 - 实现企业内部各业务系统的统一管理
@@ -72,6 +72,7 @@ ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
 | MES | MES/ | 8007 | 7800 | `/mes/` | `/mes/api/` | mes-backend | cncplan | 未部署 |
 | Dashboard | Dashboard/ | 8100 | 6100 | `/dashboard/` | `/dashboard/api/` | dashboard-backend | cncplan | 未部署 |
 | DocPublisher | DocPublisher/ | 1337 | 6200 | `/docs/` | `/strapi-api/` | docs-strapi | SQLite/MySQL | 开发中 |
+| TDM | TDM/ | 8009 | 7600 | `/tdm/` | `/tdm/api/` | tdm-backend | cncplan | 开发中 |
 
 ---
 
@@ -94,6 +95,7 @@ ssh -i ~/.ssh/jzc_server aaa@61.145.212.28 "pm2 logs portal-backend --lines 50"
 | CRM | `/api/xxx` | `/api/$1` | `/crm/api/customers` → `/api/customers` |
 | 报价 | `/api/xxx` | `/api/$1` | `/quotation/api/quotes` → `/api/quotes` |
 | 采购 | `/api/v1/xxx` | `/api/$1` | `/caigou/api/v1/pr` → `/api/v1/pr` |
+| TDM | `/api/xxx` | `/api/$1` | `/tdm/api/products` → `/api/products` |
 
 **nginx rewrite 规则示例**：
 ```nginx
@@ -142,6 +144,7 @@ location /portal-api/ {
 ├── MES/                 # 制造执行系统 (未部署)
 ├── Dashboard/           # 可视化追踪系统 (未部署)
 ├── DocPublisher/        # 文档发布系统 (开发中)
+├── TDM/                 # 产品技术标准管理 (开发中)
 ├── shared/              # 共享认证模块
 │   ├── auth/            # JWT认证、用户模型、权限
 │   └── frontend/        # 前端共享工具
@@ -250,6 +253,7 @@ curl http://127.0.0.1:8008/health   # EAM
 curl http://127.0.0.1:8007/health   # MES
 curl http://127.0.0.1:8100/health   # Dashboard
 curl http://127.0.0.1:1337/_health  # DocPublisher (Strapi)
+curl http://127.0.0.1:8009/health   # TDM
 ```
 
 **规范**: 所有系统健康检查统一使用 `/health` 路径（不带 `/api` 前缀），DocPublisher (Strapi) 使用 `/_health`
@@ -307,6 +311,7 @@ Stop-Process -Id 12345,12346,12347 -Force
 | MES | 8007 | 7800 | main.py |
 | Dashboard | 8100 | 6100 | main.py |
 | DocPublisher | 1337 | 6200 | Strapi |
+| TDM | 8009 | 7600 | main.py |
 
 **最佳实践**:
 1. 后端服务使用 PM2 管理，避免僵尸进程: `pm2 start main.py --name xxx-backend --interpreter python`
@@ -654,6 +659,7 @@ python shared/storage_utils.py report --output report.json
 - GitHub Actions 自动部署
 - 7 个子系统已部署上线 (Portal, HR, Account, Quotation, Caigou, SHM, CRM)
 - DocPublisher 文档发布系统开发中
+- TDM 产品技术标准管理系统开发中
 - 企业级文件存储系统 (v2.0)
 - Portal 项目管理功能 (P2: 回收站、看板视图、项目聊天)
 

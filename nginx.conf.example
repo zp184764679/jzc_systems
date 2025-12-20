@@ -42,6 +42,10 @@ upstream mes-backend {
     server 127.0.0.1:8007;
 }
 
+upstream tdm-backend {
+    server 127.0.0.1:8009;
+}
+
 server {
     listen 443 ssl;
     server_name jzchardware.cn;
@@ -201,6 +205,21 @@ server {
     location /mes/api/ {
         rewrite ^/mes/api/(.*)$ /$1 break;
         proxy_pass http://mes-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==================== TDM 产品技术标准系统 ====================
+    location /tdm/ {
+        alias /www/jzc_systems/TDM/frontend/dist/;
+        try_files $uri $uri/ /tdm/index.html;
+    }
+
+    location /tdm/api/ {
+        rewrite ^/tdm/api/(.*)$ /api/$1 break;
+        proxy_pass http://tdm-backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
