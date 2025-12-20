@@ -23,7 +23,7 @@ class Process(Base):
 
     # 成本信息
     hourly_rate = Column(DECIMAL(10, 2), comment="工时费率 元/小时")
-    setup_time = Column(DECIMAL(10, 4), default=0, comment="段取时间 天")
+    setup_time = Column(DECIMAL(10, 4), default=0, comment="段取时间 秒")
     daily_fee = Column(DECIMAL(10, 2), default=0, comment="工事费/日 元/天")
 
     # 生产效率

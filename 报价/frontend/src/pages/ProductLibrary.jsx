@@ -120,7 +120,7 @@ function ProductLibrary() {
       width: 180,
     },
     {
-      title: '客户料号',
+      title: '品番号',
       dataIndex: 'customer_part_number',
       key: 'customer_part_number',
       width: 150,
@@ -294,7 +294,7 @@ function ProductLibrary() {
               <Select.Option value={false}>停用</Select.Option>
             </Select>
             <Search
-              placeholder="搜索产品编码、名称、客户料号"
+              placeholder="搜索产品编码、名称、品番号"
               allowClear
               style={{ width: 300 }}
               onSearch={setSearchText}
@@ -351,7 +351,7 @@ function ProductLibrary() {
               <Descriptions.Item label="产品名称" span={2}>
                 {selectedProduct.name}
               </Descriptions.Item>
-              <Descriptions.Item label="客户料号">
+              <Descriptions.Item label="品番号">
                 {selectedProduct.customer_part_number || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="客户图号">
@@ -452,8 +452,8 @@ function ProductLibrary() {
           >
             <Input placeholder="产品名称" />
           </Form.Item>
-          <Form.Item label="客户料号" name="customer_part_number">
-            <Input placeholder="客户提供的料号" />
+          <Form.Item label="品番号" name="customer_part_number">
+            <Input placeholder="客户品番号" />
           </Form.Item>
           <Form.Item label="客户图号" name="customer_drawing_no">
             <Input placeholder="客户图纸编号" />

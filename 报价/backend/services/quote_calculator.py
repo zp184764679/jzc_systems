@@ -106,8 +106,8 @@ class QuoteCalculator:
             processes: 工艺列表，每项包含:
                 - process_name: 工艺名称
                 - daily_output: 日产量（件）
-                - setup_time: 段取时间（小时）
-                - hourly_rate: 工时费率（元/小时）
+                - setup_time: 段取时间（秒）
+                - daily_fee: 工事费/日（元/天）
                 - defect_rate: 不良率
             lot_size: LOT大小
 
@@ -123,11 +123,14 @@ class QuoteCalculator:
             process_details = []
             total_time = 0
 
+            # 每天工作8小时 = 8 * 3600 = 28800秒
+            SECONDS_PER_DAY = 8 * 3600  # 28800秒
+
             for idx, process in enumerate(processes, 1):
                 process_name = process.get('process_name', f'工序{idx}')
                 daily_output = process.get('daily_output', 1000)
-                setup_time = process.get('setup_time', 0.125)  # 小时
-                hourly_rate = process.get('hourly_rate', 55)   # 元/小时
+                setup_time_seconds = process.get('setup_time', 450)  # 秒（默认7.5分钟）
+                daily_fee = process.get('daily_fee', 440)  # 元/天（默认55元/小时×8小时）
                 defect_rate = process.get('defect_rate', 0)
 
                 # 考虑不良率后的加工个数
@@ -139,25 +142,27 @@ class QuoteCalculator:
                 else:
                     processing_days = 0
 
-                # 总时间（天） = 加工天数 + 段取时间（转换为天）
-                # 假设每天工作8小时
-                total_days = processing_days + (setup_time / 8)
+                # 段取时间转换为天数 = 秒 ÷ (8小时 × 3600秒)
+                setup_time_days = setup_time_seconds / SECONDS_PER_DAY
 
-                # 工序成本 = 总时间(天) × 日工时费 ÷ LOT
-                # 日工时费 = 小时费率 × 8小时
-                daily_cost = hourly_rate * 8
-                process_cost = (total_days * daily_cost) / lot_size
+                # 总时间（天） = 加工天数 + 段取时间（天）
+                total_days = processing_days + setup_time_days
+
+                # 工序成本 = 总时间(天) × 工事费/日 ÷ LOT
+                process_cost = (total_days * daily_fee) / lot_size
 
                 total_cost += process_cost
-                total_time += processing_days * 8 + setup_time
+                # 总时间（小时）= 加工天数 × 8 + 段取时间（秒）÷ 3600
+                total_time += processing_days * 8 + setup_time_seconds / 3600
 
                 process_details.append({
                     "sequence": idx,
                     "process_name": process_name,
                     "daily_output": daily_output,
                     "processing_days": round(processing_days, 4),
-                    "setup_time_hours": setup_time,
-                    "hourly_rate": hourly_rate,
+                    "setup_time_seconds": setup_time_seconds,
+                    "setup_time_days": round(setup_time_days, 6),
+                    "daily_fee": daily_fee,
                     "process_cost": round(process_cost, 4),
                     "defect_rate": defect_rate
                 })

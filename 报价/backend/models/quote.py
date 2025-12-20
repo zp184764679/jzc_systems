@@ -158,7 +158,7 @@ class QuoteProcess(Base):
     processing_quantity = Column(Float, comment="加工個数（LOT × (1 + 不良率)）")
     daily_production = Column(Float, comment="日産（件/天）")
     processing_days = Column(Float, comment="加工日数（加工個数 ÷ 日産）")
-    setup_time = Column(Float, default=0, comment="段取時間（天）")
+    setup_time = Column(Float, default=0, comment="段取時間（秒）")
     engineering_cost_per_day = Column(Float, comment="工事費／日（元/天）")
     lot_size = Column(Integer, comment="LOT批量")
 

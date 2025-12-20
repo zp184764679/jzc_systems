@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Card,
   Steps,
@@ -39,6 +39,7 @@ import {
   exportQuotePDF,
   exportChenlongTemplate,
   recordOcrCorrection,
+  getCrmCustomers,
 } from '../services/api'
 
 const { Step } = Steps
@@ -146,6 +147,113 @@ function QuoteCreate() {
   const [materialRecommendations, setMaterialRecommendations] = useState([]) // 材料长度推荐
   const [showDrawingModal, setShowDrawingModal] = useState(false) // 控制图纸预览Modal
   const [originalOcrValues, setOriginalOcrValues] = useState(null) // OCR原始识别值（用于学习）
+  const [customerOptions, setCustomerOptions] = useState([]) // CRM客户列表
+  const [customerLoading, setCustomerLoading] = useState(false) // 客户加载状态
+  const [hasDraft, setHasDraft] = useState(false) // 是否有草稿
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false) // 是否有未保存的更改
+
+  // 草稿存储key
+  const DRAFT_KEY = `quote_draft_${drawingId}`
+
+  // 保存草稿到localStorage
+  const saveDraft = useCallback(() => {
+    if (!drawingId) return
+    try {
+      const formData = form.getFieldsValue()
+      const draftData = {
+        formData,
+        selectedProcesses,
+        processParams,
+        savedAt: new Date().toISOString()
+      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData))
+      console.log('[草稿] 已自动保存', new Date().toLocaleTimeString())
+    } catch (error) {
+      console.error('[草稿] 保存失败:', error)
+    }
+  }, [drawingId, form, selectedProcesses, processParams, DRAFT_KEY])
+
+  // 加载草稿
+  const loadDraft = useCallback(() => {
+    if (!drawingId) return null
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.error('[草稿] 加载失败:', error)
+    }
+    return null
+  }, [drawingId, DRAFT_KEY])
+
+  // 清除草稿
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(DRAFT_KEY)
+    setHasDraft(false)
+    setHasUnsavedChanges(false)
+    console.log('[草稿] 已清除')
+  }, [DRAFT_KEY])
+
+  // 检查并提示恢复草稿
+  useEffect(() => {
+    const draft = loadDraft()
+    if (draft && draft.savedAt) {
+      setHasDraft(true)
+      const savedTime = new Date(draft.savedAt).toLocaleString()
+      Modal.confirm({
+        title: '发现未保存的草稿',
+        content: `上次编辑时间: ${savedTime}，是否恢复？`,
+        okText: '恢复草稿',
+        cancelText: '放弃草稿',
+        onOk: () => {
+          // 恢复表单数据
+          if (draft.formData) {
+            form.setFieldsValue(draft.formData)
+          }
+          // 恢复工序选择
+          if (draft.selectedProcesses) {
+            setSelectedProcesses(draft.selectedProcesses)
+          }
+          // 恢复工序参数
+          if (draft.processParams) {
+            setProcessParams(draft.processParams)
+          }
+          message.success('草稿已恢复')
+        },
+        onCancel: () => {
+          clearDraft()
+        }
+      })
+    }
+  }, [drawingId]) // 只在组件加载时执行一次
+
+  // 自动保存草稿（每30秒或数据变化时）
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const timer = setTimeout(() => {
+      saveDraft()
+    }, 3000) // 3秒后保存
+    return () => clearTimeout(timer)
+  }, [hasUnsavedChanges, saveDraft])
+
+  // 监听表单变化
+  const handleFormChange = () => {
+    setHasUnsavedChanges(true)
+  }
+
+  // 离开页面警告
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = '您有未保存的更改，确定要离开吗？'
+        return e.returnValue
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   // 查询图纸信息
   const { data: drawing, isLoading: drawingLoading } = useQuery({
@@ -210,6 +318,33 @@ function QuoteCreate() {
     }
 
     loadProcesses()
+  }, [])
+
+  // 加载CRM客户列表
+  useEffect(() => {
+    const loadCustomers = async () => {
+      setCustomerLoading(true)
+      try {
+        const response = await getCrmCustomers({ page_size: 200 })
+        if (response.success && response.data?.items) {
+          const options = response.data.items.map(c => ({
+            id: c.id,
+            code: c.customer_code || c.code || '',
+            name: c.company_name || c.name || '',
+            short_name: c.short_name || '',
+          }))
+          setCustomerOptions(options)
+          console.log('CRM客户加载成功:', options.length, '个')
+        }
+      } catch (error) {
+        console.error('CRM客户加载失败:', error)
+        // 不显示错误消息，允许手动输入
+      } finally {
+        setCustomerLoading(false)
+      }
+    }
+
+    loadCustomers()
   }, [])
 
   // 辅助函数：将字符串转换为数字，去除非数字字符
@@ -418,6 +553,7 @@ function QuoteCreate() {
     mutationFn: saveQuote,
     onSuccess: (data) => {
       setSavedQuote(data)
+      clearDraft() // 清除草稿
       message.success('报价保存成功!')
     },
     onError: (error) => {
@@ -442,6 +578,7 @@ function QuoteCreate() {
 
   // 处理工艺选择
   const handleProcessClick = (processCode) => {
+    setHasUnsavedChanges(true) // 标记有未保存的更改
     setSelectedProcesses(prev => {
       // 如果已经选中，则取消选中
       if (prev.includes(processCode)) {
@@ -480,6 +617,7 @@ function QuoteCreate() {
 
   // 更新工艺参数
   const updateProcessParam = (processCode, field, value) => {
+    setHasUnsavedChanges(true) // 标记有未保存的更改
     setProcessParams(params => {
       const newParams = {
         ...params,
@@ -853,7 +991,16 @@ function QuoteCreate() {
   return (
     <div>
       <Card
-        title="精密五金零件报价"
+        title={
+          <span>
+            精密五金零件报价
+            {hasUnsavedChanges && (
+              <span style={{ marginLeft: 12, fontSize: '12px', color: '#faad14' }}>
+                ● 有未保存的更改
+              </span>
+            )}
+          </span>
+        }
         extra={
           <Space>
             <Button
@@ -877,6 +1024,8 @@ function QuoteCreate() {
           onValuesChange={(changedValues, allValues) => {
             // 触发重新渲染以更新实时计算
             setFormValues(allValues)
+            // 标记有未保存的更改
+            handleFormChange()
           }}
         >
           <style>{`
@@ -919,9 +1068,32 @@ function QuoteCreate() {
                     <Input size="small" placeholder="A021" />
                   </Form.Item>
                   <Form.Item label="客户名称" name="customer_name" labelCol={{ span: 9 }} wrapperCol={{ span: 15 }} style={{ marginBottom: 6 }}>
-                    <Input size="small" />
+                    <Select
+                      size="small"
+                      placeholder="选择或搜索客户"
+                      showSearch
+                      allowClear
+                      loading={customerLoading}
+                      optionFilterProp="children"
+                      filterOption={(input, option) =>
+                        (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      onChange={(value, option) => {
+                        // 选择客户后自动填充客户编码
+                        if (option?.code) {
+                          form.setFieldsValue({ customer_code: option.code })
+                        }
+                      }}
+                      notFoundContent={customerLoading ? <Spin size="small" /> : '无匹配客户，可手动输入'}
+                    >
+                      {customerOptions.map(c => (
+                        <Option key={c.id} value={c.name} code={c.code}>
+                          {c.name} {c.short_name ? `(${c.short_name})` : ''} {c.code ? `[${c.code}]` : ''}
+                        </Option>
+                      ))}
+                    </Select>
                   </Form.Item>
-                  <Form.Item label="料号" name="customer_part_number" labelCol={{ span: 9 }} wrapperCol={{ span: 15 }} style={{ marginBottom: 6 }}>
+                  <Form.Item label="品番号" name="customer_part_number" labelCol={{ span: 9 }} wrapperCol={{ span: 15 }} style={{ marginBottom: 6 }}>
                     <Input size="small" />
                   </Form.Item>
                   <Form.Item label="产品名" name="product_name" labelCol={{ span: 9 }} wrapperCol={{ span: 15 }} style={{ marginBottom: 6 }}>
@@ -1417,8 +1589,11 @@ function QuoteCreate() {
                             <td style={{ border: '1px solid #d9d9d9', padding: '2px 4px', textAlign: 'right', color: '#666' }}>
                               {lotSize.toLocaleString()}
                             </td>
-                            <td style={{ border: '1px solid #d9d9d9', padding: '2px 4px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
-                              {processCost}
+                            <td style={{ border: '1px solid #d9d9d9', padding: '2px 4px', textAlign: 'right' }}>
+                              <div style={{ fontWeight: 600, color: '#1890ff' }}>{processCost}</div>
+                              <div style={{ fontSize: '9px', color: '#999', whiteSpace: 'nowrap' }}>
+                                ({processDays}+{processData.setupTime || 0})×{processData.dailyFee || 0}÷{lotSize}
+                              </div>
                             </td>
                           </tr>
                         )

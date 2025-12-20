@@ -106,8 +106,8 @@ class PricingCalculationService:
                 - process_name: 工序名称
                 - defect_rate: 不良率
                 - daily_production: 日産
-                - setup_time: 段取时间（天）
-                - engineering_cost_per_day: 工事费/日
+                - setup_time: 段取时间（秒）
+                - engineering_cost_per_day: 工事费/日（元/天）
                 - unit_price: （可选）单价，用于电镀等按件计费
                 - box_processing_time: （可选）箱处理时间（小时）
                 - hourly_rate: （可选）工事费/时
@@ -165,8 +165,14 @@ class PricingCalculationService:
                 else:
                     # 标准工序计费
                     daily_production = float(process.get('daily_production', 2000))
-                    setup_time = float(process.get('setup_time', 0))
+                    setup_time_seconds = float(process.get('setup_time', 0))  # 秒
                     engineering_cost_per_day = float(process.get('engineering_cost_per_day', 300))
+
+                    # 每天工作8小时 = 28800秒
+                    SECONDS_PER_DAY = 8 * 3600  # 28800秒
+
+                    # 段取时间转换为天数 = 秒 ÷ 28800
+                    setup_time_days = setup_time_seconds / SECONDS_PER_DAY
 
                     # 计算加工日数
                     # 加工日数 = 加工個数 ÷ 日産
@@ -174,7 +180,7 @@ class PricingCalculationService:
 
                     # 计算工序成本
                     # 加工小費 = ((加工日数 + 段取时间) × 工事费/日) ÷ LOT
-                    process_cost = ((processing_days + setup_time) * engineering_cost_per_day) / lot_size
+                    process_cost = ((processing_days + setup_time_days) * engineering_cost_per_day) / lot_size
 
                     process_details.append({
                         'process_name': process_name,
@@ -182,13 +188,14 @@ class PricingCalculationService:
                         'processing_quantity': processing_quantity,
                         'daily_production': daily_production,
                         'processing_days': round(processing_days, 6),
-                        'setup_time': setup_time,
+                        'setup_time_seconds': setup_time_seconds,
+                        'setup_time_days': round(setup_time_days, 6),
                         'engineering_cost_per_day': engineering_cost_per_day,
                         'lot_size': lot_size,
                         'process_cost': round(process_cost, 4),
                         'calculation_method': 'standard'
                     })
-                    logger.info(f"  [{idx}] {process_name}: (({processing_days:.4f}天 + {setup_time}天) × {engineering_cost_per_day}元/天) ÷ {lot_size} = {process_cost:.4f}")
+                    logger.info(f"  [{idx}] {process_name}: (({processing_days:.4f}天 + {setup_time_days:.6f}天[{setup_time_seconds}秒]) × {engineering_cost_per_day}元/天) ÷ {lot_size} = {process_cost:.4f}")
 
                 total_process_cost += process_cost
 

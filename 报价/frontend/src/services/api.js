@@ -187,6 +187,12 @@ export const getProductRoutes = (productId) => api.get(`/products/${productId}/r
 export const getDrawingRoutes = (drawingId) => api.get(`/drawings/${drawingId}/routes`);
 export const getQuoteRoutes = (quoteId) => api.get(`/quotes/${quoteId}/routes`);
 
+// ==================== CRM集成 API ====================
+
+export const getCrmCustomers = (params) => api.get('/integration/customers', { params });
+export const getCrmCustomerDetail = (customerId) => api.get(`/integration/customers/${customerId}`);
+export const searchCrmCustomers = (keyword) => api.post('/integration/customers/search', { keyword });
+
 // ==================== OCR学习 API ====================
 
 // 记录人工修正（用于AI学习）
