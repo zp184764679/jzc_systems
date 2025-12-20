@@ -13,7 +13,8 @@ from config import get_config
 from models import db
 
 # 导入路由蓝图
-from routes import products_bp, technical_specs_bp, inspection_bp, process_docs_bp, files_bp
+from routes import (products_bp, technical_specs_bp, inspection_bp, process_docs_bp, files_bp,
+                    materials_bp, processes_bp, drawings_bp)
 
 
 def create_app():
@@ -43,6 +44,10 @@ def create_app():
     app.register_blueprint(inspection_bp, url_prefix='/api')
     app.register_blueprint(process_docs_bp, url_prefix='/api')
     app.register_blueprint(files_bp, url_prefix='/api')
+    # 共享数据蓝图（材料库、工艺库、图纸）
+    app.register_blueprint(materials_bp, url_prefix='/api')
+    app.register_blueprint(processes_bp, url_prefix='/api')
+    app.register_blueprint(drawings_bp, url_prefix='/api')
 
     # 健康检查
     @app.route('/health')

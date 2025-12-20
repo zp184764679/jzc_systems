@@ -13,7 +13,10 @@ import {
   HomeOutlined,
   LogoutOutlined,
   MenuOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  ExperimentOutlined,
+  FileImageOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
@@ -23,6 +26,9 @@ import { initAuth, logout } from './utils/ssoAuth';
 // 页面组件
 import ProductList from './pages/ProductList';
 import ProductDetail from './pages/ProductDetail';
+import MaterialLibrary from './pages/MaterialLibrary';
+import ProcessLibrary from './pages/ProcessLibrary';
+import DrawingList from './pages/DrawingList';
 
 dayjs.locale('zh-cn');
 
@@ -114,6 +120,34 @@ function App() {
       label: '文件管理'
     },
     {
+      type: 'divider'
+    },
+    {
+      key: 'shared-data',
+      icon: <DatabaseOutlined />,
+      label: '共享数据',
+      children: [
+        {
+          key: 'material-library',
+          icon: <ExperimentOutlined />,
+          label: '材料库'
+        },
+        {
+          key: 'process-library',
+          icon: <ToolOutlined />,
+          label: '工艺库'
+        },
+        {
+          key: 'drawing-list',
+          icon: <FileImageOutlined />,
+          label: '图纸管理'
+        }
+      ]
+    },
+    {
+      type: 'divider'
+    },
+    {
       key: 'statistics',
       icon: <BarChartOutlined />,
       label: '统计分析'
@@ -142,6 +176,12 @@ function App() {
         return <ProductList onViewProduct={handleViewProduct} defaultTab="processes" />;
       case 'files':
         return <ProductList onViewProduct={handleViewProduct} defaultTab="files" />;
+      case 'material-library':
+        return <MaterialLibrary />;
+      case 'process-library':
+        return <ProcessLibrary />;
+      case 'drawing-list':
+        return <DrawingList />;
       case 'statistics':
         return (
           <div style={{ padding: 24, textAlign: 'center' }}>

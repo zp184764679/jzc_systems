@@ -12,11 +12,19 @@ from .inspection_criteria import InspectionCriteria
 from .process_document import ProcessDocument
 from .product_file_link import ProductFileLink
 
+# 共享数据模型（与报价系统共享）
+from .shared_material import Material
+from .shared_process import Process
+from .shared_drawing import Drawing
+
 __all__ = [
     'db',
     'ProductMaster',
     'TechnicalSpec',
     'InspectionCriteria',
     'ProcessDocument',
-    'ProductFileLink'
+    'ProductFileLink',
+    'Material',
+    'Process',
+    'Drawing'
 ]

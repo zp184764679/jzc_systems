@@ -178,4 +178,91 @@ export const fileAPI = {
   getFileTypes: () => api.get('/file-types')
 };
 
+// ==================== 材料库 API (共享数据) ====================
+
+export const materialAPI = {
+  // 获取材料列表
+  getList: (params = {}) => api.get('/materials', { params }),
+
+  // 获取材料详情
+  getById: (id) => api.get(`/materials/${id}`),
+
+  // 通过材料代码获取
+  getByCode: (code) => api.get(`/materials/code/${encodeURIComponent(code)}`),
+
+  // 创建材料
+  create: (data) => api.post('/materials', data),
+
+  // 更新材料
+  update: (id, data) => api.put(`/materials/${id}`, data),
+
+  // 删除材料
+  delete: (id) => api.delete(`/materials/${id}`),
+
+  // 搜索材料
+  search: (keyword, limit = 20) => api.get('/materials/search', { params: { keyword, limit } }),
+
+  // 获取类别列表
+  getCategories: () => api.get('/materials/categories')
+};
+
+// ==================== 工艺库 API (共享数据) ====================
+
+export const processLibraryAPI = {
+  // 获取工艺列表
+  getList: (params = {}) => api.get('/processes', { params }),
+
+  // 获取工艺详情
+  getById: (id) => api.get(`/processes/${id}`),
+
+  // 通过工艺代码获取
+  getByCode: (code) => api.get(`/processes/code/${encodeURIComponent(code)}`),
+
+  // 创建工艺
+  create: (data) => api.post('/processes', data),
+
+  // 更新工艺
+  update: (id, data) => api.put(`/processes/${id}`, data),
+
+  // 删除工艺
+  delete: (id) => api.delete(`/processes/${id}`),
+
+  // 搜索工艺
+  search: (keyword, limit = 20) => api.get('/processes/search', { params: { keyword, limit } }),
+
+  // 获取类别列表
+  getCategories: () => api.get('/processes/categories')
+};
+
+// ==================== 图纸管理 API (共享数据) ====================
+
+export const drawingAPI = {
+  // 获取图纸列表
+  getList: (params = {}) => api.get('/drawings', { params }),
+
+  // 获取图纸详情
+  getById: (id) => api.get(`/drawings/${id}`),
+
+  // 通过图号获取
+  getByNumber: (number) => api.get(`/drawings/number/${encodeURIComponent(number)}`),
+
+  // 更新图纸
+  update: (id, data) => api.put(`/drawings/${id}`, data),
+
+  // 删除图纸
+  delete: (id) => api.delete(`/drawings/${id}`),
+
+  // 搜索图纸
+  search: (keyword, limit = 20) => api.get('/drawings/search', { params: { keyword, limit } }),
+
+  // 获取客户列表
+  getCustomers: () => api.get('/drawings/customers'),
+
+  // 获取材质列表
+  getMaterials: () => api.get('/drawings/materials'),
+
+  // 获取统计数据
+  getStatistics: () => api.get('/drawings/statistics')
+};
+
 export default api;
