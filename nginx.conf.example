@@ -226,6 +226,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # ==================== Portal API 代理 (SSO Token 验证) ====================
+    # 子系统使用此路由验证 SSO Token
+    location /portal-api/ {
+        rewrite ^/portal-api/(.*)$ /api/$1 break;
+        proxy_pass http://portal-backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # ==================== 健康检查 ====================
     location /health {
         proxy_pass http://portal-backend/health;
