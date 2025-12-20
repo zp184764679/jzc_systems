@@ -19,6 +19,7 @@ const SYSTEM_URLS = {
   shm: import.meta.env.VITE_SHM_URL || getSystemUrl('/shm'),
   eam: import.meta.env.VITE_EAM_URL || getSystemUrl('/eam'),
   mes: import.meta.env.VITE_MES_URL || getSystemUrl('/mes'),
+  tdm: import.meta.env.VITE_TDM_URL || getSystemUrl('/tdm'),
 }
 
 // 所有系统配置
@@ -122,6 +123,15 @@ const allSystems = [
     icon: '🏭',
     color: '#3F51B5',
     permission: 'mes',
+    minRole: 'user'
+  },
+  {
+    name: '技术标准管理',
+    description: 'Technical Data Management',
+    url: SYSTEM_URLS.tdm,
+    icon: '📐',
+    color: '#00ACC1',
+    permission: null,  // 所有登录用户可见
     minRole: 'user'
   },
 ]
