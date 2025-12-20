@@ -2167,7 +2167,9 @@ function QuoteCreate() {
             {drawing.file_type === 'pdf' ? (
               // PDF文件使用iframe显示
               <iframe
-                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/uploads/${drawing.file_path.split('/').pop()}`}
+                src={drawing.file_path.includes('/storage/')
+                  ? drawing.file_path.replace(/^.*\/storage\//, '/storage/')
+                  : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/uploads/${drawing.file_path.split('/').pop()}`}
                 style={{
                   width: '100%',
                   height: '70vh',
@@ -2179,7 +2181,9 @@ function QuoteCreate() {
             ) : (
               // 图片文件直接显示
               <img
-                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/uploads/${drawing.file_path.split('/').pop()}`}
+                src={drawing.file_path.includes('/storage/')
+                  ? drawing.file_path.replace(/^.*\/storage\//, '/storage/')
+                  : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/uploads/${drawing.file_path.split('/').pop()}`}
                 alt="图纸"
                 style={{
                   maxWidth: '100%',
