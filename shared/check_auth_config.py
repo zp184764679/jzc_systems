@@ -23,10 +23,11 @@ SYSTEMS = ['Portal', 'HR', 'account', '报价', '采购', 'SHM', 'CRM', 'SCM', '
 # 必须一致的配置项
 MUST_MATCH_KEYS = ['JWT_SECRET_KEY']
 
-# 必须为特定值的配置项
-REQUIRED_VALUES = {
-    'AUTH_DB_NAME': 'cncplan',
-}
+# 必须一致的配置项（不要求特定值，但所有系统必须相同）
+MUST_BE_CONSISTENT = ['AUTH_DB_NAME']
+
+# 可接受的 AUTH_DB_NAME 值（用于验证是否是有效的认证数据库）
+VALID_AUTH_DB_NAMES = ['cncplan', 'account']
 
 
 def parse_env_file(env_path):
@@ -158,19 +159,30 @@ def check_all_systems(base_path):
     else:
         results['summary']['jwt_consistent'] = True
 
-    # 检查 AUTH_DB_NAME
+    # 检查 AUTH_DB_NAME 一致性
+    auth_db_values = {}
     for system, data in results['systems'].items():
-        if data['status'] != 'ok':
-            continue
+        if data['status'] == 'ok':
+            auth_db = data['config'].get('AUTH_DB_NAME', 'NOT_SET')
+            if auth_db != 'NOT_SET':
+                auth_db_values[system] = auth_db
 
-        auth_db = data['config'].get('AUTH_DB_NAME', 'NOT_SET')
-        expected = REQUIRED_VALUES.get('AUTH_DB_NAME', 'cncplan')
+    unique_auth_dbs = set(auth_db_values.values())
+    if len(unique_auth_dbs) > 1:
+        # 找出最常见的值
+        db_counts = {}
+        for db in auth_db_values.values():
+            db_counts[db] = db_counts.get(db, 0) + 1
+        most_common_db = max(db_counts.keys(), key=lambda k: db_counts[k])
 
-        if auth_db != expected and auth_db != 'NOT_SET':
-            results['errors'].append(
-                f"{system}: AUTH_DB_NAME 应为 '{expected}'，当前是 '{auth_db}'"
-            )
-            results['systems'][system]['auth_db_wrong'] = True
+        for system, db in auth_db_values.items():
+            if db != most_common_db:
+                results['errors'].append(
+                    f"{system}: AUTH_DB_NAME 不一致 (当前: {db}, 多数系统使用: {most_common_db})"
+                )
+                results['systems'][system]['auth_db_wrong'] = True
+    else:
+        results['summary']['auth_db_consistent'] = True
 
     # 计算有效系统数
     for system, data in results['systems'].items():
