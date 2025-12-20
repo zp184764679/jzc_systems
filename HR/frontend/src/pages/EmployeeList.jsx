@@ -72,9 +72,6 @@ const EmployeeList = () => {
   // Get unique departments from employees for filter (from current page data)
   const uniqueDepartments = [...new Set(allEmployees.map(emp => emp.department).filter(Boolean))].sort();
 
-  // Get unique positions (titles) from employees
-  const uniquePositions = [...new Set(allEmployees.map(emp => emp.title).filter(Boolean))].sort();
-
   // Filter employees based on active tab (by position) - 后端已筛选在职员工
   const employees = activeTab === 'all'
     ? allEmployees.filter(emp => !emp.is_blacklisted)
@@ -646,17 +643,17 @@ const EmployeeList = () => {
     },
   ];
 
-  // Menu items for positions (岗位)
+  // Menu items for positions (岗位) - 使用职位主数据表
   const menuItems = [
     {
       key: 'all',
       icon: <UserOutlined />,
       label: `全部在职 (${pagination.total})`,
     },
-    ...uniquePositions.map(pos => ({
-      key: pos,
+    ...positions.map(pos => ({
+      key: pos.name,
       icon: <UserOutlined />,
-      label: `${pos} (${allEmployees.filter(e => e.title === pos && !e.is_blacklisted).length})`,
+      label: `${pos.name} (${allEmployees.filter(e => e.title === pos.name && !e.is_blacklisted).length})`,
     })),
   ];
 
