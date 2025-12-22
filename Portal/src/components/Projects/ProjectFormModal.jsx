@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { MailOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { projectAPI } from '../../services/api'
-import { CustomerSelect, EmployeeSelect } from '../Selectors'
+import { CustomerSelect, EmployeeSelect, PartNumberSelect } from '../Selectors'
 import EmailImportPanel from '../Tasks/EmailImportPanel'
 
 const { TextArea } = Input
@@ -204,13 +204,11 @@ export default function ProjectFormModal({ open, onClose, onSuccess, project }) 
         <Form.Item
           name="part_number"
           label="部件番号"
-          tooltip="可输入多个部件番号，按回车确认"
+          tooltip="从报价系统选择品番号，支持多选"
         >
-          <Select
-            mode="tags"
-            placeholder="输入部件番号后按回车（支持多个）"
-            tokenSeparators={[',', '，', ' ']}
-            style={{ width: '100%' }}
+          <PartNumberSelect
+            mode="multiple"
+            placeholder="搜索并选择品番号（支持多选）"
           />
         </Form.Item>
 

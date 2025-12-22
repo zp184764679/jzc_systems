@@ -242,6 +242,16 @@ export const integrationAPI = {
   getCustomers: (params) => api.get('/integration/customers', { params }),
   getCustomer: (id) => api.get(`/integration/customers/${id}`),
 
+  // CRM 供应商
+  getSuppliers: (params) => api.get('/integration/suppliers', { params }),
+  getSupplier: (id) => api.get(`/integration/suppliers/${id}`),
+  searchSuppliers: (keyword) => api.get('/integration/suppliers/search', { params: { keyword } }),
+
+  // 报价系统产品/品番号
+  getProducts: (params) => api.get('/integration/products', { params }),
+  getProduct: (code) => api.get(`/integration/products/${code}`),
+  searchProducts: (keyword) => api.get('/integration/products/search', { params: { keyword } }),
+
   // HR 员工
   getEmployees: (params) => api.get('/integration/employees', { params }),
   getEmployee: (id) => api.get(`/integration/employees/${id}`),

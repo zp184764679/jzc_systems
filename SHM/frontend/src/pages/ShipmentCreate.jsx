@@ -17,7 +17,7 @@ import {
   Divider,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons'
-import { shipmentApi, addressApi, requirementApi } from '../api'
+import { shipmentApi, addressApi, requirementApi, integrationApi } from '../api'
 import dayjs from 'dayjs'
 
 function ShipmentCreate() {
@@ -27,6 +27,46 @@ function ShipmentCreate() {
   const [loading, setLoading] = useState(false)
   const [addresses, setAddresses] = useState([])
   const [requirement, setRequirement] = useState(null)
+  const [customers, setCustomers] = useState([])
+  const [customerLoading, setCustomerLoading] = useState(false)
+  const [customerSearchText, setCustomerSearchText] = useState('')
+
+  // 加载 CRM 客户列表
+  useEffect(() => {
+    loadCustomers('')
+  }, [])
+
+  const loadCustomers = async (keyword) => {
+    setCustomerLoading(true)
+    try {
+      const res = await integrationApi.getCustomers({ keyword, page_size: 50 })
+      if (res.success && res.data) {
+        setCustomers(res.data.items || res.data || [])
+      }
+    } catch (error) {
+      console.error('加载客户列表失败:', error)
+    } finally {
+      setCustomerLoading(false)
+    }
+  }
+
+  // 客户搜索防抖
+  const handleCustomerSearch = (value) => {
+    setCustomerSearchText(value)
+    loadCustomers(value)
+  }
+
+  // 选择客户后填充信息
+  const handleCustomerSelect = (customerId, option) => {
+    if (!customerId) {
+      form.setFieldsValue({ customer_name: '' })
+      return
+    }
+    // 自动填充客户名称
+    form.setFieldsValue({ customer_name: option.customerName || '' })
+    // 触发原有的地址/交货要求加载
+    handleCustomerChange(customerId)
+  }
 
   const addItem = () => {
     setItems([
@@ -257,22 +297,37 @@ function ShipmentCreate() {
             <Col span={8}>
               <Form.Item
                 name="customer_id"
-                label="客户ID"
-                rules={[{ required: true, message: '请输入客户ID' }]}
+                label="客户"
+                rules={[{ required: true, message: '请选择客户' }]}
               >
-                <Input
-                  placeholder="请输入客户ID"
-                  onBlur={(e) => handleCustomerChange(e.target.value)}
-                />
+                <Select
+                  showSearch
+                  placeholder="搜索并选择客户"
+                  loading={customerLoading}
+                  filterOption={false}
+                  onSearch={handleCustomerSearch}
+                  onChange={handleCustomerSelect}
+                  notFoundContent={customerLoading ? '搜索中...' : '无匹配客户'}
+                  allowClear
+                >
+                  {customers.map((c) => (
+                    <Select.Option
+                      key={c.id}
+                      value={c.id}
+                      customerName={c.name || c.short_name}
+                    >
+                      {c.code ? `[${c.code}] ` : ''}{c.short_name || c.name}
+                    </Select.Option>
+                  ))}
+                </Select>
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
                 name="customer_name"
                 label="客户名称"
-                rules={[{ required: true, message: '请输入客户名称' }]}
               >
-                <Input placeholder="请输入客户名称" />
+                <Input placeholder="自动填充" disabled />
               </Form.Item>
             </Col>
             <Col span={8}>

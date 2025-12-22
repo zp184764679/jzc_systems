@@ -1,5 +1,6 @@
 # backend/app/models/__init__.py
 from .customer import Customer
+from .supplier import Supplier, SUPPLIER_STATUS
 from .sales import (
     SalesOpportunity, OpportunityStageHistory, FollowUpRecord,
     OpportunityStage, OpportunityPriority, FollowUpType,
@@ -18,6 +19,7 @@ from .core import (
 
 __all__ = [
     'Customer',
+    'Supplier', 'SUPPLIER_STATUS',
     'SalesOpportunity', 'OpportunityStageHistory', 'FollowUpRecord',
     'OpportunityStage', 'OpportunityPriority', 'FollowUpType',
     'STAGE_PROBABILITY_MAP', 'STAGE_NAME_MAP', 'FOLLOW_UP_TYPE_MAP', 'PRIORITY_NAME_MAP',

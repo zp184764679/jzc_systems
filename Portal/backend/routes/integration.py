@@ -67,6 +67,132 @@ def get_customer(customer_id):
         return jsonify({'error': result['error']}), 503
 
 
+# ==================== CRM 供应商接口 ====================
+
+@integration_bp.route('/suppliers', methods=['GET'])
+def get_suppliers():
+    """
+    获取供应商列表
+    Query params:
+    - keyword: 搜索关键词
+    - page: 页码（默认1）
+    - page_size: 每页数量（默认20）
+    """
+    keyword = request.args.get('keyword', '')
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 20, type=int)
+    token = get_token_from_request()
+
+    result = integration_service.get_suppliers(
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        token=token
+    )
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
+@integration_bp.route('/suppliers/<int:supplier_id>', methods=['GET'])
+def get_supplier(supplier_id):
+    """获取供应商详情"""
+    token = get_token_from_request()
+    result = integration_service.get_supplier(supplier_id, token=token)
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    elif result['error'] == '供应商不存在':
+        return jsonify({'error': result['error']}), 404
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
+@integration_bp.route('/suppliers/search', methods=['GET'])
+def search_suppliers():
+    """搜索供应商（用于下拉选择）"""
+    keyword = request.args.get('keyword', '')
+    limit = request.args.get('limit', 10, type=int)
+    token = get_token_from_request()
+
+    result = integration_service.get_suppliers(
+        keyword=keyword,
+        page=1,
+        page_size=limit,
+        token=token
+    )
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
+# ==================== 报价系统产品接口 ====================
+
+@integration_bp.route('/products', methods=['GET'])
+def get_products():
+    """
+    获取产品/品番号列表
+    Query params:
+    - keyword: 搜索关键词
+    - page: 页码（默认1）
+    - page_size: 每页数量（默认20）
+    """
+    keyword = request.args.get('keyword', '')
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 20, type=int)
+    token = get_token_from_request()
+
+    result = integration_service.get_products(
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        token=token
+    )
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
+@integration_bp.route('/products/<path:product_code>', methods=['GET'])
+def get_product(product_code):
+    """获取产品详情"""
+    token = get_token_from_request()
+    result = integration_service.get_product(product_code, token=token)
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    elif result['error'] == '产品不存在':
+        return jsonify({'error': result['error']}), 404
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
+@integration_bp.route('/products/search', methods=['GET'])
+def search_products():
+    """搜索产品/品番号（用于下拉选择）"""
+    keyword = request.args.get('keyword', '')
+    limit = request.args.get('limit', 10, type=int)
+    token = get_token_from_request()
+
+    result = integration_service.get_products(
+        keyword=keyword,
+        page=1,
+        page_size=limit,
+        token=token
+    )
+
+    if result['success']:
+        return jsonify(result['data']), 200
+    else:
+        return jsonify({'error': result['error']}), 503
+
+
 # ==================== HR 员工接口 ====================
 
 @integration_bp.route('/employees', methods=['GET'])

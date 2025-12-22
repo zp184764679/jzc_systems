@@ -96,7 +96,7 @@ def create_app():
             db.session.remove()
 
     # Import models
-    from .models import customer, core, base_data, sales, contract
+    from .models import customer, core, base_data, sales, contract, supplier
 
     # Create database tables if using SQLite (development mode)
     if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
@@ -111,8 +111,10 @@ def create_app():
     from .routes.contracts import contracts_bp
     from .routes.customer_grades import customer_grades_bp
     from .routes.customer_reports import bp as customer_reports_bp
+    from .routes.suppliers import bp as suppliers_bp
 
     app.register_blueprint(customers.bp)
+    app.register_blueprint(suppliers_bp)
     app.register_blueprint(orders.bp)
     app.register_blueprint(integration.bp)
     app.register_blueprint(base_data_routes.bp)

@@ -139,6 +139,23 @@ export const reportsApi = {
   exportReport: (params) => api.get('/reports/export', { params }),
 };
 
+// Integration API - 子系统集成
+export const integrationApi = {
+  // CRM 客户
+  getCustomers: (params) => api.get('/integration/customers', { params }),
+  getCustomer: (id) => api.get(`/integration/customers/${id}`),
+  searchCustomers: (params) => api.post('/integration/customers/search', params),
+  // 产品
+  getProducts: (params) => api.get('/integration/products', { params }),
+  getProduct: (id) => api.get(`/integration/products/${id}`),
+  getProductByCode: (code) => api.get(`/integration/products/by-code/${code}`),
+  // HR 员工
+  getWarehouseStaff: (params) => api.get('/integration/hr/warehouse-staff', { params }),
+  getEmployee: (id) => api.get(`/integration/hr/employees/${id}`),
+  // 健康检查
+  checkHealth: () => api.get('/integration/health'),
+};
+
 // RMA API - 退货管理
 export const rmaApi = {
   // CRUD
