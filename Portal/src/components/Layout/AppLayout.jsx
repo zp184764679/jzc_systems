@@ -15,7 +15,8 @@ import {
   SoundOutlined,
   DeleteOutlined,
   FolderOpenOutlined,
-  FolderOutlined
+  FolderOutlined,
+  MailOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -47,6 +48,11 @@ export default function AppLayout() {
       key: '/projects',
       icon: <ProjectOutlined />,
       label: '项目管理',
+    },
+    {
+      key: '/email-import',
+      icon: <MailOutlined />,
+      label: '邮件导入',
     },
     {
       key: '/notifications',
@@ -129,6 +135,9 @@ export default function AppLayout() {
   const getSelectedKey = () => {
     if (location.pathname.startsWith('/projects')) {
       return '/projects'
+    }
+    if (location.pathname.startsWith('/email-import')) {
+      return '/email-import'
     }
     if (location.pathname.startsWith('/notifications')) {
       return '/notifications'

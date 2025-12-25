@@ -16,6 +16,7 @@ import AnnouncementsPage from './pages/Announcements/AnnouncementsPage'
 import RecycleBinPage from './pages/RecycleBin/RecycleBinPage'
 import TemplateLibraryPage from './pages/Templates/TemplateLibraryPage'
 import FileHubPage from './pages/FileHub/FileHubPage'
+import EmailImportPage from './pages/EmailImport/EmailImportPage'
 
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
@@ -65,6 +66,7 @@ function AppContent() {
         <Route path="/recycle-bin" element={<RecycleBinPage />} />
         <Route path="/templates" element={<TemplateLibraryPage />} />
         <Route path="/file-hub" element={<FileHubPage />} />
+        <Route path="/email-import" element={<EmailImportPage />} />
       </Route>
 
       {/* Fallback route */}

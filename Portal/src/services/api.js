@@ -57,6 +57,12 @@ export const projectAPI = {
 
   // Archive project
   archiveProject: (id) => api.post(`/projects/${id}/archive`),
+
+  // Star/unstar project
+  toggleStar: (id) => api.post(`/projects/${id}/star`),
+
+  // Get starred projects
+  getStarredProjects: () => api.get('/projects/starred'),
 }
 
 // ========== Task APIs ==========
@@ -90,6 +96,22 @@ export const taskAPI = {
 
   // Delete task
   deleteTask: (id) => api.delete(`/tasks/${id}`),
+
+  // Copy task
+  copyTask: (id) => api.post(`/tasks/${id}/copy`),
+
+  // Checklist API
+  getChecklist: (taskId) => api.get(`/tasks/${taskId}/checklist`),
+  addChecklistItem: (taskId, text) => api.post(`/tasks/${taskId}/checklist`, { text }),
+  updateChecklistItem: (taskId, itemId, data) => api.put(`/tasks/${taskId}/checklist/${itemId}`, data),
+  deleteChecklistItem: (taskId, itemId) => api.delete(`/tasks/${taskId}/checklist/${itemId}`),
+  toggleChecklistItem: (taskId, itemId) => api.post(`/tasks/${taskId}/checklist/${itemId}/toggle`),
+
+  // Comments API
+  getComments: (taskId) => api.get(`/tasks/${taskId}/comments`),
+  addComment: (taskId, content, parentId) => api.post(`/tasks/${taskId}/comments`, { content, parent_id: parentId }),
+  updateComment: (taskId, commentId, content) => api.put(`/tasks/${taskId}/comments/${commentId}`, { content }),
+  deleteComment: (taskId, commentId) => api.delete(`/tasks/${taskId}/comments/${commentId}`),
 
   // 任务导向管理 API
   // Get kanban data
@@ -517,6 +539,21 @@ export const emailAPI = {
   // 同步最新邮件（从 IMAP 服务器拉取）
   syncEmails: (sinceDays = 7) =>
     api.post('/emails/sync', null, { params: { since_days: sinceDays } }),
+
+  // 检查邮件是否已被导入过 (P0-2)
+  checkDuplicate: (emailId) => api.get(`/emails/${emailId}/check-duplicate`),
+
+  // 获取导入历史
+  getImportHistory: (params) => api.get('/emails/import-history', { params }),
+
+  // 根据邮件信息匹配项目
+  matchProject: (emailId, params) => api.get(`/emails/${emailId}/match-project`, { params }),
+
+  // 获取可分配的员工列表
+  getEmployees: (emailId, params) => api.get(`/emails/${emailId}/employees`, { params }),
+
+  // 从邮件创建任务
+  createTaskFromEmail: (emailId, data) => api.post(`/emails/${emailId}/create-task`, data),
 }
 
 // ========== File Hub APIs ==========
