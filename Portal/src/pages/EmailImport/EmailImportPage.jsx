@@ -140,7 +140,8 @@ export default function EmailImportPage() {
     setLoadingProjects(true)
     try {
       const res = await projectAPI.getProjects({ status: 'active', page_size: 100 })
-      setProjects(res.data?.items || res.data || [])
+      // API returns { projects: [...] } format
+      setProjects(res.data?.projects || res.data?.items || [])
     } catch (err) {
       console.error('Failed to load projects:', err)
     } finally {
@@ -153,9 +154,8 @@ export default function EmailImportPage() {
     setLoadingEmployees(true)
     try {
       const res = await integrationAPI.getEmployees({ page_size: 100 })
-      if (res.data?.success) {
-        setEmployees(res.data.data?.items || [])
-      }
+      // API returns { items: [...] } directly
+      setEmployees(res.data?.items || res.data?.data?.items || [])
     } catch (err) {
       console.error('Failed to load employees:', err)
     } finally {
